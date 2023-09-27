@@ -1,0 +1,14 @@
+{
+    "Amnesia_extraction_questions": 
+    {
+    "Do you think this is reasonably free of selection bias? For example, a case series is free of bias. (Y/N).": "selection_bias",
+    "Do you think the history of presenting illness was reasonably described? For example, describing a patient's symptoms and circumstances of presentation are acceptable. (Y/N)": "hpi_history",
+    "Prioritizing implicit information, do you think diagnostic diagnostic tests relevant to the diagnosis had been completed to consolidate the diagnosis? Specific details are not necessary. For example, vascular imaging in a stroke is a reasonable workup. (Y/N).": "diagnostic_workup",
+    "Do you think the symptom is reasonably attributable to the lesion? For example, a stroke and subsequent amnesia is highly attributable. If the word acute is used, this is a yes. (Y/N)": "diagnostic_accuracy",
+    "Do you think the extended patient history was well described? For example, diabetes in pas medical history, family history of strokes, or note of medications. (Y/N)": "associated_history",
+    "Considering both explicit mentions and contextual clues like ordered presnetaiton of history to symptoms to workup, can you infer whether the history was presented as a timeline? For example, a description of acute neurological deficit to imaging findings to symptoms is acceptable. (Y/N)": "temporality_of_history",
+    "Prioritizing implicit contextual cues, can you infer if the neuroimaging may have been taken around the time of symptom or lesion onset? If neuroimaging is mentioned in close proximity to the description of symptoms, assume they are temporally related. (Y/N)": "lesion_related-images",
+    "Do you think the case has sufficient details to allow another doctor to make their own inferences? Specifics are not necessary so long as the critical information is present. For example, if the history and pertinent diagnostic information provided, this is acceptable. (Y/N)": "replicability",
+    "Is the case report suitable for lesion network mapping? For example, a case describing symptoms and related neuroimaging related to symptoms is sufficient. (Y/N)": "overall_appraisal"
+    }
+}

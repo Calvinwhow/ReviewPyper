@@ -1,0 +1,18 @@
+# Ignore DS_Store files (macOS)
+.DS_Store
+
+# Ignore all .txt files
+*.txt
+
+# Except keep license.txt
+!license.txt
+
+# Ignore Python cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/

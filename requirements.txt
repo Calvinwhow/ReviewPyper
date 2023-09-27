@@ -1,0 +1,13 @@
+tqdm
+sklearn
+setuptools
+pdf2image
+re
+cv2
+PyPDF2
+fuzzywuzzy
+openai
+pytesseract
+numpy
+pandas
+textract
