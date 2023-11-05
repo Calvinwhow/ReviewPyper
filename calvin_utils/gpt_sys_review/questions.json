@@ -10,5 +10,14 @@
     "Prioritizing implicit contextual cues, can you infer if the neuroimaging may have been taken around the time of symptom or lesion onset? If neuroimaging is mentioned in close proximity to the description of symptoms, assume they are temporally related. (Y/N)": "lesion_related-images",
     "Do you think the case has sufficient details to allow another doctor to make their own inferences? Specifics are not necessary so long as the critical information is present. For example, if the history and pertinent diagnostic information provided, this is acceptable. (Y/N)": "replicability",
     "Is the case report suitable for lesion network mapping? For example, a case describing symptoms and related neuroimaging related to symptoms is sufficient. (Y/N)": "overall_appraisal"
+    },
+    "cognitive_examination_questions":
+    {
+        "Is this test developed to be taken anywhere (Y), or in the clinic (N)?": "remote",
+        "What cognitive domains does the developed program assess? Domains are: Language | Memory | Executive | Visuospatial | Fluency.": "cognitive_domains",
+        "How is the test administered? Options are: Web application, tablet, phone, or other.": "administration_modality",
+        "Name the statistical/machine learning techniques employed.": "ml_techniques",
+        "What are the critical results of the study? (AUC, sensitivty, specificty, correlation, etc).": "results",
+        "What is the patient population (Sample size, disease states, cognitive status, age, ethnicity).": "patient_population",
     }
 }

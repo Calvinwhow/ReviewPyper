@@ -288,12 +288,13 @@ class FilterPapers:
         - None
         """
         # Create a new directory in the same root folder
-        out_dir = os.path.join(os.path.dirname(self.json_path), "filtered_articles")
+        out_dir = os.path.join(os.path.dirname(self.csv_path), "inclusion_exclusion_json")
         os.makedirs(out_dir, exist_ok=True)
         
         # Save the filtered dictionary to a JSON file
         with open(os.path.join(out_dir, 'filtered_labeled_sections.json'), 'w') as f:
             json.dump(self.filter_json(), f, indent=4)
+        return os.path.join(out_dir, 'filtered_labeled_sections.json')
 
     def run(self):
         """
@@ -302,7 +303,8 @@ class FilterPapers:
         Returns:
         - None
         """
-        self.save_to_json()
+        output_path = self.save_to_json()
+        return output_path
 
 class InclusionExclusionSummarizer:
     """
@@ -314,7 +316,7 @@ class InclusionExclusionSummarizer:
     - df (DataFrame): Pandas DataFrame to store summarized results.
     """
     
-    def __init__(self, json_path, acceptable_strings=["good", "excellent", "positive", " y " " y.", "yes", "correct", "is likely", "is possible", "is probable"]):
+    def __init__(self, json_path, questions, acceptable_strings=["good", "excellent", "positive", " y " " y.", "yes", "correct", "is likely", "is possible", "is probable"]):
         """
         Initializes the InclusionExclusionSummarizer class.
         
@@ -323,6 +325,7 @@ class InclusionExclusionSummarizer:
         """
         self.acceptable_strings = acceptable_strings
         self.json_path = json_path
+        self.questions = questions
         self.data = self.read_json()
         self.df = self.summarize_results()
 
@@ -348,8 +351,14 @@ class InclusionExclusionSummarizer:
         for article, questions in self.data.items():
             summary_dict[article] = {}
             for question, chunks in questions.items():
+                # Get the polarity value for the question from the questions dictionary
+                polarity = self.questions.get(question)
+                if polarity is None:
+                    raise ValueError(f"The question from the JSON: \n\n'{question}' \n\n was not found in the questions dictionary.")
+
                 # Convert all chunk answers to lowercase and check for "yes" keywords
-                binary_answers = [1 if any(s in answer.lower() for s in self.acceptable_strings) else 0 for answer in chunks.values()]
+                binary_answers = [polarity if any(s in answer.lower() for s in self.acceptable_strings) else abs(1 - polarity) for answer in chunks.values()]
+                
                 # Sum up the binary answers for each question
                 summary_dict[article][question] = sum(binary_answers)
         
@@ -385,7 +394,7 @@ class InclusionExclusionSummarizer:
         os.makedirs(out_dir, exist_ok=True)
         
         # Determine the name of the CSV file based on whether rows have been dropped
-        file_name = "automated_filtered_results.csv" if dropped else "raw_results.csv"
+        file_name = "processed_results.csv" if dropped else "raw_results.csv"
         
         # Save the DataFrame to a CSV file
         csv_path = os.path.join(out_dir, file_name)
@@ -393,6 +402,7 @@ class InclusionExclusionSummarizer:
             self.drop_rows_with_zeros().to_csv(csv_path)
         else:
             self.df.to_csv(csv_path)
+        return csv_path
             
     def run(self):
         """
@@ -401,9 +411,10 @@ class InclusionExclusionSummarizer:
         Returns:
         - None
         """
-        self.save_to_csv()
-        self.save_to_csv(dropped=True)
-        return self.df
+        raw_path = self.save_to_csv()
+        automated_path = self.save_to_csv(dropped=True)
+        print(f"Your CSV files of filtered manuscripts have been saved to this directory: \n {os.path.dirname(raw_path)}")
+        return self.df, raw_path, automated_path
     
 class CustomSummarizer(InclusionExclusionSummarizer):
     """
@@ -413,7 +424,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
     - keyword_mapping (dict): Dictionary mapping each key to a list of acceptable values.
     """
     
-    def __init__(self, json_path, keyword_mapping=None):
+    def __init__(self, json_path, answers_binary=False):
         """
         Initializes the CustomSummarizer class.
         
@@ -423,7 +434,14 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         """
         self.json_path = json_path
         self.data = self.read_json()
-        self.keyword_mapping = keyword_mapping
+        self.answers_binary = answers_binary
+        if self.answers_binary:
+            self.keyword_mapping = {
+            0: ["poor", "bad", "negative", "n", "no"],
+            1: ["good", "excellent", "positive", "y", "yes"]
+            }
+        else:
+            self.keyword_mapping = None
     
     def exact_match(self, answer):
         """
@@ -488,12 +506,11 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         Returns:
         - DataFrame: Pandas DataFrame containing the summarized results.
         """
-        import numpy as np
-        import pandas as pd
         summary_dict = {}
         for article, questions in self.data.items():
             summary_dict[article] = {}
             for question, chunks in questions.items():
+                #Extract binary data and process
                 if self.keyword_mapping:
                     mapped_answers = [self.keyword_or_fuzzy_match(answer) for answer in chunks.values()]
                     if all(x is np.nan for x in mapped_answers) or all(x is None for x in mapped_answers):
@@ -501,6 +518,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                     else:
                         valid_answers = [x for x in mapped_answers if x is not np.nan and x is not None]
                         summary_dict[article][question] = np.sum(valid_answers) if valid_answers else 'Unidentified'
+                #Extract raw data for research articles
                 elif self.keyword_mapping is None:
                     try:
                         combined_answers = tuple(chunks.values())
@@ -513,6 +531,9 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                 else:
                     raise ValueError("Unacceptable keyword mapping value.")
         df = pd.DataFrame.from_dict(summary_dict, orient='index').fillna(np.nan)
+        if self.answers_binary:
+            # Set all values above 0 to 1
+            df[df > 0] = 1
         return df
     
     def run_custom(self):
@@ -523,9 +544,10 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         - DataFrame: Pandas DataFrame containing the summarized results.
         """
         self.df = self.summarize_results_with_mapping()
-        self.save_to_csv(filename='data_extraction_results')
-        self.save_to_csv(dropped=True, filename='data_extraction_results')
-        return self.df
+        raw_path = self.save_to_csv(filename='data_extraction')
+        automated_path = self.save_to_csv(dropped=True, filename='data_extraction')
+        print(f"Your CSV files of filtered manuscripts have been saved to this directory: \n {os.path.dirname(raw_path)}")
+        return self.df, raw_path, automated_path
 
 class LabelWithLDA:
     """

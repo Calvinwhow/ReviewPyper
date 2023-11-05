@@ -1,9 +1,10 @@
-import openai
-import json
 import os 
-import time
 import sys
+import json
+import time
+import openai
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 from calvin_utils.gpt_sys_review.txt_utils import TextChunker
     
@@ -507,4 +508,230 @@ class CaseReportLabeler(OpenAIChatEvaluator):
         results_dict['other'] = ' '.join(results_dict['other'])
         return results_dict
 
+class OpenAIChatBase(OpenAIEvaluator):
+    """
+    Base class to evaluate text chunks using OpenAI's chat models.
+    """
+    
+    def __init__(self, api_key_path, question, model_choice="gpt3_small"):
+        super().__init__(api_key_path)
+        self.question = question
+        self.get_model_data(model_choice)
+        self.q_index = 0
+        
+    def get_model_data(self, model_choice):
+        """Sets values for the OpenAI model to use."""
+        self.temperature = 1.0
+        self.response_tokens = 50
+        self.question_token = 500
+        models = {
+            "gpt4": {"name": "gpt-4", "token_limit": 8192 - 2 * (self.question_token), "cost": 0.03 / 1000},
+            "gpt3_large": {"name": "gpt-3.5-turbo-16k", "token_limit": 16385 - 2 * (self.question_token), "cost": 0.003 / 1000},
+            "gpt3_small": {"name": "gpt-3.5-turbo", "token_limit": 4097 - round(1.2 * self.question_token), "cost": 0.0015 / 1000}
+        }
+        self.model = models[model_choice]["name"]
+        self.token_limit = models[model_choice]["token_limit"]
+        self.cost = models[model_choice]["cost"]
+        
+    def evaluate_with_openai(self, conversation):
+        """Evaluates the title using OpenAI GPT."""
+        retry_count = 0
+        while retry_count < 4:
+            try:
+                answer, _ = self.get_response_from_openai(conversation)
+                self.q_index += 1
+                return 1 if "1" in answer else 0
+            except Exception as e:
+                retry_count, sleep_time = self.handle_response_exception(e, retry_count)
+                time.sleep(sleep_time)
+        return None
 
+    def get_response_from_openai(self, conversation):
+        """Sends a conversation to OpenAI and retrieves the assistant's last answer."""
+        response = openai.ChatCompletion.create(
+            model=self.model,
+            messages=conversation,
+            temperature=self.temperature,
+            max_tokens=self.response_tokens
+        )
+        return response['choices'][-1]['message']['content'], response["usage"]["total_tokens"]
+
+    def handle_response_exception(self, e, retry_count):
+        """
+        Handles exceptions during API calls to OpenAI.
+        """
+        if type(e).__name__ == 'RateLimitError':
+            print(f"Rate limit error: {e}. Retrying Question No. {self.q_index} Attempt:({retry_count+1})")
+            return retry_count + 1, 30
+        else:
+            print(f"An error occurred: {e}. Retrying Question No. {self.q_index} Attempt:({retry_count+1})")
+            return retry_count + 1, 1
+
+class TitleScreener(OpenAIChatBase):
+    """
+    A class used to screen titles within a CSV file using OpenAI's chat models.
+    This class extends the OpenAIChatBase, which provides the core functionality 
+    to evaluate text using OpenAI's models. The TitleScreener class
+    introduces methods specific to reading titles from a CSV and evaluating them.
+
+    Attributes:
+    ----------
+    df : DataFrame
+        A pandas DataFrame containing data from the provided CSV file.
+
+    Methods:
+    -------
+    keyword_screen(keywords: List[str]) -> None:
+        Screens titles in the DataFrame using a list of provided keywords.
+    openai_screen() -> None:
+        Evaluates titles in the DataFrame using OpenAI's chat models.
+    to_csv(output_path: str) -> None:
+        Saves the DataFrame, including screening results, to a CSV file.
+
+    Parameters:
+    ----------
+    api_key : str
+        The API key for OpenAI.
+    csv_path : str
+        Path to the CSV file containing the titles to be screened.
+    question : str
+        The question posed to the OpenAI model for title evaluation.
+    model_choice : str, optional (default="gpt3_small")
+        The choice of OpenAI model to use for evaluation. Options include "gpt3_small", "gpt3_large", and "gpt4".
+        
+    Example Call:
+    _____________
+    # Define your API key, path to the CSV file, and the question for evaluation
+    API_KEY = "YOUR_OPENAI_API_KEY"
+    CSV_PATH = "path/to/your/titles.csv"
+    EVALUATION_QUESTION = "Is this title related to medical research?"
+
+    # Create an instance of the class
+    title_screening = TitleScreenAPIRevised(api_key=API_KEY, csv_path=CSV_PATH, question=EVALUATION_QUESTION)
+
+    # Perform keyword screening on titles
+    keywords_list = ["focal", "lesion", "brain", "death", "case"]
+    title_screening.keyword_screen(keywords=keywords_list)
+
+    # Evaluate titles using OpenAI
+    title_screening.openai_screen()
+
+    # Save the screened titles to a new CSV file
+    OUTPUT_PATH = "path/to/save/screened_titles.csv"
+    title_screening.to_csv(output_path=OUTPUT_PATH)
+    """
+    def __init__(self, api_key_path, csv_path, question, model_choice="gpt3_small", keywords=None):
+        self.csv_path = csv_path
+        self.keywords = keywords
+        super().__init__(api_key_path=api_key_path, question=question, model_choice=model_choice)
+        self.df = pd.read_csv(csv_path)
+    
+    def keyword_screen(self):
+        """
+        Screen titles using a basic language model approach.
+        
+        Keywords = list of strings which can be used to identify relevant articles
+        """
+        if self.keywords:
+            self.df["Keyword_Screen"] = self.df["Title"].apply(lambda title: int(any(word in title.lower() for word in self.keywords)))
+    
+    def launch_openai_evaluation(self, title):
+        conversation = [
+            {"role": "system", "content": "You are a helpful assistant. Responses should be (0 for No, 1 for Yes)"},
+            {"role": "user", "content": f"Based on this title: {title}\n{self.question}\n\nResponse (0 for No, 1 for Yes)"}
+            ]
+        return self.evaluate_with_openai(conversation)
+        
+    def openai_screen(self):
+        """
+        Screen titles using OpenAI GPT based on a posed question.
+        """
+        tqdm.pandas(desc="OpenAI Screening")
+        self.df["OpenAI_Screen"] = self.df["Title"].progress_apply(lambda title: self.launch_openai_evaluation(title))
+    
+    def to_csv(self, output_path=None):
+        """
+        Save the dataframe with the screening results to a CSV.
+        """
+        if output_path is None:
+            output_path = self.csv_path.split('.')[0] + "_cleaned.csv"
+        self.df.to_csv(output_path, index=False)
+        print(f"Saved finalized CSV to {output_path}")
+        return output_path
+        
+    def run(self):
+        """
+        Orchestrator method
+        """
+        self.keyword_screen()
+        self.openai_screen()
+        output_path = self.to_csv()
+
+class AbstractScreener(TitleScreener):
+    """
+    A class to evaluate abstracts from a CSV using the OpenAI API based on a posed question.
+
+    Methods:
+    -------
+    keyword_screen(keywords: List[str]) -> None:
+        Screens astracts in the DataFrame using a list of provided keywords.
+    openai_screen() -> None:
+        Evaluates astracts in the DataFrame using OpenAI's chat models.
+    to_csv(output_path: str) -> None:
+        Saves the DataFrame, including screening results, to a CSV file.
+
+    Parameters:
+    ----------
+    api_key : str
+        The API key for OpenAI.
+    csv_path : str
+        Path to the CSV file containing the titles to be screened.
+    question : str
+        The question posed to the OpenAI model for title evaluation.
+    model_choice : str, optional (default="gpt3_small")
+        The choice of OpenAI model to use for evaluation. Options include "gpt3_small", "gpt3_large", and "gpt4".
+    """
+    def __init__(self, api_key_path, csv_path, question, model_choice="gpt3_small", keywords=None):
+        """
+        Initializes the AbstractEvaluatorDocumented class with the path to the API key and the CSV containing the abstracts.
+
+        Parameters:
+        - api_key_path (str): Path to the file containing the OpenAI API key.
+        - csv_path (str): Path to the CSV containing the abstracts.
+        """
+        self.csv_path = csv_path
+        self.keywords = keywords
+        super().__init__(api_key_path=api_key_path, csv_path=csv_path, question=question, model_choice=model_choice)
+        self.df = pd.read_csv(csv_path)
+
+    def keyword_screen(self):
+        """
+        Screen titles using a basic language model approach.
+        
+        Keywords = list of strings which can be used to identify relevant articles
+        """
+        if self.keywords:
+            self.df["Keyword_Screen_Abstract"] = self.df["Abstract"].apply(lambda text: int(any(word in text.lower() for word in self.keywords)))
+    
+    def launch_openai_evaluation(self, text):
+        conversation = [
+            {"role": "system", "content": "You are a helpful assistant. Responses should be (0 for No, 1 for Yes)"},
+            {"role": "user", "content": f"Based on this abstract: {text}\n{self.question}\n\nResponse (0 for No, 1 for Yes)"}
+            ]
+        return self.evaluate_with_openai(conversation)
+        
+    def openai_screen(self):
+        """
+        Screen titles using OpenAI GPT based on a posed question.
+        """
+        tqdm.pandas(desc="OpenAI Screening")
+        self.df["OpenAI_Screen_Abstract"] = self.df["Abstract"].progress_apply(lambda text: self.launch_openai_evaluation(text))
+    
+    def run(self):
+        """
+        Orchestrator method
+        """
+        self.keyword_screen()
+        self.openai_screen()
+        output_path = self.to_csv()
+        return output_path

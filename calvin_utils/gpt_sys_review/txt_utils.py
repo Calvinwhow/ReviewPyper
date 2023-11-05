@@ -1,5 +1,6 @@
 import os
 import re
+import pandas as pd
 
 # Updated TextPreprocessor class without removing newlines
 class TextPreprocessor:
@@ -159,3 +160,196 @@ class TextChunker:
         - list: List containing the generated text chunks.
         """
         return self.chunks
+
+class AbstractSeparator:
+    '''
+    A class to organize .txt of Abstracts from PubMed into a CSV file.
+    
+    Example usage:
+    separator = AbstractSeparator("/path/to/your/textfile.txt")
+    separator.separate_abstracts()
+    separator.to_csv("/path/to/save/csvfile.csv")
+    '''
+    def __init__(self, file_path):
+        self.file_path = file_path
+        with open(self.file_path, 'r') as file:
+            self.content = file.read()
+        self.abstracts = []
+        
+    def separate_abstracts(self):
+        """Separate the content into individual abstracts based on the described pattern."""
+        #r'(\d+\.\s)'
+        first_abstract_entry = re.search(r'(\d+\.\s[A-Z])', self.content)
+        first_start_position = first_abstract_entry.start() if first_abstract_entry else None
+
+        #r'\n(\d+\.\s)'
+        # Find subsequent abstracts using the original pattern
+        abstract_entries = re.finditer(r'\n\n\n(\d+\.\s[A-Z])', self.content)
+        start_positions = [match.start() for match in abstract_entries]
+        
+        if first_start_position is not None:
+            start_positions = [first_start_position] + start_positions
+
+        # Create abstract chunks based on the start positions
+        abstract_chunks = [self.content[start_positions[i]:start_positions[i + 1]].strip() for i in range(len(start_positions) - 1)]
+        abstract_chunks.append(self.content[start_positions[-1]:].strip())
+        
+        self.abstracts = abstract_chunks
+    
+    def to_csv(self, output_path=None):
+        """Save the separated abstracts to a CSV."""
+        df = pd.DataFrame(self.abstracts, columns=["Abstract"])
+        if output_path is None:
+            output_path = self.file_path.split('.txt')[0]+'_cleaned.csv'
+        df.to_csv(output_path, index=False)
+        return df, output_path
+        
+    def get_abstracts(self):
+        """Return the list of separated abstracts."""
+        return self.abstracts
+    
+    def run(self):
+        """Orchestrator method"""
+        self.separate_abstracts()
+        df, output_path = self.to_csv()
+        return df, output_path
+    
+class TitleReviewFilter():
+    """
+    A class to filter abstracts based on title review results.
+
+    Methods:
+    - load_data: Loads the title review results and abstracts data.
+    - filter_abstracts: Filters the abstracts based on a specified column from the title review results.
+    - save_filtered_data: Saves the filtered abstracts to a specified path.
+    - get_filtered_dataframe: Returns the filtered abstracts dataframe for visualization.
+    """
+
+    def __init__(self, title_review_path, abstracts_path, column_name):
+        """
+        Initializes the TitleReviewFilter class with paths to the title review results and abstracts CSVs.
+
+        Parameters:
+        - column_name (str): The column name in the title review results to use for filtering.
+        - title_review_path (str): Path to the title review results CSV.
+        - abstracts_path (str): Path to the abstracts CSV.
+        """
+        self.title_review_path = title_review_path
+        self.abstracts_path = abstracts_path
+        self.title_df, self.abstracts_df = self.load_data()
+        self.column_name = column_name
+
+    def load_data(self):
+        """
+        Loads the title review results and abstracts data from CSVs.
+
+        Returns:
+        - DataFrame, DataFrame: DataFrames containing the title review results and abstracts.
+        """
+        title_df = pd.read_csv(self.title_review_path)
+        abstracts_df = pd.read_csv(self.abstracts_path)
+        return title_df, abstracts_df
+
+    def filter_abstracts(self):
+        """
+        Filters the abstracts based on a specified column from the title review results.
+        """
+        # Find the indices of the rows in title review results where the specified column has a value of 1
+        mask_indices = self.title_df[self.title_df[self.column_name] == 1].index
+        # Filter the abstracts dataframe using the mask indices
+        self.filtered_df = self.abstracts_df.iloc[mask_indices]
+
+    def save_filtered_data(self, output_path=None):
+        """
+        Saves the filtered abstracts to a specified path.
+
+        Parameters:
+        - output_path (str): Path to save the filtered abstracts CSV.
+        """
+
+        if output_path is None:
+            output_path = self.abstracts_path.split('.')[0]+'_filtered.csv'
+        if not output_path.endswith('.csv'):
+            output_path += '.csv'
+        self.filtered_df.to_csv(output_path, index=False)
+        return output_path
+
+    def get_filtered_dataframe(self):
+        """
+        Returns the filtered abstracts dataframe for visualization.
+
+        Returns:
+        - DataFrame: DataFrame containing the filtered abstracts.
+        """
+        return self.filtered_df
+    
+    def run(self):
+        """
+        Orchestrator method.
+        """
+        self.filter_abstracts()
+        output_path = self.save_filtered_data()
+        df = self.get_filtered_dataframe()
+        return df, output_path
+    
+class PostProcessing:
+    '''
+    A class for post-processing operations on CSV files containing abstracts.
+    
+    Example usage:
+    post_process = PostProcessing("csv1.csv", "csv2.csv", "pubmed_csv.csv")
+    merged_df = post_process.merge_csvs_on_abstract()
+    final_file_path = post_process.concatenate_csvs()
+    '''
+    def __init__(self, file1_path, file2_path, pubmed_csv_path):
+        '''
+        Initialize the PostProcessing class.
+        
+        Parameters:
+        file1_path (str): The path to the first CSV file to be merged.
+        file2_path (str): The path to the second CSV file to be merged.
+        pubmed_csv_path (str): The path to the PubMed CSV file for concatenation.
+        '''
+        self.file1_path = file1_path
+        self.file2_path = file2_path
+        self.pubmed_csv_path = pubmed_csv_path
+        self.merged_df = None
+
+    def merge_csvs_on_abstract(self):
+        '''
+        Merge two CSV files based on the 'Abstract' column and store the result.
+        
+        Returns:
+        DataFrame: The merged DataFrame.
+        '''
+        # Reading the two CSV files
+        df1 = pd.read_csv(self.file1_path)
+        df2 = pd.read_csv(self.file2_path)
+        
+        # Merging them on the 'Abstract' column
+        self.merged_df = pd.merge(df1, df2, on='Abstract', how='outer')
+        
+        return self.merged_df
+
+    def concatenate_csvs(self):
+        '''
+        Concatenate the merged DataFrame with another CSV file and save as "master_list.csv".
+        
+        Returns:
+        str: The path to the saved final CSV file.
+        '''
+        # Reading the PubMed CSV file
+        df_pubmed = pd.read_csv(self.pubmed_csv_path)
+        
+        # Concatenating the dataframes
+        self.concatenated_df = df_pubmed.join(self.merged_df, lsuffix='_merged', rsuffix='_pubmed')
+        
+        # Saving the concatenated DataFrame
+        self.final_file_path = os.path.join(os.path.dirname(self.file1_path), "master_list.csv")
+        self.concatenated_df.to_csv(self.final_file_path, index=False)
+        print(f"Saved Master List to: \n {self.final_file_path}")
+            
+    def run(self):
+        self.merge_csvs_on_abstract()
+        self.concatenate_csvs()
+        return self.concatenated_df
