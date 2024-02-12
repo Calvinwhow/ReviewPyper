@@ -1,5 +1,3 @@
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.decomposition import LatentDirichletAllocation
 from tqdm import tqdm
 from calvin_utils.gpt_sys_review.txt_utils import TextChunker
 from calvin_utils.gpt_sys_review.gpt_utils import CaseReportLabeler
