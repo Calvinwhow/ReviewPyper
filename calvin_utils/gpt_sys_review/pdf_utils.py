@@ -364,13 +364,14 @@ class BulkPDFDownloader:
                     self.master_df['PDF_Path'] = ''
         
         # Update Master list based on the PyPaperBot Results
-        for index, row in report_df.iterrows():
+        filtered_report_df = report_df[report_df["Name"].notna()]
+        for index, row in filtered_report_df.iterrows():
             # Get values from the PyPaperBot result.csv file.
             doi = row["DOI"] # Will use this as the key to reference the master list. 
             name = row["Name"] # This is what PyPaperBot saved the give file as. 
             downloaded = row["Downloaded"]
-            filename = os.path.join(self.pdf_dir_path, name)
-            
+            filename = os.path.join(self.pdf_dir_path, str(name))
+
             # Access the master list and update each item accordingly.
             self.master_df.loc[self.master_df['DOI'] == doi, 'PDF_Downloaded'] = downloaded
             self.master_df.loc[self.master_df['DOI'] == doi, 'PDF_Path'] = filename
@@ -383,17 +384,20 @@ class BulkPDFDownloader:
         Iterate upon result_df multiple times until all mirrors have been attempted. 
         '''   
         
-        mirror_list=["https://sci-hub.do", "https://sci-hub.st", "https://sci-hub.se", "https://sci-hub.ru"]    
+        mirror_list=["https://sci-hub.ru", "https://sci-hub.st", "https://sci-hub.se"]    
         try:
-            for mirror in mirror_list: 
+            for mirror in mirror_list:
                 report_df = pd.read_csv(os.path.join(self.pdf_dir_path, 'result.csv'))
-                undownloaded_dois_list = report_df.loc[report_df["Downloaded"] == "FALSE", 'DOI'].tolist()
+                report_df = report_df[report_df["Name"].notna()] # Removing erroneous cells
+                undownloaded_dois_list = report_df.loc[report_df["Downloaded"] == False, 'DOI'].tolist()
+                print("----\n Found ", len(undownloaded_dois_list), " undownloaded documents. ")
+                print("Attempting mirror: ", mirror, "\n ----") 
                 if len(undownloaded_dois_list) > 0:
                     self.prepare_pypaperbot_v1(undownloaded_dois_list)
                     self.orchestrate_download_v1(mirror=mirror)
                     self.update_master_list()
                 else:
-                    break
+                    pass
         except Exception as e:
             print("Error in iteration upon lists: %s" % e)
             
