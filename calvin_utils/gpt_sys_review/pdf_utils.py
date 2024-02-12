@@ -297,6 +297,7 @@ class PDFTextExtractor:
 class BulkPDFDownloader:
     """
     A class to bulk download PDFs for a list of DOIs from a CSV file.
+    This may need to be run with a VPN.
 
     Attributes:
         csv_path (str): Path to the CSV file containing DOIs and screening info.
@@ -318,7 +319,7 @@ class BulkPDFDownloader:
         self.dois = filtered_df['DOI'].tolist()
 
         # Create a text file to store the DOIs
-        with open(os.path.join(self.directory, 'input.txt'), 'w') as f:
+        with open(os.path.join(self.directory, 'dois.txt'), 'w') as f:
             for doi in self.dois:
                 f.write(f"{doi}\n")
                 
@@ -338,6 +339,7 @@ class BulkPDFDownloader:
             pdf_dir_path = os.path.join(self.directory, 'PDFs')
 
             for doi in self.dois:
+                doi = str(doi)
                 pdf_name = f"{doi.replace('/', '_')}.pdf"
                 pdf_path = os.path.join(pdf_dir_path, pdf_name)
                 
@@ -348,21 +350,26 @@ class BulkPDFDownloader:
             print("Updated 'master_list.csv' with PDF download status.")
         else:
             print("'master_list.csv' does not exist in the specified directory.")
-
-    def run(self):
-        doi_file_path = os.path.join(self.directory, 'input.txt')
+            
+    def orchestrate_download(self):
+        '''
+        Run the PyPaperBot Download
+        '''
+        doi_file_path = os.path.join(self.directory, 'dois.txt')
         pdf_dir_path = os.path.join(self.directory, 'PDFs')
         os.makedirs(pdf_dir_path, exist_ok=True)
-        
-        # Run PyPaperBot
-        command = f"python -m PyPaperBot --doi-file=\"{doi_file_path}\" --dwn-dir=\"{pdf_dir_path}\""
-        subprocess.run(command, shell=True)
-        
-        self.update_master_list()
+        #Mirrors: https://sci-hub.st or https://sci-hub.do
+        command = f"python -m PyPaperBot --doi-file=\"{doi_file_path}\" --dwn-dir=\"{pdf_dir_path}\" --scihub-mirror=https://sci-hub.st"
+        print("Running command:", command)
 
-import os
-import pandas as pd
-import re
+        try:
+            subprocess.run(command, shell=True, text=True)
+        except Exception as e:
+            print("An error occurred:", e)
+
+    def run(self):
+        self.orchestrate_download()
+        self.update_master_list()
 
 class PdfPostProcess:
     def __init__(self, master_list_path):
