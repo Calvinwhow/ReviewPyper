@@ -384,7 +384,7 @@ class BulkPDFDownloader:
         Iterate upon result_df multiple times until all mirrors have been attempted. 
         '''   
         
-        mirror_list=["https://sci-hub.ru", "https://sci-hub.st", "https://sci-hub.se"]    
+        mirror_list=["https://sci-hub.ru", "https://sci-hub.st", "https://sci-hub.se", "https://sci-hub.do"]    
         try:
             for mirror in mirror_list:
                 report_df = pd.read_csv(os.path.join(self.pdf_dir_path, 'result.csv'))
