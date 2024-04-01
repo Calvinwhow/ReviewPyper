@@ -3,9 +3,10 @@ pdf2image==1.16.3
 openai==0.27.9
 PyPDF2==2.11.1
 setuptools==65.5.1
-opencv-python==4.6.0
+opencv-python==4.6.0.66
 fuzzywuzzy==0.18.0
-numpy==1.21.6
+numpy==1.26
 tqdm==4.64.1
 textract==1.6.5
 pytesseract==0.3.10
+biopython==1.83
