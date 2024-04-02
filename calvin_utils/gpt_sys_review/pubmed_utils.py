@@ -9,6 +9,10 @@ import requests
 from lxml import etree
 from itertools import chain
 from tqdm import tqdm
+import re
+import numpy as np
+
+tqdm.pandas()
 
 class PubMedSearcher:
     """
@@ -23,8 +27,11 @@ class PubMedSearcher:
     - search: Searches PubMed for articles based on the search string and retrieves the specified number of articles.
     - download_articles: Downloads articles from the DataFrame to the specified directory (open access is prioritized, but may use PyPaperBot as a fallback).
     - fetch_references: Fetches references for each article in the DataFrame using multiple methods.
+    - standardize_references: Standardizes the references column in the DataFrame to only contain the following keys: ['doi', 'pmid', 'pmcid', 'title', 'authors']
     - fetch_cited_by: Fetches list of articles that cite each article in the DataFrame using Europe PMC (only works for articles with a record in Europe PMC)
     - download_xml_fulltext: Downloads the XML full text for each article in the DataFrame to the specified directory (rarely available, but can be useful).
+    - check_open_access: Checks if each article in the DataFrame is open access using Unpaywall and fills in the relevant columns ['is_oa', 'best_oa_location_url', 'pdf_url_1', 'pdf_url_2', 'pdf_url_3', 'pdf_url_4', 'europe_pmc_url']
+    - save: Saves the df to a CSV file.
     """
 
     def __init__(self, search_string=None, df=None, email="lesion_bank@gmail.com"):
@@ -35,7 +42,6 @@ class PubMedSearcher:
         search_string (str): The search string to use when querying PubMed.
         df (DataFrame): An optional DataFrame that may already contain articles, previous search results, etc.
         email (str): The email address to use when querying PubMed.
-
         """
         self.search_string = search_string
         self.df = df if df is not None else pd.DataFrame()
@@ -51,17 +57,27 @@ class PubMedSearcher:
 
         Parameters:
         count (int): The number of articles to retrieve.
-        min_date (int): The minimum publication year to consider.
-        max_date (int): The maximum publication year to consider.
-        order_by (str): The order in which to retrieve articles. Can be 'chronological' or 'relevance'.
+        min_date (int, optional): The minimum publication year to consider.
+        max_date (int, optional): The maximum publication year to consider.
+        order_by (str, optional): The order in which to retrieve articles. Can be 'chronological' or 'relevance'. Defaults to 'chronological'.
         """
         if not self.search_string:
             raise ValueError("Search string is not provided")
 
         Entrez.email = self.email
-        search_handle = Entrez.esearch(db="pubmed", term=self.search_string, retmax=count,
-                                        sort='relevance' if order_by == 'relevance' else 'pub date',
-                                        mindate=str(min_date), maxdate=str(max_date))
+        search_params = {
+            'db': "pubmed",
+            'term': self.search_string,
+            'retmax': count,
+            'sort': 'relevance' if order_by == 'relevance' else 'pub date',
+        }
+
+        if min_date is not None:
+            search_params['mindate'] = str(min_date)
+        if max_date is not None:
+            search_params['maxdate'] = str(max_date)
+
+        search_handle = Entrez.esearch(**search_params)
         search_results = Entrez.read(search_handle)
         search_handle.close()
 
@@ -73,13 +89,16 @@ class PubMedSearcher:
         records_df = self._parse_records_to_df(records_xml_bytes)
         self.df = pd.concat([self.df, records_df], ignore_index=True)
 
-    def download_articles(self, download_directory="downloads", allow_pypaperbot=True):
+    def download_articles(self, download_directory="PDFs", allow_pypaperbot=True, save_progress=True, max_downloads=None, enumerate=False):
         """
         Downloads articles from the DataFrame to the specified directory. Tries to download open access articles first, then uses PyPaperBot as a fallback.
 
         Parameters:
         download_directory (str): The directory where the PDF files should be saved.
         allow_pypaperbot (bool): Whether to use PyPaperBot as a fallback for downloading articles.
+        save_progress (bool): Whether to save the DataFrame after downloading each article. Good when downloading large numbers of articles that may not complete in one go.
+        max_downloads (int): The maximum number of articles to download. If None, all articles will be downloaded.
+        enumerate (bool): Whether to enumerate the download directories based on the article index.
         """
 
         if self.df.empty:
@@ -92,41 +111,49 @@ class PubMedSearcher:
             self.df['pdf_filepath'] = None
 
         for index, row in tqdm(self.df.iterrows(), total=self.df.shape[0], desc="Downloading articles"):
-            if row.get('download_complete') == 'Complete':
+            count_downloads = self.df['download_complete'].value_counts().get('Complete', 0)
+            if max_downloads and count_downloads >= max_downloads:
+                print(f"Maximum number of downloads reached ({max_downloads}).")
+                break
+            if row.get('download_complete') == 'Complete' or row.get('download_complete') == 'Unavailable':
                 continue
             
-            custom_download_dir = self._determine_download_directory(row, download_directory, index)
+            custom_download_dir = self._determine_download_directory(row, download_directory, index, enumerate)
             os.makedirs(custom_download_dir, exist_ok=True)
 
-            # Extract last name and year for filename
-            last_name = row.get('first_author', '').split(',')[0].strip() if 'first_author' in row else None
-            year = str(row.get('publication_year')) if 'publication_year' in row else None
+            pmid = row.get('pmid')
 
-            if row.get('is_oa', False):
+            if not pd.notna(row.get('is_oa')):
+                pass
+            elif pd.notna(row.get('is_oa')) or row.get('is_oa', False):
                 for url in [row.get(f'pdf_url_{i}') for i in range(1, 5) if row.get(f'pdf_url_{i}')]:
-                    if self.download_article_oa(url, custom_download_dir, last_name, year):
+                    if self.download_article_oa(url, custom_download_dir, pmid):
                         if self._update_download_status(custom_download_dir, index):
                             break  # Exit loop if successful download
                 
             # If download is not complete, try PyPaperBot
-            if self.df.at[index, 'download_complete'] != 'Complete' and allow_pypaperbot and row.get('doi'):
-                if self.download_article_pypaperbot(row['doi'], custom_download_dir):
+            if self.df.at[index, 'download_complete'] != 'Complete' and allow_pypaperbot and row.get('doi') and pmid:
+                if self.download_article_pypaperbot(row['doi'], pmid, custom_download_dir):
                     self._update_download_status(custom_download_dir, index)
                 
             # If still not marked as complete, set as unavailable
             if self.df.at[index, 'download_complete'] != 'Complete':
                 self.df.at[index, 'download_complete'] = "Unavailable"
                 self.df.at[index, 'pdf_filepath'] = None
+            
+            if save_progress:
+                self.save()
 
     def fetch_references(self):
         """
-        Fetches references for each article in the DataFrame using multiple methods.
+        Fetches references for each article in the DataFrame using the find_references method.
 
-        The references are fetched in the following order:
-        1. Europe PMC (if available)
-        2. PubMed OA Subset (if available)
-        3. CrossRef (if DOI is available)
-        4. "Not found" if no references are found using the above methods.
+        The find_references method will attempt to fetch references in the following order:
+        1. PubMed
+        2. PMC
+        3. Europe PMC
+        4. CrossRef
+        If no references are found using these methods, it will return "Not found".
         """
         if not hasattr(self, 'df') or self.df.empty:
             print("DataFrame does not exist or is empty.")
@@ -136,30 +163,52 @@ class PubMedSearcher:
             self.df['references'] = pd.NA
         
         for index, row in tqdm(self.df.iterrows(), total=self.df.shape[0], desc="Fetching References"):
-            references = None
-            
             if pd.isna(row['references']):
-                if row.get('is_oa') and pd.notna(row.get('europe_pmc_url')):
-                    references = self.get_references_europe(row.get('pmid'))
-                    
-                if references is None or not references:
-                    if row.get('is_oa') and pd.notna(row.get('pmcid')):
-                        references = self.get_references_pubmed_oa_subset(row.get('pmcid'))
-                
-                if references is None or not references:
-                    references = self.get_references_crossref(row.get('doi')) if pd.notna(row.get('doi')) else None
-                
-                if references is None or not references:
+                references = self._find_references_for_row(row)
+                if not references:  # If references list is empty or None
                     references = "Not found"
-                
                 self.df.at[index, 'references'] = references
+
+    def standardize_references(self):
+        """
+        Standardizes the references column in the DataFrame to only contain the following keys:
+        ['doi', 'pmid', 'pmcid', 'title', 'authors']
+        Populates a new column 'references_standardized' with the standardized references (list of dicts)
+        """
+        def standardize_references_for_row(references):
+            standard_keys = ['doi', 'pmid', 'pmcid', 'title', 'authors']
+            return [
+                {key: ref.get(key, None) for key in standard_keys}
+                for ref in references
+                if isinstance(ref, dict)
+            ]
+
+        if 'references' not in self.df.columns:
+            print('Error: No references column found in DataFrame.')
+            return
+
+        if 'references_standardized' not in self.df.columns:
+            self.df['references_standardized'] = pd.NA
+
+        for index, row in tqdm(self.df.iterrows(), total=self.df.shape[0], desc="Standardizing references"):
+            ref_standardized = row['references_standardized']
+            if pd.notna(ref_standardized) and (isinstance(ref_standardized, (list, np.ndarray)) and len(ref_standardized) > 0):
+                continue
+            
+            references = row['references']
+            if isinstance(references, list) and not references:
+                continue
+            if isinstance(references, np.ndarray) and references.size == 0:
+                continue
+            if not isinstance(references, (list, np.ndarray)) and pd.isna(references):
+                continue
+
+            self.df.at[index, 'references_standardized'] = standardize_references_for_row(references)
 
     def fetch_cited_by(self):
         """
         Fetches list of articles that cite each article in the DataFrame using Europe PMC.
-
         Currently only works for articles with a record in Europe PMC.
-
         """
         if not hasattr(self, 'df') or self.df.empty:
             print("DataFrame does not exist or is empty.")
@@ -169,11 +218,10 @@ class PubMedSearcher:
             self.df['cited_by'] = pd.NA
         
         for index, row in tqdm(self.df.iterrows(), total=self.df.shape[0], desc="Fetching Cited By"):
-            cited_by = None
-            
-            if pd.isna(row['cited_by']):
-                if row.get('is_oa') and pd.notna(row.get('europe_pmc_url')):
-                    cited_by = self.fetch_citing_articles_europe(row.get('pmid'))
+            if pd.notna(row['cited_by']):
+                continue
+            if pd.notna(row.get('is_oa')) and row.get('is_oa') and pd.notna(row.get('europe_pmc_url')):
+                cited_by = self.get_citing_articles_europe(row.get('pmid'))
                 self.df.at[index, 'cited_by'] = cited_by
 
     def download_xml_fulltext(self, download_directory="downloads"):
@@ -223,7 +271,45 @@ class PubMedSearcher:
                 self.df.at[index, 'xml_download_complete'] = "Not OA or no XML available"
                 self.df.at[index, 'xml_filepath'] = None
 
-    def check_open_access(self, doi):
+    def check_open_access(self):
+        """
+        Checks if each article in the DataFrame is open access using Unpaywall and fills in the relevant columns.
+        Columns: 'is_oa', 'best_oa_location_url', 'pdf_url_1', 'pdf_url_2', 'pdf_url_3', 'pdf_url_4', 'europe_pmc_url'
+        """
+        required_columns = ['is_oa', 'best_oa_location_url', 'pdf_url_1', 'pdf_url_2', 
+                            'pdf_url_3', 'pdf_url_4', 'europe_pmc_url']
+        for column in required_columns:
+            if column not in self.df.columns:
+                self.df[column] = pd.NA
+
+        # Check if 'doi' column exists
+        if 'doi' not in self.df.columns:
+            return "Error: 'doi' column not found in the DataFrame."
+
+        # Iterate over DataFrame rows and fill in the values
+        for index, row in tqdm(self.df.iterrows(), total=self.df.shape[0], desc="Checking Open Access"):
+            if row.get('is_oa') is True or row.get('is_oa') is False:
+                continue
+            doi = row.get('doi')
+            if pd.notna(doi):
+                oa_info = self.check_open_access_doi(doi)
+                for key in required_columns:
+                    self.df.at[index, key] = oa_info.get(key, pd.NA)
+            else:
+                self.df.at[index, 'is_oa'] = False
+
+    def save(self, csv_path="master_list.csv"):
+        """
+        Saves the DataFrame to a CSV file.
+        """
+        self.df.to_csv(csv_path, index=False)
+
+    def save_abstracts_as_csv(self, filename="abstracts.csv"):
+        """Saves a DataFrame containing only the 'pmid' and 'abstract' columns to a CSV file."""
+        abstracts_df = self.df[['pmid','abstract']].copy()
+        abstracts_df.to_csv(filename, index=False)
+
+    def check_open_access_doi(self, doi):
         """
         Checks if an article is open access using Unpaywall and returns access information, including multiple PDF URLs.
 
@@ -266,7 +352,7 @@ class PubMedSearcher:
         else:
             return {"error": f"Unpaywall API request failed with status code {response.status_code}"}
 
-    def download_article_pypaperbot(self, doi, download_directory="downloads", mirror="https://sci-hub.st"):
+    def download_article_pypaperbot(self, doi, pmid, download_directory="downloads", mirror_idx=0):
         """
         Attempts to fetch the article using PyPaperBot based on the given DOI and Sci-Hub mirror.
 
@@ -278,19 +364,26 @@ class PubMedSearcher:
         Returns:
         str: A message indicating the result of the fetch operation.
         """
+        mirror_list= ["https://sci-hub.st", "https://sci-hub.ru",  "https://sci-hub.se", "https://sci-hub.do"]   
+        
+        if mirror_idx >= len(mirror_list):
+            return None
+        
         try:
-            command = f'PyPaperBot --doi {doi} --dwn-dir "{download_directory}" --scihub-mirror={mirror}'
+            command = f'PyPaperBot --doi {doi} --dwn-dir "{download_directory}" --scihub-mirror={mirror_list[mirror_idx]}'
             
             result = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            
-            if result.returncode == 0:
+
+            if self._check_if_downloaded(download_directory):
+                self._rename_downloaded_file(download_directory, pmid)
                 return "Article fetched successfully."
             else:
-                return f"PyPaperBot encountered an error: {result.stderr}"
+                return self.download_article_pypaperbot(doi, pmid, download_directory, mirror_idx + 1)
+                               
         except subprocess.CalledProcessError as e:
             return f"Error executing PyPaperBot: {e}"
         
-    def download_article_oa(self, pdf_url, download_directory, last_name=None, year=None):
+    def download_article_oa(self, pdf_url, download_directory, pmid=None):
         """
         Downloads an article from a provided open access PDF URL to the specified directory.
         Sets the filename as <last_name>_<year>.pdf if possible, or defaults to a generic name.
@@ -305,7 +398,7 @@ class PubMedSearcher:
         try:
             response = requests.get(pdf_url, stream=True)
             if response.status_code == 200:
-                filename = f"{last_name}_{year}.pdf" if last_name and year else "downloaded_article.pdf"
+                filename = f"{pmid}.pdf" if pmid else "downloaded_article.pdf"
                 file_path = os.path.join(download_directory, filename)
                 
                 with open(file_path, 'wb') as f:
@@ -319,22 +412,40 @@ class PubMedSearcher:
 
     def get_references_europe(self, pmid):
         """
-        Fetches references for an article identified by its PMID from Europe PMC.
+        Fetches references for an article identified by its PMID from Europe PMC API (hits the MEDLINE database).
         """
     
-        url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/MED/{pmid}/references?format=json"
+        url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/MED/{pmid}/references?page=1&pageSize=1000&format=json"
 
         try:
             response = requests.get(url)
             if response.status_code == 200:
                 data = response.json()
-                return data
+                data =  data.get('referenceList', [])
+                if data:
+                    parsed_data = data.get('reference', [])
+                    if "id" in parsed_data:
+                        parsed_data["pmid"] = parsed_data.pop("id")
+                    if "authorString" in data:
+                        parsed_data["authors"] = parsed_data.pop("authorString")
+                return parsed_data.get('reference', []) if data else []
             else:
-                print(f"Failed to fetch references. Status code: {response.status_code}")
+                # print(f"Failed to fetch references. Status code: {response.status_code}")
                 return None
         except Exception as e:
-            print(f"Exception occurred while fetching references: {e}")
+            # print(f"Exception occurred while fetching references: {e}")
             return None
+        
+    def get_references_entrez_pmc(self, pmcid):
+        """Finds references for a given PMCID using Entrez API.
+        Seems to return identical results to the get_references_pubmed_oa_subset method.
+        """
+        Entrez.email = self.email
+        handle = Entrez.efetch(db="pmc", id=pmcid, retmode="xml")
+        xml_data = handle.read()
+        handle.close()
+        references = self._parse_pubmed_references(xml_data)
+        return references
         
     def get_references_pubmed_oa_subset(self, pmcid):
         xml_content = self._get_xml_for_pmcid(pmcid)
@@ -343,6 +454,67 @@ class PubMedSearcher:
             return references
         else:
             return None
+        
+    def get_references_entrez_pubmed(self, pmid):
+        """
+        Returns a list of PMCIDs for the references of a given pmid. 
+        Doesn't seem to work for all PMIDs, so use with caution.
+        """
+        Entrez.email = self.email
+        handle = Entrez.efetch(db="pubmed", id=pmid, retmode="xml")
+        article_details = Entrez.read(handle)
+        handle.close()
+
+        if article_details['PubmedArticle'][0]['PubmedData']['ReferenceList'] and len(article_details['PubmedArticle'][0]['PubmedData']['ReferenceList']) > 0:
+            references = []
+            try:
+                # Attempt to navigate to the ReferenceList
+                result_list = article_details['PubmedArticle'][0]['PubmedData']['ReferenceList'][0]['Reference']
+                authors_pattern = r"^(.*?)\s+et al\."
+                doi_pattern = r"doi\s*:\s*([^\s.]+)\.?"
+                doi_pattern2 = r"doi\.org/([^\s,;]+)"
+                doi_pattern3 = r"doi\.wiley\.org/([^\s,;]+)"
+
+                for ref in result_list:
+                    article_id_list = ref.get('ArticleIdList', [])
+                    citation = ref.get('Citation', '')
+                    ref_dict = {'citation': citation}
+
+                    if article_id_list:
+                        for element in article_id_list:
+                            value = str(element)
+                            id_type = element.attributes['IdType']
+                            ref_dict[id_type] = value
+
+                    if 'doi' not in ref_dict:
+                        match = re.search(doi_pattern, citation, re.IGNORECASE)
+                        if match:
+                            ref_dict['doi'] = match.group(1)
+                        elif 'doi' not in ref_dict:
+                            match2 = re.search(doi_pattern2, citation, re.IGNORECASE)
+                            if match2:
+                                ref_dict['doi'] = match2.group(1)
+                        else:
+                            match3 = re.search(doi_pattern3, citation, re.IGNORECASE)
+                            if match3:
+                                ref_dict['doi'] = match3.group(1)
+
+                    authors_match = re.search(authors_pattern, citation, re.IGNORECASE)
+                    if authors_match:
+                        ref_dict['authors'] = authors_match.group(1)
+
+                    if 'pubmed' in ref_dict:
+                        ref_dict['pmid'] = ref_dict.pop('pubmed')
+                    if 'pmc' in ref_dict:
+                        ref_dict['pmcid'] = ref_dict.pop('pmc')
+                    
+                    references.append(ref_dict)
+                return references
+
+            except (KeyError, IndexError, TypeError) as e:
+                print(f"Error navigating article details: {e}")
+                return None
+        return None
         
     def get_references_crossref(self, doi):
         """
@@ -363,9 +535,15 @@ class PubMedSearcher:
                 data = response.json()
                 references = data['message'].get('reference', [])
                 if references:
+                    for reference in references:
+                        if 'DOI' in reference:
+                            reference['doi'] = reference.pop('DOI')
+                        if 'author' in reference:
+                            reference['authors'] = reference.pop('author')
+                        if 'article-title' in reference:
+                            reference['title'] = reference.pop('article-title')
                     return references
                 else:
-                    print("No references found in the metadata.")
                     return None
             else:
                 print(f"Failed to fetch references, HTTP status code: {response.status_code}")
@@ -374,7 +552,7 @@ class PubMedSearcher:
             print(f"Request failed: {str(e)}")
             return None
 
-    def fetch_citing_articles_europe(self, pmid):
+    def get_citing_articles_europe(self, pmid):
         """
         Fetches references for an article identified by its PMID from Europe PMC.
         Tries two different search methods and returns the results from the first successful one.
@@ -387,7 +565,13 @@ class PubMedSearcher:
                 if response.status_code == 200:
                     data = response.json()
                     if data.get("citationList", {}).get("citation"):
-                        return data
+                        parsed_data = data['citationList']
+                        for citation in parsed_data["citation"]:
+                            if "id" in citation:
+                                citation["pmid"] = citation.pop("id")
+                            if "authorString" in citation:
+                                citation["authors"] = citation.pop("authorString")
+                        return parsed_data["citation"]
                 else:
                     print(f"Failed to fetch references. Status code: {response.status_code}")
             except Exception as e:
@@ -504,21 +688,6 @@ class PubMedSearcher:
             article_data['pmcid'] = pmcid
             article_data['pmid'] = pmid
 
-            if doi:
-                oa_info = self.check_open_access(doi)
-                article_data['is_oa'] = oa_info.get('is_oa', False)
-                article_data['best_oa_location_url'] = oa_info.get('best_oa_location_url', '')
-                article_data['pdf_url_1'] = oa_info.get('pdf_url_1', '')
-                article_data['pdf_url_2'] = oa_info.get('pdf_url_2', '')
-                article_data['pdf_url_3'] = oa_info.get('pdf_url_3', '')
-                article_data['pdf_url_4'] = oa_info.get('pdf_url_4', '')
-                article_data['europe_pmc_url'] = oa_info.get('europe_pmc_url', '')
-            else:
-                article_data['is_oa'] = False
-                article_data['best_oa_location_url'] = ''
-                article_data['best_oa_location_url_for_pdf'] = ''
-                article_data['oa_status'] = 'unknown'
-
             keywords = medline.get('KeywordList', [])
             article_data['keywords'] = "; ".join([kwd for sublist in keywords for kwd in sublist]) if keywords else ""
             
@@ -530,25 +699,25 @@ class PubMedSearcher:
 
             records_data.append(article_data)
 
-        return pd.DataFrame(records_data)
+        df =  pd.DataFrame(records_data)
+        cols = df.columns.tolist()
+        cols.insert(0, cols.pop(cols.index('pmid')))
+        df = df[cols]
+        return df
     
-    def _determine_download_directory(self, row, base_directory, index):
+    def _determine_download_directory(self, row, base_directory, index, enumerate=False):
         """Determine the download directory for an article based on its metadata."""
         def is_value_meaningful(value):
             return value and str(value).strip() not in ['', 'None', 'nan', 'NaN']
-
-        first_author = row.get('first_author', '').split(',')[0].strip() if 'first_author' in row and is_value_meaningful(row['first_author']) else None
-        publication_year = row.get('publication_year') if 'publication_year' in row and is_value_meaningful(row['publication_year']) else None
+        
         pmid = row.get('pmid') if 'pmid' in row and is_value_meaningful(row['pmid']) else None
 
-        dir_parts = [str(index)]
-
-        if first_author:
-            dir_parts.append(first_author)
-        if publication_year:
-            dir_parts.append(publication_year)
-        elif pmid:
-            dir_parts.append(f"pmid{pmid}")
+        dir_parts = []
+        
+        if enumerate:
+            dir_parts.append(f"{index}")
+        if pmid:
+            dir_parts.append(f"{pmid}")
 
         directory_name = "_".join(dir_parts)
         return os.path.join(base_directory, directory_name)
@@ -567,6 +736,67 @@ class PubMedSearcher:
         """Check if a file with the given extension exists in the specified directory or path."""
         files_with_type = glob(os.path.join(download_directory_or_path, f'*{filetype}'))
         return len(files_with_type) > 0
+    
+    def _rename_downloaded_file(self, download_directory, pmid):
+        """Rename the downloaded file to match the article's PMID."""
+        pdf_files = glob(os.path.join(download_directory, '*.pdf'))
+        if pdf_files:
+            pdf_file = pdf_files[0]
+            new_pdf_file = os.path.join(download_directory, f"{pmid}.pdf")
+            os.rename(pdf_file, new_pdf_file)
+    
+    def _find_references_for_row(self, row):
+        pmcid = row.get('pmcid', None)  # Correct usage for a pandas Series
+        pmid = row.get('pmid', None)
+        doi = row.get('doi', None)
+
+        def try_pubmed(pmid):
+            if pmid:
+                references = self.get_references_entrez_pubmed(pmid)
+                if references is not None and len(references) > 0:
+                    return references
+
+        def try_pmc(pmcid):
+            if pmcid:
+                references = self.get_references_entrez_pmc(pmcid)
+                if references is not None and len(references) > 0:
+                    return references
+                else:
+                    references = self.get_references_pubmed_oa_subset(pmcid)
+                    if references is not None and len(references) > 0:
+                        return references
+
+        def try_europe(pmid):
+            if pmid:
+                references = self.get_references_europe(pmid)
+                if references is not None and len(references) > 0:
+                    return references
+
+        def try_crossref(doi):
+            if doi:
+                references = self.get_references_crossref(doi)
+                if references is not None and len(references) > 0:
+                    return references
+
+        # Try all methods until one works
+        references = try_pubmed(pmid)
+        if references:
+            return references
+
+        references = try_pmc(pmcid)
+        if references:
+            return references
+
+        references = try_europe(pmid)
+        if references:
+            return references
+
+        references = try_crossref(doi)
+        if references:
+            return references
+
+        # Return None or an empty list if no references found
+        return []
         
     def _stringify_children(self, node):
         """
@@ -695,7 +925,7 @@ class PubMedSearcher:
                 "ref_id": ref_id,
                 "pmid_cited": pmid_cited,
                 "doi_cited": doi_cited,
-                "article_title": article_title,
+                "title": article_title,
                 "authors": "; ".join(names),
                 "year": year,
                 "journal": journal,
@@ -705,4 +935,3 @@ class PubMedSearcher:
             dict_refs.append(dict_ref)
             
         return dict_refs
-

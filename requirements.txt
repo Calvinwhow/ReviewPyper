@@ -10,3 +10,5 @@ tqdm==4.64.1
 textract==1.6.5
 pytesseract==0.3.10
 biopython==1.83
+lxml==5.2.0
+requests==2.31.0
