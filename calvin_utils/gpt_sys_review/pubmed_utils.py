@@ -11,6 +11,7 @@ from itertools import chain
 from tqdm import tqdm
 import re
 import numpy as np
+from calvin_utils.gpt_sys_review.image_utils import ImageExtractor
 
 tqdm.pandas()
 
@@ -51,7 +52,7 @@ class PubMedSearcher:
             self.df = pd.DataFrame()
         self.email = email
 
-    def search(self, count=10, min_date=None, max_date=None, order_by='chronological'):
+    def search(self, count=10, min_date=None, max_date=None, order_by='chronological', only_open_access=False, only_case_reports=False):
         """
         Searches PubMed for articles based on the search string and retrieves the specified number of articles.
 
@@ -60,9 +61,24 @@ class PubMedSearcher:
         min_date (int, optional): The minimum publication year to consider.
         max_date (int, optional): The maximum publication year to consider.
         order_by (str, optional): The order in which to retrieve articles. Can be 'chronological' or 'relevance'. Defaults to 'chronological'.
+        only_open_access (bool, optional): Whether to retrieve only open access articles. Defaults to False.
+        only_case_reports (bool, optional): Whether to retrieve only case reports. Defaults to False.
         """
         if not self.search_string:
             raise ValueError("Search string is not provided")
+        
+        additional_filters = []
+        if only_open_access:
+            # Combine open access filters with an OR condition
+            additional_filters.append("(open access[filter] OR free full text[sb])")
+        
+        if only_case_reports:
+            # Add filter for case reports
+            additional_filters.append("case reports[pt]")
+        
+        # Join any additional filters to the search string with AND
+        if additional_filters:
+            self.search_string += " AND " + " AND ".join(additional_filters)
 
         Entrez.email = self.email
         search_params = {
@@ -160,7 +176,7 @@ class PubMedSearcher:
             return
         
         if 'references' not in self.df.columns:
-            self.df['references'] = pd.NA
+            self.df['references'] = None
         
         for index, row in tqdm(self.df.iterrows(), total=self.df.shape[0], desc="Fetching References"):
             if pd.isna(row['references']):
@@ -188,7 +204,7 @@ class PubMedSearcher:
             return
 
         if 'references_standardized' not in self.df.columns:
-            self.df['references_standardized'] = pd.NA
+            self.df['references_standardized'] = None
 
         for index, row in tqdm(self.df.iterrows(), total=self.df.shape[0], desc="Standardizing references"):
             ref_standardized = row['references_standardized']
@@ -215,7 +231,7 @@ class PubMedSearcher:
             return
         
         if 'cited_by' not in self.df.columns:
-            self.df['cited_by'] = pd.NA
+            self.df['cited_by'] = None
         
         for index, row in tqdm(self.df.iterrows(), total=self.df.shape[0], desc="Fetching Cited By"):
             if pd.notna(row['cited_by']):
@@ -223,6 +239,24 @@ class PubMedSearcher:
             if pd.notna(row.get('is_oa')) and row.get('is_oa') and pd.notna(row.get('europe_pmc_url')):
                 cited_by = self.get_citing_articles_europe(row.get('pmid'))
                 self.df.at[index, 'cited_by'] = cited_by
+
+    def extract_images(self):
+        """
+        Extracts images from PDFs for each article in the DataFrame and saves the image paths in a new column 'img_paths'.
+        Able to handle both native and image-based PDFs.
+        """
+        if 'pdf_filepath' not in self.df.columns:
+            print("PDF file paths column not found in DataFrame.")
+            return
+        self.df["img_paths"] = [[] for _ in range(len(self.df))]
+        for idx, row in tqdm(self.df.iterrows(), total=len(self.df), desc="Extracting images"):
+            pdf_path = row["pdf_filepath"]
+            if pd.isna(pdf_path) or pdf_path in [0, "0", None, "", "<NA>"]:
+                continue
+            img_extractor = ImageExtractor(pdf_path)
+            img_extractor.extract_images()
+            self.df.at[idx, "img_paths"] = img_extractor.img_paths
+        return self
 
     def download_xml_fulltext(self, download_directory="downloads"):
         """
@@ -280,7 +314,7 @@ class PubMedSearcher:
                             'pdf_url_3', 'pdf_url_4', 'europe_pmc_url']
         for column in required_columns:
             if column not in self.df.columns:
-                self.df[column] = pd.NA
+                self.df[column] = None
 
         # Check if 'doi' column exists
         if 'doi' not in self.df.columns:
@@ -294,7 +328,7 @@ class PubMedSearcher:
             if pd.notna(doi):
                 oa_info = self.check_open_access_doi(doi)
                 for key in required_columns:
-                    self.df.at[index, key] = oa_info.get(key, pd.NA)
+                    self.df.at[index, key] = oa_info.get(key, None)
             else:
                 self.df.at[index, 'is_oa'] = False
 
@@ -386,17 +420,24 @@ class PubMedSearcher:
     def download_article_oa(self, pdf_url, download_directory, pmid=None):
         """
         Downloads an article from a provided open access PDF URL to the specified directory.
-        Sets the filename as <last_name>_<year>.pdf if possible, or defaults to a generic name.
+        Sets the filename as <pmid>.pdf if possible, or defaults to a generic name.
 
         Parameters:
         pdf_url (str): URL pointing to the PDF file.
         download_directory (str): The directory where the PDF file should be saved.
-        last_name (str, optional): The last name of the first author. Defaults to None.
-        year (str, optional): The publication year of the article. Defaults to None.
+        pmid (str, optional): The PubMed ID of the article. Defaults to None.
         """
         os.makedirs(download_directory, exist_ok=True)
+        
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.google.com/",
+        }
+        
         try:
-            response = requests.get(pdf_url, stream=True)
+            response = requests.get(pdf_url, headers=headers, stream=True)
             if response.status_code == 200:
                 filename = f"{pmid}.pdf" if pmid else "downloaded_article.pdf"
                 file_path = os.path.join(download_directory, filename)
@@ -935,3 +976,53 @@ class PubMedSearcher:
             dict_refs.append(dict_ref)
             
         return dict_refs
+    
+def pmid_to_doi(pmid, email):
+    """
+    Converts a PMID to a DOI using the Entrez API.
+    """
+    Entrez.email = email
+    handle = Entrez.efetch(db="pubmed", id=pmid, retmode="xml")
+    records = Entrez.read(handle)
+    handle.close()
+    try:
+        id_list = records['PubmedArticle'][0]['PubmedData']['ArticleIdList']
+        for element in id_list:
+            if element.attributes.get('IdType') == 'doi':
+                return str(element)
+        return None
+        
+    except Exception as e:
+        print(f"Error processing PMID {pmid}: {e}")
+    return None
+
+def doi_to_pmid(doi, email):
+    """
+    Converts a DOI to a PMID using the Entrez API.
+    """
+    Entrez.email = email
+    handle = Entrez.efetch(db="pubmed", id=doi, retmode="xml")
+    records = Entrez.read(handle)
+    handle.close()
+    try:
+        id_list = records['PubmedArticle'][0]['PubmedData']['ArticleIdList']
+        for element in id_list:
+            if element.attributes.get('IdType') == 'pubmed':
+                return str(element)
+        return None
+        
+    except Exception as e:
+        print(f"Error processing doi {doi}: {e}")
+    return None
+
+def convert_id(id, id_type, email):
+    """
+    Converts an ID from one type to another, e.g. PMID to DOI or DOI to PMID.
+    Uses Entrez API for the conversion.
+    """
+    if id_type == 'pmid':
+        return pmid_to_doi(id, email)
+    elif id_type == 'doi':
+        return doi_to_pmid(id, email)
+    else:
+        return None
