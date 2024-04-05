@@ -437,15 +437,16 @@ class OpenAIChatEvaluator(OpenAIEvaluator):
         return save_file
     
 class CaseReportLabeler(OpenAIChatEvaluator):
-    def __init__(self, api_key_path, text, questions, section_headers):
+    def __init__(self, api_key_path, text, questions, section_headers, model_choice="gpt3_large"):
         self.text = text
         self.section_headers = section_headers
+        self.model_choice = model_choice
         super().__init__(api_key_path, 
                          json_file_path=None, 
                          keys_to_consider=None, 
                          question_type="labelling", 
                          question=questions, 
-                         model_choice="gpt3_small",
+                         model_choice=model_choice,
                          debug=False, 
                          test_mode=False)
 
@@ -526,8 +527,8 @@ class OpenAIChatBase(OpenAIEvaluator):
         self.question_token = 500
         models = {
             "gpt4": {"name": "gpt-4", "token_limit": 8192 - 2 * (self.question_token), "cost": 0.03 / 1000},
-            "gpt3_large": {"name": "gpt-3.5-turbo-16k", "token_limit": 16385 - 2 * (self.question_token), "cost": 0.003 / 1000},
-            "gpt3_small": {"name": "gpt-3.5-turbo", "token_limit": 4097 - round(1.2 * self.question_token), "cost": 0.0015 / 1000}
+            "gpt3_large": {"name": "gpt-3.5-turbo-0125", "token_limit": 16385 - 2 * (self.question_token), "cost": 0.003 / 1000},
+            "gpt3_small": {"name": "gpt-3.5-turbo-0613", "token_limit": 4097 - round(1.2 * self.question_token), "cost": 0.0015 / 1000}
         }
         self.model = models[model_choice]["name"]
         self.token_limit = models[model_choice]["token_limit"]
@@ -633,6 +634,11 @@ class TitleScreener(OpenAIChatBase):
         Keywords = list of strings which can be used to identify relevant articles
         """
         if self.keywords:
+            if 'Title' not in self.df.columns:
+                if 'title' in self.df.columns:
+                    self.df.rename(columns={'title': 'Title'}, inplace=True)
+                else:
+                    raise ValueError("Title column not found in the DataFrame.")
             self.df["Keyword_Screen"] = self.df["Title"].apply(lambda title: int(any(word in title.lower() for word in self.keywords)))
     
     def launch_openai_evaluation(self, title):
@@ -647,7 +653,12 @@ class TitleScreener(OpenAIChatBase):
         Screen titles using OpenAI GPT based on a posed question.
         """
         tqdm.pandas(desc="OpenAI Screening")
-        self.df["OpenAI_Screen"] = self.df["Title"].progress_apply(lambda title: self.launch_openai_evaluation(title))
+        if 'Title' not in self.df.columns:
+            if 'title' in self.df.columns:
+                self.df.rename(columns={'title': 'Title'}, inplace=True)
+            else:
+                raise ValueError("Title column not found in the DataFrame.")
+        self.df["OpenAI_Screen_Title"] = self.df["Title"].progress_apply(lambda title: self.launch_openai_evaluation(title))
     
     def to_csv(self, output_path=None):
         """
@@ -711,6 +722,11 @@ class AbstractScreener(TitleScreener):
         Keywords = list of strings which can be used to identify relevant articles
         """
         if self.keywords:
+            if 'Abstract' not in self.df.columns:
+                if 'abstract' in self.df.columns:
+                    self.df.rename(columns={'abstract': 'Abstract'}, inplace=True)
+                else:
+                    raise ValueError("Abstract column not found in the DataFrame.")
             self.df["Keyword_Screen_Abstract"] = self.df["Abstract"].apply(lambda text: int(any(word in text.lower() for word in self.keywords)))
     
     def launch_openai_evaluation(self, text):
@@ -725,7 +741,19 @@ class AbstractScreener(TitleScreener):
         Screen titles using OpenAI GPT based on a posed question.
         """
         tqdm.pandas(desc="OpenAI Screening")
-        self.df["OpenAI_Screen_Abstract"] = self.df["Abstract"].progress_apply(lambda text: self.launch_openai_evaluation(text))
+        if 'Abstract' not in self.df.columns:
+            if 'abstract' in self.df.columns:
+                self.df.rename(columns={'abstract': 'Abstract'}, inplace=True)
+            else:
+                raise ValueError("Abstract column not found in the DataFrame.")
+        if "OpenAI_Screen" in self.df.columns:
+            self.df["OpenAI_Screen_Abstract"] = 0
+            self.df.loc[self.df['OpenAI_Screen'] == 1, 'OpenAI_Screen_Abstract'] = self.df.loc[self.df['OpenAI_Screen'] == 1, 'Abstract'].progress_apply(lambda text: self.launch_openai_evaluation(text))
+        elif "OpenAI_Screen_Title" in self.df.columns:
+            self.df["OpenAI_Screen_Abstract"] = 0
+            self.df.loc[self.df['OpenAI_Screen_Title'] == 1, 'OpenAI_Screen_Abstract'] = self.df.loc[self.df['OpenAI_Screen_Title'] == 1, 'Abstract'].progress_apply(lambda text: self.launch_openai_evaluation(text))
+        else:
+            self.df["OpenAI_Screen_Abstract"] = self.df["Abstract"].progress_apply(lambda text: self.launch_openai_evaluation(text))
     
     def run(self):
         """

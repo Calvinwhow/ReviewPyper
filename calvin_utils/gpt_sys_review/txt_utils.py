@@ -58,32 +58,39 @@ class TextPreprocessor:
         """
         return re.sub(r'[^\x00-\x7F]+', ' ', text)
 
+    def process_files_recursive(self, current_input_dir, current_output_dir):
+        # Create output directory if it doesn't exist
+        if not os.path.exists(current_output_dir):
+            os.makedirs(current_output_dir)
+        
+        # Loop through each item in the current directory
+        for filename in os.listdir(current_input_dir):
+            current_input_path = os.path.join(current_input_dir, filename)
+            
+            if os.path.isdir(current_input_path):
+                # If it's a directory, recurse into it
+                new_output_dir = os.path.join(current_output_dir, filename)
+                self.process_files_recursive(current_input_path, new_output_dir)
+            elif filename.endswith('.txt'):
+                # Process text files
+                output_filepath = os.path.join(current_output_dir, filename)
+                
+                # Read, preprocess, and save the text
+                with open(current_input_path, 'r', encoding='utf-8') as input_file:
+                    original_text = input_file.read()
+
+                preprocessed_text = self.preprocess_text(original_text)
+                cleaned_text = self.remove_non_ascii(preprocessed_text)
+
+                with open(output_filepath, 'w', encoding='utf-8') as output_file:
+                    output_file.write(cleaned_text)
+    
     def process_files(self):
         """
         Reads each text file from the input directory, applies preprocessing, and saves it to the output directory.
+        Recursively handles subdirectories.
         """
-        # Create output directory if it doesn't exist
-        if not os.path.exists(self.output_dir):
-            os.makedirs(self.output_dir)
-        
-        # Loop through each file in the input directory
-        for filename in os.listdir(self.input_dir):
-            if filename.endswith('.txt'):
-                input_filepath = os.path.join(self.input_dir, filename)
-                
-                output_filepath = os.path.join(self.output_dir, filename) #<-- edit
-                
-                # Read the original text
-                with open(input_filepath, 'r', encoding='utf-8') as input_file:
-                    original_text = input_file.read()
-                
-                # Apply preprocessing
-                preprocessed_text = self.preprocess_text(original_text)
-                cleaned_text = self.remove_non_ascii(preprocessed_text)
-                
-                # Save the preprocessed text
-                with open(output_filepath, 'w', encoding='utf-8') as output_file:
-                    output_file.write(cleaned_text)
+        self.process_files_recursive(self.input_dir, self.output_dir)
         return self.output_dir
 
 class TextChunker:

@@ -28,7 +28,7 @@ class SectionLabeler:
     - save_to_json: Saves the labeled sections to a JSON file.
     """
 
-    def __init__(self, folder_path, article_type, api_key_path=None):
+    def __init__(self, folder_path, article_type, api_key_path=None, model_choice='gpt3_large'):
         """
         Initializes the SectionLabeler class with the folder path and article type.
 
@@ -42,6 +42,7 @@ class SectionLabeler:
         self.folder_path = folder_path
         self.article_type = article_type
         self.chunker = None
+        self.model_choice = model_choice
 
     def select_labels(self):
         # Define section labels for each article type
@@ -164,34 +165,47 @@ class SectionLabeler:
                 print(residual_text)
         return labeled_sections, residual_text
         
+    def process_files_recursive(self, current_dir, output_dict):
+        for filename in tqdm(os.listdir(current_dir), desc="Processing files"):
+            full_path = os.path.join(current_dir, filename)
+            
+            if os.path.isdir(full_path):
+                # Recurse into subdirectory
+                self.process_files_recursive(full_path, output_dict)
+            elif filename.endswith('.txt'):
+                # Process the text file
+                with open(full_path, 'r') as f:
+                    text = f.read()
+
+                labeled_sections = {}
+
+                if self.article_type == 'research':
+                    labeled_sections, text = self.label_text(text)
+                elif self.article_type == 'case':
+                    questions = self.get_questions()
+                    evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers, model_choice=self.model_choice)
+                    labeled_sections = evaluator.evaluate_all_files()
+                else:
+                    raise ValueError(f"Unknown article type {self.article_type}, choose case or research")
+                
+                # Save a JSON of the labeled sections within the current directory
+                with open(os.path.join(current_dir, f"{filename}_labeled_sections.json"), 'w') as json_file:
+                    json.dump(labeled_sections, json_file)
+
+                output_dict[filename] = labeled_sections
+
     def process_files(self):
         """
-        Processes all text files in the specified folder.
+        Recursively processes all text files in the specified folder and its subfolders.
         """
         output_dict = {}
 
         self.select_labels()
 
-        for filename in tqdm(os.listdir(self.folder_path)):
-            if filename.endswith('.txt'):
-                with open(os.path.join(self.folder_path, filename), 'r') as f:
-                    text = f.read()
+        # Start the recursive processing
+        self.process_files_recursive(self.folder_path, output_dict)
 
-                # Initialize labeled_sections
-                labeled_sections = {}
-
-                # Use keyword matching for stereotypical articles
-                if self.article_type == 'research':
-                    labeled_sections, text = self.label_text(text)
-                elif self.article_type == 'case':
-                    questions = self.get_questions()
-                    evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers)
-                    labeled_sections = evaluator.evaluate_all_files()
-                else:
-                    raise ValueError(f"Unknown article type {self.article_type}, choose case or research")
-
-                output_dict[filename] = labeled_sections
-
+        # Save the results
         self.save_to_json(output_dict)
 
     def save_to_json(self, output_dict):

@@ -105,7 +105,8 @@ class OCROperator:
     @staticmethod
     def extract_text_from_pdf_dir(pdf_dir: str, output_dir: str = None, page_threshold: int = 50) -> None:
         """
-        Iterates through a directory of PDF files and extracts text using OCR.
+        Recursively iterates through a directory and subdirectories of PDF files and extracts text using OCR,
+        respecting a page threshold.
 
         Parameters
         ----------
@@ -113,26 +114,36 @@ class OCROperator:
             The directory containing the PDF files.
         output_dir : str
             The directory to save the extracted text to.
+        page_threshold : int
+            The maximum number of pages in a PDF for it to be processed.
 
         Returns
         -------
-        None
+        Output directory path
         """
         if output_dir is None:
             output_dir = os.path.join(os.path.dirname(pdf_dir), 'pdf_txt')
-        os.makedirs(output_dir,exist_ok=True)
-        for file_name in tqdm(os.listdir(pdf_dir)):
-            if file_name.endswith('.pdf'):
-                input_file_path = os.path.join(pdf_dir, file_name)
+        os.makedirs(output_dir, exist_ok=True)
+        
+        for file_name in tqdm(os.listdir(pdf_dir), desc="Processing PDFs"):
+            full_path = os.path.join(pdf_dir, file_name)
+            
+            if os.path.isdir(full_path):
+                # It's a directory; recurse into it
+                # Calculate a specific output directory for this subdirectory
+                sub_output_dir = os.path.join(output_dir, file_name)
+                OCROperator.extract_text_from_pdf_dir(full_path, sub_output_dir, page_threshold)
+            elif file_name.endswith('.pdf'):
+                # It's a PDF file; process it
+                input_file_path = full_path
                 
-                #Exclude if over page count
+                # Exclude if over page count
                 page_count = OCROperator.get_pdf_page_count(input_file_path)
                 if page_count > page_threshold:
                     print(f"Skipping {file_name} as it has {page_count} pages, exceeding the threshold of {page_threshold}.")
                     continue
                 
                 output_file_path = os.path.join(output_dir, f"{os.path.splitext(file_name)[0]}_OCR.txt")
-
                 text = OCROperator.extract_text_from_pdf(input_file_path)
                 OCROperator.save_text_to_file(text, output_file_path)
         return output_dir
@@ -215,8 +226,7 @@ class OCROperator:
                 text = OCROperator.extract_text_from_pdf(file_path)
                 OCROperator.save_text_to_file(text, output_file_path)
         return output_dir
-
-                
+            
 class PDFTextExtractor:
     """
     A class to handle PDF text extraction and saving it to a file.
@@ -275,7 +285,8 @@ class PDFTextExtractor:
     @staticmethod
     def extract_text_from_pdf_dir(pdf_dir: str, output_dir: str) -> None:
         """
-        Iterates through a directory of PDF files, extracts text, and saves it to text files in an output directory.
+        Recursively iterates through a directory and subdirectories of PDF files, extracts text,
+        and saves it to text files in an output directory.
 
         Parameters
         ----------
@@ -289,9 +300,16 @@ class PDFTextExtractor:
         None
         """
         for file_name in os.listdir(pdf_dir):
-            if file_name.endswith(".pdf"):
-                input_file_path = os.path.join(pdf_dir, file_name)
-                output_file_path = os.path.join(output_dir, f"{os.path.splitext(file_name)[0]}.txt")
+            full_path = os.path.join(pdf_dir, file_name)
+            
+            if os.path.isdir(full_path):
+                # It's a directory; recurse into it
+                PDFTextExtractor.extract_text_from_pdf_dir(full_path, output_dir)
+            elif file_name.endswith(".pdf"):
+                # It's a PDF file; extract the text
+                input_file_path = full_path
+                output_file_name = f"{os.path.splitext(file_name)[0]}.txt"
+                output_file_path = os.path.join(output_dir, output_file_name)
                 text = PDFTextExtractor.extract_text_from_pdf(input_file_path)
                 PDFTextExtractor.save_text_to_file(text, output_file_path)
 
