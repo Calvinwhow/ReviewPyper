@@ -259,6 +259,10 @@ class OpenAIChatEvaluator(OpenAIEvaluator):
             self.model = "gpt-3.5-turbo"
             self.token_limit = 4097 - np.round(1.2*(self.question_token))
             self.cost = 0.0015/1000
+        elif model_choice=="gpt3_small_labeler":
+            self.model = "gpt-3.5-turbo"
+            self.token_limit = 1000 - np.round(1.2*(self.question_token))
+            self.cost = 0.0015/1000            
         else:
             raise ValueError(f"Model choice {model_choice} not supported, please choose gpt4, gpt3_large, or gpt3_small.")
 
@@ -414,6 +418,9 @@ class OpenAIChatEvaluator(OpenAIEvaluator):
             print("KeyboardInterrupt detected. Saving results and closing.")
             self.save_to_json(self.all_answers)
             sys.exit(0)
+        except Exception as e:
+            self.save_to_json(self.all_answers)
+            raise RuntimeError("Critical error occured. Saving results and aborting.")
 
     def save_to_json(self, output_dict):
         """
@@ -435,6 +442,7 @@ class OpenAIChatEvaluator(OpenAIEvaluator):
             json.dump(output_dict, f, indent=0)
         print(f"Saved to: {save_file}")
         return save_file
+
     
 class CaseReportLabeler(OpenAIChatEvaluator):
     def __init__(self, api_key_path, text, questions, section_headers):
@@ -469,7 +477,7 @@ class CaseReportLabeler(OpenAIChatEvaluator):
         results_dict = {'case_report': [], 'other': []}
         acceptable_case_answers = self.section_headers.get('Case_Report', [])
         
-        for file_name, selected_text in tqdm(self.relevant_text_by_file.items()):
+        for file_name, selected_text in self.relevant_text_by_file.items():
             # Chunk text by token limits
             chunks = self.call_chunker(selected_text)
             
@@ -527,7 +535,8 @@ class OpenAIChatBase(OpenAIEvaluator):
         models = {
             "gpt4": {"name": "gpt-4", "token_limit": 8192 - 2 * (self.question_token), "cost": 0.03 / 1000},
             "gpt3_large": {"name": "gpt-3.5-turbo-16k", "token_limit": 16385 - 2 * (self.question_token), "cost": 0.003 / 1000},
-            "gpt3_small": {"name": "gpt-3.5-turbo", "token_limit": 4097 - round(1.2 * self.question_token), "cost": 0.0015 / 1000}
+            "gpt3_small": {"name": "gpt-3.5-turbo", "token_limit": 4097 - round(1.2 * self.question_token), "cost": 0.0015 / 1000},
+            "gpt3_small_labeler": {"name": "gpt-3.5-turbo", "token_limit": 1000 - round(1.2 * self.question_token), "cost": 0.0015 / 1000}
         }
         self.model = models[model_choice]["name"]
         self.token_limit = models[model_choice]["token_limit"]

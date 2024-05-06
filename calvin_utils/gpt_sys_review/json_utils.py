@@ -66,7 +66,7 @@ class SectionLabeler:
         if self.article_type == "research":
             return None
         elif self.article_type == "case":
-            questions = {'Priotizing implicit and explicit information, do you think this contain a neurological case report? For example, if the text refers to "the patient", referse to an individual, or part of a clinical investigation, this is a strong yes. (Y/N)': 'case_report'}
+            questions = {'Priotizing implicit and explicit information, do you think this contains a description of a medical case? For example, if the text refers to a patient, seemingly describes a history of presenting illness, or is seemingly describing a medical situation. This could be in referring to hospital course, imaging findings, or laboratory results. ONLY RESPOND AS YES OR NO (Y/N)': 'case_report'}
             return questions
         else:
             return None
@@ -163,19 +163,52 @@ class SectionLabeler:
             if show_residuals:
                 print(residual_text)
         return labeled_sections, residual_text
+    
+    def save_to_json(self, output_dict, filename=None):
+        """
+        Saves the labeled sections to a JSON file.
+
+        Parameters:
+        - output_dict (dict): Dictionary containing the labeled sections.
+
+        Returns:
+        - None
+        """
+        # Create a new directory in the same root folders
+        out_dir = os.path.join(self.folder_path, '..', 'json')
+        os.makedirs(out_dir, exist_ok=True)
+        
+        if filename is not None and not os.path.exists(filename):
+            save_file_path = os.path.join(out_dir, f'{filename}_labeled_sections.json')
+            with open(save_file_path, 'w') as f:
+                json.dump(output_dict, f, indent=0)
+        else:
+            save_file_path = os.path.join(out_dir, f'_{self.article_type}_labeled_sections.json')
+            with open(save_file_path, 'w') as f:
+                json.dump(output_dict, f, indent=0)
+                print(f"Saved to: \n {save_file_path}")
+                
+        return save_file_path
         
     def process_files(self):
         """
         Processes all text files in the specified folder.
+        
+        TODO--this can be dramatically improved by saving a JSON file for each article, instead of a single large JSON. 
+        To keep it compatible with susbequent code, could combine the JSONs after. 
         """
         output_dict = {}
 
         self.select_labels()
 
-        for filename in tqdm(os.listdir(self.folder_path)):
+        for filename in tqdm(os.listdir(self.folder_path), desc='Segmenting text files'):
             if filename.endswith('.txt'):
-                with open(os.path.join(self.folder_path, filename), 'r') as f:
-                    text = f.read()
+                try:
+                    with open(os.path.join(self.folder_path, filename), 'r') as f:
+                        text = f.read()
+                except:
+                    print("Failed to read file: ", filename)
+                    continue
 
                 # Initialize labeled_sections
                 labeled_sections = {}
@@ -189,29 +222,13 @@ class SectionLabeler:
                     labeled_sections = evaluator.evaluate_all_files()
                 else:
                     raise ValueError(f"Unknown article type {self.article_type}, choose case or research")
-
+                
+                # Store results
+                filename = os.path.splitext(os.path.basename(filename))[0]
+                self.save_to_json({filename: labeled_sections}, filename=filename)
                 output_dict[filename] = labeled_sections
 
         self.save_to_json(output_dict)
-
-    def save_to_json(self, output_dict):
-        """
-        Saves the labeled sections to a JSON file.
-
-        Parameters:
-        - output_dict (dict): Dictionary containing the labeled sections.
-
-        Returns:
-        - None
-        """
-        # Create a new directory in the same root folders
-        out_dir = os.path.join(self.folder_path, '..', 'labeled_text')
-        os.makedirs(out_dir, exist_ok=True)
-        save_file_path = os.path.join(out_dir, f'{self.article_type}_labeled_sections.json')
-        with open(save_file_path, 'w') as f:
-            json.dump(output_dict, f, indent=0)
-        print(f"Saved to: \n {save_file_path}")
-        return save_file_path
 
 class FilterPapers:
     '''

@@ -121,20 +121,10 @@ class OCROperator:
         if output_dir is None:
             output_dir = os.path.join(os.path.dirname(pdf_dir), 'pdf_txt')
         os.makedirs(output_dir,exist_ok=True)
-        for file_name in tqdm(os.listdir(pdf_dir)):
-            if file_name.endswith('.pdf'):
-                input_file_path = os.path.join(pdf_dir, file_name)
-                
-                #Exclude if over page count
-                page_count = OCROperator.get_pdf_page_count(input_file_path)
-                if page_count > page_threshold:
-                    print(f"Skipping {file_name} as it has {page_count} pages, exceeding the threshold of {page_threshold}.")
-                    continue
-                
-                output_file_path = os.path.join(output_dir, f"{os.path.splitext(file_name)[0]}_OCR.txt")
-
-                text = OCROperator.extract_text_from_pdf(input_file_path)
-                OCROperator.save_text_to_file(text, output_file_path)
+        
+        pdf_paths = [f for f in os.listdir(pdf_dir) if f.endswith('.pdf')]
+        
+        OCROperator.pdf_text_extraction(pdf_paths=pdf_paths, output_dir=output_dir, page_threshold=page_threshold)
         return output_dir
                 
     @staticmethod
@@ -157,22 +147,10 @@ class OCROperator:
         
         """
         if output_dir is None:
-            output_dir = os.path.join(os.path.dirname(pdf_dir), 'pdf_txt')
+            raise ValueError("Error: output_dir requires the absolute path to the dierctory to save results to.")
         os.makedirs(output_dir, exist_ok=True)
         
-        for file_path in tqdm(pdf_paths):
-            file_name = os.path.basename(file_path)
-            if file_name.endswith('.pdf'):
-                # Exclude if over page count
-                page_count = OCROperator.get_pdf_page_count(file_path)
-                if page_count > page_threshold:
-                    print(f"Skipping {file_name} as it has {page_count} pages, exceeding the threshold of {page_threshold}.")
-                    continue
-
-                output_file_path = os.path.join(output_dir, f"{os.path.splitext(file_name)[0]}_OCR.txt")
-
-                text = OCROperator.extract_text_from_pdf(file_path)
-                OCROperator.save_text_to_file(text, output_file_path)
+        OCROperator.pdf_text_extraction(pdf_paths=pdf_paths, output_dir=output_dir, page_threshold=page_threshold)
         return output_dir
                 
     @staticmethod
@@ -201,21 +179,50 @@ class OCROperator:
             output_dir = os.path.join(os.path.dirname(master_list_path), 'pdf_txt')
         os.makedirs(output_dir, exist_ok=True)
 
-        for file_path in tqdm(pdf_paths):
+        OCROperator.pdf_text_extraction(pdf_paths=pdf_paths, output_dir=output_dir, page_threshold=page_threshold)
+        return output_dir
+
+    @staticmethod
+    def pdf_text_extraction(pdf_paths, output_dir, page_threshold):
+        """
+        Extracts text from multiple PDF files specified by pdf_paths and saves the extracted text to individual text files in the specified output_dir. Each output file is named after its corresponding PDF file with an "_OCR" suffix.
+
+        Parameters:
+
+        pdf_paths (list): A list of file paths to the PDF files from which text needs to be extracted.
+        output_dir (str): The directory where the extracted text files will be saved.
+        page_threshold (int): The maximum number of pages a PDF can have for it to be processed. PDFs with more pages than this threshold will be skipped.
+        This function iterates over the list of PDF file paths, checks if the file meets the criteria (i.e., is a PDF and does not exceed the page threshold), and attempts to extract text using OCR if necessary. Files that already have a corresponding output file in the target directory or encounter errors during processing are skipped with a message printed to the console.
+
+        The function is robust against errors during the page count retrieval and text extraction processes, skipping any problematic PDFs and continuing with the rest.
+
+        Note: This function depends on the OCROperator class for the actual PDF page count retrieval, text extraction, and saving the extracted text to a file.
+        """
+        for file_path in tqdm(pdf_paths, desc='Extracting text from PDFs.'):
             file_name = os.path.basename(file_path)
             if file_name.endswith('.pdf'):
-                # Exclude if over page count
-                page_count = OCROperator.get_pdf_page_count(file_path)
+                output_file_path = os.path.join(output_dir, f"{os.path.splitext(file_name)[0]}_OCR.txt")
+                if os.path.exists(output_file_path):
+                    continue
+                
+                # Only inlcude manuscripts below page threshold.
+                try:
+                    page_count = OCROperator.get_pdf_page_count(file_path)
+                except Exception as e:
+                    print("Skipping due to error getting page number: " + str(e))
+                    continue
                 if page_count > page_threshold:
                     print(f"Skipping {file_name} as it has {page_count} pages, exceeding the threshold of {page_threshold}.")
                     continue
-
-                output_file_path = os.path.join(output_dir, f"{os.path.splitext(file_name)[0]}_OCR.txt")
-
-                text = OCROperator.extract_text_from_pdf(file_path)
+                
+                # Extract all Text in PDF.
+                try:
+                    text = OCROperator.extract_text_from_pdf(file_path)
+                except Exception as e:
+                    print("Skipping document. Error occurred while extracting text: ", e)
+                    continue
+        
                 OCROperator.save_text_to_file(text, output_file_path)
-        return output_dir
-
                 
 class PDFTextExtractor:
     """
@@ -432,38 +439,129 @@ class PdfPostProcess:
 
         df_master.to_csv(os.path.join(self.directory, 'master_list.csv'), index=False)
 
-    def rename_pdfs_to_pmid(self):
-        """Rename PDFs to PMIDs."""
+    def update_master_list_v2(self):
+        """Update the master list with download statuses and paths."""
         df_master = pd.read_csv(self.master_list_path)
+        if 'PDF_Downloaded' not in df_master.columns:
+            df_master['PDF_Downloaded'] = 0
+        if 'PDF_Path' not in df_master.columns:
+            df_master['PDF_Path'] = ''
+
         pdf_dir_path = os.path.join(self.directory, 'PDFs')
-        
-        for filename in os.listdir(pdf_dir_path):
-            if filename.endswith('.pdf'):
-                title_from_file = filename.replace('.pdf', '')
-                normalized_title_from_file = self.normalize_title(title_from_file)
-
-                for index, row in df_master.iterrows():
-                    title = row['Title']
-                    pmid = row['PMID']
-                    normalized_title = self.normalize_title(title)
-
-                    if normalized_title_from_file == normalized_title:
-                        new_filename = f"{pmid}.pdf"
-                        os.rename(
-                            os.path.join(pdf_dir_path, filename),
-                            os.path.join(pdf_dir_path, new_filename)
-                        )
-                        df_master.loc[index, 'PDF_Path'] = os.path.join(pdf_dir_path, new_filename)
-                        df_master.loc[index, 'PDF_Downloaded'] = 1
-                        break
-
+        for index, row in df_master.iterrows():
+            pdf_name = f"{row['PMID']}.pdf"
+            pdf_path = os.path.join(pdf_dir_path, pdf_name)
+            # Add the path and update the downloaded column. 
+            if  os.path.exists(pdf_path):
+                df_master.loc[index, 'PDF_Path'] = pdf_path
+                df_master.loc[index, 'PDF_Downloaded'] = True 
+            else:
+                # In this situation, we failed to download a positive hit.
+                if row['OpenAI_Screen_Abstract'] == 1:
+                    df_master.loc[index, 'PDF_Path'] = np.nan
+                    df_master.loc[index, 'PDF_Downloaded'] = False
+                # This article was not expected to be downloaded. Set blank. 
+                else:
+                    df_master.loc[index, 'PDF_Path'] = np.nan
+                    df_master.loc[index, 'PDF_Downloaded'] = np.nan
+                
         df_master.to_csv(os.path.join(self.directory, 'master_list.csv'), index=False)
-
+        
     def normalize_title(self, title):
         """Normalize title by removing non-alphabetic characters."""
         return re.sub('[^a-zA-Z]', '', title).lower()
     
+    def pmid_renaming(self, pdf_dir_path, df_master):
+        unmatched_files = set()
+        # List comprehension to filter only PDF files
+        pdf_files = [f for f in os.listdir(pdf_dir_path) if f.endswith('.pdf')]
+        for filename in tqdm(pdf_files, desc="First pass processing PDF files"):
+            # Fix the filename to allow manipulation
+            title_from_file = os.path.splitext(filename)[0]
+            normalized_title_from_file = self.normalize_title(title_from_file)
+                        
+            # Only process incomplete files. 
+            pmid_set = set(df_master['PMID'].astype(str))
+            if title_from_file in pmid_set:
+                # print("Object already complete. Skipping: ", title_from_file)
+                continue
+                
+            # Iterate to match title
+            file_matched = False
+            for index, row in df_master.iterrows():
+                title = row['Title']
+                pmid = row['PMID']
+                normalized_title = self.normalize_title(title)
+                
+                # Check if it matches. Update if it does, then move on. 
+                if normalized_title_from_file == normalized_title:
+                    new_filename = f"{pmid}.pdf"
+                    os.rename(
+                        os.path.join(pdf_dir_path, filename),
+                        os.path.join(pdf_dir_path, new_filename)
+                    )
+                    df_master.loc[index, 'PDF_Path'] = os.path.join(pdf_dir_path, new_filename)
+                    df_master.loc[index, 'PDF_Downloaded'] = 1
+                    
+                    # Added for legibility
+                    file_matched = True
+                    break
+            # If it does not match, catalogue and move on. 
+            if file_matched == False:
+                unmatched_files.add(title_from_file)
+            
+        return df_master, unmatched_files
+    
+    def pmid_renaming_round_two(self, pdf_dir_path, df_master, unmatched_files, loose_match=False):
+        unmatched_files2 = set()
+        for title_from_file in tqdm(unmatched_files, desc=f"Collecting difficult to match files. Loose match {loose_match}."):
+            # Skip blank files
+            if title_from_file is None or title_from_file == 'none':
+                continue 
+            # Iterate to match titles
+            file_matched = False
+            for index, row in df_master.iterrows():
+                title = row['Title']
+                pmid = row['PMID']
+                
+                # Check if it matches. Update if it does, then move on. 
+                if (title_from_file.lower() in title.lower()) or (title.lower() in title_from_file.lower()) \
+                    or loose_match and self.normalize_title(title_from_file) in self.normalize_title(title) \
+                        or (loose_match and self.normalize_title(title) in self.normalize_title(title_from_file)):
+                    new_filename = f"{pmid}.pdf"
+                    
+                    # Do not overwrite existing files. Preceding files take precedence.
+                    if os.path.exists(os.path.join(pdf_dir_path, new_filename)):
+                        break
+                    else:
+                        os.rename(
+                            os.path.join(pdf_dir_path, (title_from_file+'.pdf')),
+                            os.path.join(pdf_dir_path, new_filename)
+                        )
+                        df_master.loc[index, 'PDF_Path'] = os.path.join(pdf_dir_path, new_filename)
+                        df_master.loc[index, 'PDF_Downloaded'] = 1
+                        
+                        file_matched = True
+                    break
+            # If it does not match, catalogue and move on. 
+            if file_matched == False:
+                unmatched_files2.add(title_from_file)
+        if loose_match:       
+            print("Failed to match these files: \n" + "\n".join(unmatched_files2))
+        return df_master, unmatched_files2
+
+    def rename_pdfs_to_pmid(self):
+        """Rename PDFs to PMIDs."""
+        df_master = pd.read_csv(self.master_list_path)
+        pdf_dir_path = os.path.join(self.directory, 'PDFs')
+        df_master, unmatched_files = self.pmid_renaming(pdf_dir_path, df_master)
+        df_master, unmatched_files = self.pmid_renaming_round_two(pdf_dir_path, df_master, unmatched_files)
+        df_master, unmatched_files = self.pmid_renaming_round_two(pdf_dir_path, df_master, unmatched_files, loose_match=True)
+
+        df_master.to_csv(os.path.join(self.directory, 'master_list.csv'), index=False)
+
     def run(self):
         """Orchestration method"""
         self.update_master_list()
         self.rename_pdfs_to_pmid()
+        self.update_master_list_v2()
