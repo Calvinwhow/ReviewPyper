@@ -1,17 +1,23 @@
-import pandas as pd
-from io import BytesIO
-from Bio import Entrez
-import requests
-import subprocess
-from glob import glob
+import json
 import os
-import requests
-from lxml import etree
-from itertools import chain
-from tqdm import tqdm
+import random
 import re
+import time
+
 import numpy as np
+import pandas as pd
+import requests
+from Bio import Entrez
+from bs4 import BeautifulSoup
+from glob import glob
+from io import BytesIO
+from itertools import chain
+from lxml import etree
+from tqdm import tqdm
+
+import fitz  # PyMuPDF
 from calvin_utils.gpt_sys_review.image_utils import ImageExtractor
+from pypaperretriever import PyPaperRetriever
 
 tqdm.pandas()
 
@@ -31,7 +37,6 @@ class PubMedSearcher:
     - standardize_references: Standardizes the references column in the DataFrame to only contain the following keys: ['doi', 'pmid', 'pmcid', 'title', 'authors']
     - fetch_cited_by: Fetches list of articles that cite each article in the DataFrame using Europe PMC (only works for articles with a record in Europe PMC)
     - download_xml_fulltext: Downloads the XML full text for each article in the DataFrame to the specified directory (rarely available, but can be useful).
-    - check_open_access: Checks if each article in the DataFrame is open access using Unpaywall and fills in the relevant columns ['is_oa', 'best_oa_location_url', 'pdf_url_1', 'pdf_url_2', 'pdf_url_3', 'pdf_url_4', 'europe_pmc_url']
     - save: Saves the df to a CSV file.
     """
 
@@ -105,60 +110,40 @@ class PubMedSearcher:
         records_df = self._parse_records_to_df(records_xml_bytes)
         self.df = pd.concat([self.df, records_df], ignore_index=True)
 
-    def download_articles(self, download_directory="PDFs", allow_pypaperbot=True, save_progress=True, max_downloads=None, enumerate=False):
-        """
-        Downloads articles from the DataFrame to the specified directory. Tries to download open access articles first, then uses PyPaperBot as a fallback.
-
-        Parameters:
-        download_directory (str): The directory where the PDF files should be saved.
-        allow_pypaperbot (bool): Whether to use PyPaperBot as a fallback for downloading articles.
-        save_progress (bool): Whether to save the DataFrame after downloading each article. Good when downloading large numbers of articles that may not complete in one go.
-        max_downloads (int): The maximum number of articles to download. If None, all articles will be downloaded.
-        enumerate (bool): Whether to enumerate the download directories based on the article index.
-        """
-
+    def download_articles(self, allow_scihub=True, download_directory="pdf_downloads"):
         if self.df.empty:
             print("DataFrame is empty.")
             return
-
+        if 'pmid' not in self.df.columns or 'doi' not in self.df.columns:
+            print(f"DataFrame is missing required columns for article download (pmid and doi)")
+            return
         if 'download_complete' not in self.df.columns:
-            self.df['download_complete'] = 'Not started'
+            self.df['download_complete'] = 'not_started'
         if 'pdf_filepath' not in self.df.columns:
             self.df['pdf_filepath'] = None
-
         for index, row in tqdm(self.df.iterrows(), total=self.df.shape[0], desc="Downloading articles"):
-            count_downloads = self.df['download_complete'].value_counts().get('Complete', 0)
-            if max_downloads and count_downloads >= max_downloads:
-                print(f"Maximum number of downloads reached ({max_downloads}).")
-                break
-            if row.get('download_complete') == 'Complete' or row.get('download_complete') == 'Unavailable':
+            if row.get('download_complete') == 'complete' or row.get('download_complete') == 'unavailable':
                 continue
-            
-            custom_download_dir = self._determine_download_directory(row, download_directory, index, enumerate)
-            os.makedirs(custom_download_dir, exist_ok=True)
-
             pmid = row.get('pmid')
-
-            if not pd.notna(row.get('is_oa')):
-                pass
-            elif pd.notna(row.get('is_oa')) or row.get('is_oa', False):
-                for url in [row.get(f'pdf_url_{i}') for i in range(1, 5) if row.get(f'pdf_url_{i}')]:
-                    if self.download_article_oa(url, custom_download_dir, pmid):
-                        if self._update_download_status(custom_download_dir, index):
-                            break  # Exit loop if successful download
-                
-            # If download is not complete, try PyPaperBot
-            if self.df.at[index, 'download_complete'] != 'Complete' and allow_pypaperbot and row.get('doi') and pmid:
-                if self.download_article_pypaperbot(row['doi'], pmid, custom_download_dir):
-                    self._update_download_status(custom_download_dir, index)
-                
-            # If still not marked as complete, set as unavailable
-            if self.df.at[index, 'download_complete'] != 'Complete':
-                self.df.at[index, 'download_complete'] = "Unavailable"
+            doi = row.get('doi')
+            if not doi or len(str(doi)) < 5:
+                self.df.at[index, 'download_complete'] = 'unavailable'
+                continue
+            pdf_filepath = PyPaperRetriever(
+                                        pmid=pmid,
+                                        doi=doi,
+                                        email=self.email,
+                                        allow_scihub=allow_scihub,
+                                        download_directory=download_directory
+                                    ).find_and_download().filepath
+            if pdf_filepath in [None, '', 'unavailable']:
+                self.df.at[index, 'download_complete'] = 'unavailable'
                 self.df.at[index, 'pdf_filepath'] = None
-            
-            if save_progress:
-                self.save()
+            else:
+                self.df.at[index, 'download_complete'] = 'complete'
+                self.df.at[index, 'pdf_filepath'] = pdf_filepath
+            self.save()
+        return self
 
     def fetch_references(self):
         """
@@ -240,6 +225,38 @@ class PubMedSearcher:
                 cited_by = self.get_citing_articles_europe(row.get('pmid'))
                 self.df.at[index, 'cited_by'] = cited_by
 
+    def fetch_abstracts(self, save_progress=True):
+        """
+        Fetches abstracts for each article in the DataFrame using the Entrez API.
+        Unnecessary if you used the 'search' method to retrieve articles, as abstracts are already included.
+        """
+        if not hasattr(self, 'df') or self.df.empty:
+            print("DataFrame does not exist or is empty.")
+            return
+        
+        if 'abstract' not in self.df.columns:
+            self.df['abstract'] = None
+        
+        for index, row in tqdm(self.df.iterrows(), total=self.df.shape[0], desc="Fetching Abstracts"):
+            if pd.notna(row['abstract']):
+                continue
+            pmid = row.get('pmid')
+            if pd.notna(pmid):
+                abstract = self.get_abstract(pmid)
+                self.df.at[index, 'abstract'] = abstract
+            
+            if save_progress:
+                self.save()
+    
+    def get_abstract(self, pmid):
+        """Fetches the abstract for an article identified by its PMID using the Entrez API."""
+        Entrez.email = self.email
+        handle = Entrez.efetch(db="pubmed", id=pmid, retmode="xml")
+        article_details = Entrez.read(handle)
+        handle.close()
+        abstract = article_details['PubmedArticle'][0]['MedlineCitation']['Article'].get('Abstract', {}).get('AbstractText', '')
+        return " ".join(abstract)
+
     def extract_images(self):
         """
         Extracts images from PDFs for each article in the DataFrame and saves the image paths in a new column 'img_paths'.
@@ -250,12 +267,15 @@ class PubMedSearcher:
             return
         self.df["img_paths"] = [[] for _ in range(len(self.df))]
         for idx, row in tqdm(self.df.iterrows(), total=len(self.df), desc="Extracting images"):
+            # Check if img_paths already exists, or is None, and skip if so
+            if pd.notna(row["img_paths"]) and len(row["img_paths"]) > 0:
+                continue
             pdf_path = row["pdf_filepath"]
             if pd.isna(pdf_path) or pdf_path in [0, "0", None, "", "<NA>"]:
                 continue
             img_extractor = ImageExtractor(pdf_path)
             img_extractor.extract_images()
-            self.df.at[idx, "img_paths"] = img_extractor.img_paths
+            self.df.at[idx, "img_paths"] = img_extractor.img_paths if len(img_extractor.img_paths) > 0 else ["Unavailable"]
         return self
 
     def download_xml_fulltext(self, download_directory="downloads"):
@@ -305,33 +325,6 @@ class PubMedSearcher:
                 self.df.at[index, 'xml_download_complete'] = "Not OA or no XML available"
                 self.df.at[index, 'xml_filepath'] = None
 
-    def check_open_access(self):
-        """
-        Checks if each article in the DataFrame is open access using Unpaywall and fills in the relevant columns.
-        Columns: 'is_oa', 'best_oa_location_url', 'pdf_url_1', 'pdf_url_2', 'pdf_url_3', 'pdf_url_4', 'europe_pmc_url'
-        """
-        required_columns = ['is_oa', 'best_oa_location_url', 'pdf_url_1', 'pdf_url_2', 
-                            'pdf_url_3', 'pdf_url_4', 'europe_pmc_url']
-        for column in required_columns:
-            if column not in self.df.columns:
-                self.df[column] = None
-
-        # Check if 'doi' column exists
-        if 'doi' not in self.df.columns:
-            return "Error: 'doi' column not found in the DataFrame."
-
-        # Iterate over DataFrame rows and fill in the values
-        for index, row in tqdm(self.df.iterrows(), total=self.df.shape[0], desc="Checking Open Access"):
-            if row.get('is_oa') is True or row.get('is_oa') is False:
-                continue
-            doi = row.get('doi')
-            if pd.notna(doi):
-                oa_info = self.check_open_access_doi(doi)
-                for key in required_columns:
-                    self.df.at[index, key] = oa_info.get(key, None)
-            else:
-                self.df.at[index, 'is_oa'] = False
-
     def save(self, csv_path="master_list.csv"):
         """
         Saves the DataFrame to a CSV file.
@@ -342,114 +335,6 @@ class PubMedSearcher:
         """Saves a DataFrame containing only the 'pmid' and 'abstract' columns to a CSV file."""
         abstracts_df = self.df[['pmid','abstract']].copy()
         abstracts_df.to_csv(filename, index=False)
-
-    def check_open_access_doi(self, doi):
-        """
-        Checks if an article is open access using Unpaywall and returns access information, including multiple PDF URLs.
-
-        Parameters:
-        doi (str): The DOI of the article to check.
-
-        Returns:
-        dict: A dictionary containing open access information, including if it's open access,
-                the best link to access it, multiple links to download the PDF if available, and the OA status.
-        """
-        url = f"https://api.unpaywall.org/v2/{doi}?email={self.email}"
-        response = requests.get(url)
-        
-        if response.status_code == 200:
-            data = response.json()
-            oa_status = data.get("oa_status", "unknown")
-            is_oa = data.get("is_oa", False)
-            best_oa_location_url = data.get("best_oa_location", {}).get("url", None) if data.get("best_oa_location") else None
-            pdf_urls = [None, None, None, None]
-            pdf_locations = [loc.get("url_for_pdf") for loc in data.get("oa_locations", []) if loc.get("url_for_pdf")]
-            pdf_urls[:len(pdf_locations)] = pdf_locations[:4]
-
-            pubmed_europe_info = next((
-                (loc.get("url").split("?")[0], loc.get("url").split("pmc")[-1].split("/")[0])
-                for loc in data.get("oa_locations", [])
-                if "europepmc.org/articles/pmc" in loc.get("url", "")
-            ), (None, None))
-
-            pubmed_europe_url, pmcid = pubmed_europe_info
-
-            return {
-                "is_oa": is_oa,
-                "best_oa_location_url": best_oa_location_url,
-                "pdf_url_1": pdf_urls[0],
-                "pdf_url_2": pdf_urls[1],
-                "pdf_url_3": pdf_urls[2],
-                "pdf_url_4": pdf_urls[3],
-                "europe_pmc_url": pubmed_europe_url,
-            }
-        else:
-            return {"error": f"Unpaywall API request failed with status code {response.status_code}"}
-
-    def download_article_pypaperbot(self, doi, pmid, download_directory="downloads", mirror_idx=0):
-        """
-        Attempts to fetch the article using PyPaperBot based on the given DOI and Sci-Hub mirror.
-
-        Parameters:
-        doi (str): The DOI of the article to fetch.
-        download_directory (str): The directory where the article PDF should be saved.
-        mirror (str): The Sci-Hub mirror URL to use for downloading the article.
-
-        Returns:
-        str: A message indicating the result of the fetch operation.
-        """
-        mirror_list= ["https://sci-hub.st", "https://sci-hub.ru",  "https://sci-hub.se", "https://sci-hub.do"]   
-        
-        if mirror_idx >= len(mirror_list):
-            return None
-        
-        try:
-            command = f'PyPaperBot --doi {doi} --dwn-dir "{download_directory}" --scihub-mirror={mirror_list[mirror_idx]}'
-            
-            result = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
-            if self._check_if_downloaded(download_directory):
-                self._rename_downloaded_file(download_directory, pmid)
-                return "Article fetched successfully."
-            else:
-                return self.download_article_pypaperbot(doi, pmid, download_directory, mirror_idx + 1)
-                               
-        except subprocess.CalledProcessError as e:
-            return f"Error executing PyPaperBot: {e}"
-        
-    def download_article_oa(self, pdf_url, download_directory, pmid=None):
-        """
-        Downloads an article from a provided open access PDF URL to the specified directory.
-        Sets the filename as <pmid>.pdf if possible, or defaults to a generic name.
-
-        Parameters:
-        pdf_url (str): URL pointing to the PDF file.
-        download_directory (str): The directory where the PDF file should be saved.
-        pmid (str, optional): The PubMed ID of the article. Defaults to None.
-        """
-        os.makedirs(download_directory, exist_ok=True)
-        
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Referer": "https://www.google.com/",
-        }
-        
-        try:
-            response = requests.get(pdf_url, headers=headers, stream=True)
-            if response.status_code == 200:
-                filename = f"{pmid}.pdf" if pmid else "downloaded_article.pdf"
-                file_path = os.path.join(download_directory, filename)
-                
-                with open(file_path, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        f.write(chunk)
-                return True
-            else:
-                return False
-        except Exception:
-            return False
 
     def get_references_europe(self, pmid):
         """
@@ -697,6 +582,7 @@ class PubMedSearcher:
         Required columns: 'title', 'doi' # We may need to adjust this in the future
         """
         required_columns = ['title', 'doi']  # Adjusted required columns
+        df.rename(columns={col: col.lower() for col in df.columns}, inplace=True)
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
             raise ValueError(f"DataFrame is missing required columns: {', '.join(missing_columns)}")
@@ -745,46 +631,6 @@ class PubMedSearcher:
         cols.insert(0, cols.pop(cols.index('pmid')))
         df = df[cols]
         return df
-    
-    def _determine_download_directory(self, row, base_directory, index, enumerate=False):
-        """Determine the download directory for an article based on its metadata."""
-        def is_value_meaningful(value):
-            return value and str(value).strip() not in ['', 'None', 'nan', 'NaN']
-        
-        pmid = row.get('pmid') if 'pmid' in row and is_value_meaningful(row['pmid']) else None
-
-        dir_parts = []
-        
-        if enumerate:
-            dir_parts.append(f"{index}")
-        if pmid:
-            dir_parts.append(f"{pmid}")
-
-        directory_name = "_".join(dir_parts)
-        return os.path.join(base_directory, directory_name)
-    
-    def _update_download_status(self, download_directory, index):
-        """Update the download status of an article based on the downloaded PDF file."""
-        if self._check_if_downloaded(download_directory):
-            pdf_files = glob(os.path.join(download_directory, '*.pdf'))
-            if pdf_files:
-                self.df.at[index, 'download_complete'] = 'Complete'
-                self.df.at[index, 'pdf_filepath'] = pdf_files[0]
-                return True
-        return False
-
-    def _check_if_downloaded(self, download_directory_or_path, filetype=".pdf"):
-        """Check if a file with the given extension exists in the specified directory or path."""
-        files_with_type = glob(os.path.join(download_directory_or_path, f'*{filetype}'))
-        return len(files_with_type) > 0
-    
-    def _rename_downloaded_file(self, download_directory, pmid):
-        """Rename the downloaded file to match the article's PMID."""
-        pdf_files = glob(os.path.join(download_directory, '*.pdf'))
-        if pdf_files:
-            pdf_file = pdf_files[0]
-            new_pdf_file = os.path.join(download_directory, f"{pmid}.pdf")
-            os.rename(pdf_file, new_pdf_file)
     
     def _find_references_for_row(self, row):
         pmcid = row.get('pmcid', None)  # Correct usage for a pandas Series
@@ -976,53 +822,3 @@ class PubMedSearcher:
             dict_refs.append(dict_ref)
             
         return dict_refs
-    
-def pmid_to_doi(pmid, email):
-    """
-    Converts a PMID to a DOI using the Entrez API.
-    """
-    Entrez.email = email
-    handle = Entrez.efetch(db="pubmed", id=pmid, retmode="xml")
-    records = Entrez.read(handle)
-    handle.close()
-    try:
-        id_list = records['PubmedArticle'][0]['PubmedData']['ArticleIdList']
-        for element in id_list:
-            if element.attributes.get('IdType') == 'doi':
-                return str(element)
-        return None
-        
-    except Exception as e:
-        print(f"Error processing PMID {pmid}: {e}")
-    return None
-
-def doi_to_pmid(doi, email):
-    """
-    Converts a DOI to a PMID using the Entrez API.
-    """
-    Entrez.email = email
-    handle = Entrez.efetch(db="pubmed", id=doi, retmode="xml")
-    records = Entrez.read(handle)
-    handle.close()
-    try:
-        id_list = records['PubmedArticle'][0]['PubmedData']['ArticleIdList']
-        for element in id_list:
-            if element.attributes.get('IdType') == 'pubmed':
-                return str(element)
-        return None
-        
-    except Exception as e:
-        print(f"Error processing doi {doi}: {e}")
-    return None
-
-def convert_id(id, id_type, email):
-    """
-    Converts an ID from one type to another, e.g. PMID to DOI or DOI to PMID.
-    Uses Entrez API for the conversion.
-    """
-    if id_type == 'pmid':
-        return pmid_to_doi(id, email)
-    elif id_type == 'doi':
-        return doi_to_pmid(id, email)
-    else:
-        return None

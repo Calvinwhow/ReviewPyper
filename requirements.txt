@@ -14,3 +14,5 @@ lxml==5.2.0
 requests==2.31.0
 python-Levenshtein==0.25.0
 PyMuPDF==1.24.1
+pybids==0.16.4
+git+https://github.com/josephisaacturner/pypaperretriever.git

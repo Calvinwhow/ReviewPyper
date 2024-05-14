@@ -1,0 +1,130 @@
+{
+    "name": "bids",
+    "entities": [
+        {
+            "name":"pubmed_id",
+            "pattern":"pmid-(\\d+)",
+            "directory":"{pubmed_id}"
+        },
+        {
+            "name":"image",
+            "pattern":"img-(\\d+)"
+        },
+        {
+            "name": "doi_id",
+            "pattern": "doi-([a-zA-Z0-9.%]+)"
+        },             
+        {
+            "name": "subject",
+            "pattern": "[/\\\\]+sub-([a-zA-Z0-9]+)",
+            "directory": "{subject}"
+        },
+        {
+            "name": "session",
+            "pattern": "[_/\\\\]+ses-([a-zA-Z0-9]+)",
+            "mandatory": false,
+            "directory": "{subject}{session}"
+        },
+        {
+            "name": "sample",
+            "pattern": "[_/\\\\]+sample-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "task",
+            "pattern": "[_/\\\\]+task-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "tracksys",
+            "pattern": "[_/\\\\]+tracksys-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "acquisition",
+            "pattern": "[_/\\\\]+acq-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "ceagent",
+            "pattern": "[_/\\\\]+ce-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "staining",
+            "pattern": "[_/\\\\]+stain-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "tracer",
+            "pattern": "[_/\\\\]+trc-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "reconstruction",
+            "pattern": "[_/\\\\]+rec-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "direction",
+            "pattern": "[_/\\\\]+dir-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "run",
+            "pattern": "[_/\\\\]+run-(\\d+)",
+            "dtype": "int"
+        },
+        {
+            "name": "proc",
+            "pattern": "[_/\\\\]+proc-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "modality",
+            "pattern": "[_/\\\\]+mod-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "echo",
+            "pattern": "[_/\\\\]+echo-([0-9]+)"
+        },
+        {
+            "name": "flip",
+            "pattern": "[_/\\\\]+flip-([0-9]+)"
+        },
+        {
+            "name": "inv",
+            "pattern": "[_/\\\\]+inv-([0-9]+)"
+        },
+        {
+            "name": "mt",
+            "pattern": "[_/\\\\]+mt-(on|off)"
+        },
+        {
+            "name": "part",
+            "pattern": "[_/\\\\]+part-(imag|mag|phase|real)"
+        },
+        {
+            "name": "recording",
+            "pattern": "[_/\\\\]+recording-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "space",
+            "pattern": "[_/\\\\]+space-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "chunk",
+            "pattern": "[_/\\\\]+chunk-([0-9]+)"
+        },
+        {
+            "name": "suffix",
+            "pattern": "(?:^|[_/\\\\])([a-zA-Z0-9]+)\\.[^/\\\\]+$"
+        },
+        {
+            "name": "scans",
+            "pattern": "(.*\\_scans.tsv)$"
+        },
+        {
+            "name": "fmap",
+            "pattern": "(phasediff|magnitude[1-2]|phase[1-2]|fieldmap|epi)\\.nii"
+        },
+        {
+            "name": "datatype",
+            "pattern": "[/\\\\]+(anat|beh|dwi|eeg|fmap|func|ieeg|meg|motion|micr|nirs|perf|pet)[/\\\\]+"
+        },
+        {
+            "name": "extension",
+            "pattern": "[^./\\\\](\\.[^/\\\\]+)$"
+        }
+    ]
+}
