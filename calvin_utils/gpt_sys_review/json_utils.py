@@ -331,7 +331,7 @@ class InclusionExclusionSummarizer:
     - df (DataFrame): Pandas DataFrame to store summarized results.
     """
     
-    def __init__(self, json_path, questions, acceptable_strings=["good", "excellent", "positive", " y " " y.", "yes", "correct", "is likely", "is possible", "is probable"]):
+    def __init__(self, json_path, questions, acceptable_strings=["1", "good", "excellent", "positive", " y " " y.", "yes", "correct", "is likely", "is possible", "is probable"]):
         """
         Initializes the InclusionExclusionSummarizer class.
         

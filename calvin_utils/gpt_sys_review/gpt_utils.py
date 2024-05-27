@@ -223,6 +223,7 @@ class OpenAIChatEvaluator(OpenAIEvaluator):
         """
         Sets the manner in which directives and questions are posed to the model.
         """
+        self.chunk_end = None
         if self.question_type=="research":
             self.directive = "You are a research assistant. Your task is to carefully evaluate the following research report. Use both explicit information and reasonable inferences to answer the questions. Be as concise as possible."
             self.chunk_flag = "[RESEARCH REPORT]"
@@ -231,6 +232,11 @@ class OpenAIChatEvaluator(OpenAIEvaluator):
             self.directive = "You are a medical assistant. Your task is to carefully evaluate the following case report. Use both explicit information and reasonable inferences to answer the questions. Be as concise as possible."
             self.chunk_flag = "[CASE REPORT]"
             self.dir = "case_extractions"
+        elif self.question_type=="inclusion":
+            self.directive = "You are a helpful binary assistant, only able to speak in 1s or 0s. Your task is to carefully evaluate the following medical article. Use both explicit information and reasonable inferences to answer the questions. Responses should be: 0 for No, 1 for Y."
+            self.chunk_flag = "[MEDICAL ARTICLE]"
+            self.dir = "case_extractions"
+            self.chunk_end = "\n\nRespond 0 for No, 1 for Yes."
         elif self.question_type=="labelling":
             self.directive = "You are a text labelling assistant. Your task is to carefully evaluate the following case report. Use both explicit information and reasonable inferences to answer the questions. Be as concise as possible."
             self.chunk_flag = "[SEGMENT]"
@@ -238,7 +244,15 @@ class OpenAIChatEvaluator(OpenAIEvaluator):
             self.token_limit = 500
         else:
             raise ValueError(f"Model choice {question_type} not supported, please choose gpt4, gpt3_large, or gpt3_small.")
-        
+    
+    def add_context_to_chunks(self, chunks, debug=False):
+        """Method to append a message to the end of every chunk. Set in self.get_question_settings"""
+        if self.chunk_end is not None:
+            for i in range(len(chunks)):
+                chunks[i] += self.chunk_end
+        print(chunks) if debug else None
+        return chunks
+    
     def get_model_data(self, model_choice):
         """
         Sets values for the OpenAI model to use.
@@ -309,6 +323,7 @@ class OpenAIChatEvaluator(OpenAIEvaluator):
                 print('Text associated with file:', selected_text)
                 print(f'Allowing {self.token_limit} tokens per submission')
                 print('Number of chunks:', len(chunks))
+        chunks = self.add_context_to_chunks(chunks)
         return chunks
     
     def generate_submission(self, chunk, q):
@@ -724,8 +739,8 @@ class AbstractScreener(TitleScreener):
     
     def launch_openai_evaluation(self, text):
         conversation = [
-            {"role": "system", "content": "You are a helpful assistant. Responses should be (0 for No, 1 for Yes)"},
-            {"role": "user", "content": f"Based on this abstract: {text}\n{self.question}\n\nResponse (0 for No, 1 for Yes)"}
+            {"role": "system", "content": "You are a helpful binary assistant, only able to speak in 1s or 0s. Responses should be: 0 for No, 1 for Yes"},
+            {"role": "user", "content": f"Based on this abstract: {text}\n{self.question}\n\nRespond 0 for No, 1 for Yes."}
             ]
         return self.evaluate_with_openai(conversation)
         

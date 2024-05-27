@@ -426,16 +426,17 @@ class BulkPDFDownloaderV2(BulkPDFDownloader):
     Attributes:
         csv_path (str): Path to the CSV file containing DOIs and screening info.
         directory (str): Directory to save PDFs.
-        column (str): The column name used for filtering rows, default is "openai_screen_abstract".
+        column (str): The column name used for filtering rows, default is "OpenAI_Screen_Abstract".
     """
     def __init__(self, csv_path, email, allow_scihub=True, column=None):
         self.csv_path = csv_path
         self.master_df = pd.read_csv(self.csv_path)
-        self.master_df.columns = [col.lower() for col in self.master_df.columns]
+        # self.master_df.columns = [col.lower() for col in self.master_df.columns]
         self.directory = os.path.dirname(self.csv_path)
         self.pdf_dir_path = os.path.join(self.directory, 'PDFs')
         os.makedirs(self.pdf_dir_path, exist_ok=True)
-        self.positive_abstract = column.lower() if column is not None else "openai_screen_abstract"
+        self.positive_abstract = column if column is not None else "OpenAI_Screen_Abstract"
+        # self.positive_abstract = column.lower() if column is not None else "OpenAI_Screen_Abstract"
         self.email = email
         self.allow_scihub = allow_scihub
 
@@ -454,15 +455,15 @@ class BulkPDFDownloaderV2(BulkPDFDownloader):
     def run(self):
         filtered_df = self.master_df[self.master_df[self.positive_abstract] == 1]
         for index, row in tqdm(filtered_df.iterrows(), total=len(filtered_df)):
-            doi = row['doi']
-            pmid = row['pmid']
+            doi = row['DOI']
+            pmid = row['PMID']
             success, filepath = self.download_pdf(doi, pmid)
             if success:
-                self.master_df.loc[self.master_df['doi'] == doi, 'pdf_downloaded'] = 1
-                self.master_df.loc[self.master_df['doi'] == doi, 'pdf_path'] = filepath
+                self.master_df.loc[self.master_df['DOI'] == doi, 'PDF_Downloaded'] = True
+                self.master_df.loc[self.master_df['DOI'] == doi, 'PDF_Path'] = filepath
             else:
-                self.master_df.loc[self.master_df['doi'] == doi, 'pdf_downloaded'] = 0
-
+                self.master_df.loc[self.master_df['DOI'] == doi, 'PDF_Downloaded'] = False
+        # self.master_df.columns = [col.capitalize() for col in self.master_df.columns]
         self.master_df.to_csv(self.csv_path, index=False)
 
 class PdfPostProcess:
@@ -494,7 +495,7 @@ class PdfPostProcess:
         """Update the master list with download statuses and paths."""
         df_master = pd.read_csv(self.master_list_path)
         if 'PDF_Downloaded' not in df_master.columns:
-            df_master['PDF_Downloaded'] = 0
+            df_master['PDF_Downloaded'] = False
         if 'PDF_Path' not in df_master.columns:
             df_master['PDF_Path'] = ''
 
@@ -515,8 +516,9 @@ class PdfPostProcess:
                 else:
                     df_master.loc[index, 'PDF_Path'] = np.nan
                     df_master.loc[index, 'PDF_Downloaded'] = np.nan
-                
+        
         df_master.to_csv(os.path.join(self.directory, 'master_list.csv'), index=False)
+        return df_master
         
     def normalize_title(self, title):
         """Normalize title by removing non-alphabetic characters."""
@@ -552,7 +554,7 @@ class PdfPostProcess:
                         os.path.join(pdf_dir_path, new_filename)
                     )
                     df_master.loc[index, 'PDF_Path'] = os.path.join(pdf_dir_path, new_filename)
-                    df_master.loc[index, 'PDF_Downloaded'] = 1
+                    df_master.loc[index, 'PDF_Downloaded'] = True
                     
                     # Added for legibility
                     file_matched = True
@@ -590,7 +592,7 @@ class PdfPostProcess:
                             os.path.join(pdf_dir_path, new_filename)
                         )
                         df_master.loc[index, 'PDF_Path'] = os.path.join(pdf_dir_path, new_filename)
-                        df_master.loc[index, 'PDF_Downloaded'] = 1
+                        df_master.loc[index, 'PDF_Downloaded'] = True
                         
                         file_matched = True
                     break
@@ -610,9 +612,18 @@ class PdfPostProcess:
         df_master, unmatched_files = self.pmid_renaming_round_two(pdf_dir_path, df_master, unmatched_files, loose_match=True)
 
         df_master.to_csv(os.path.join(self.directory, 'master_list.csv'), index=False)
+   
+    def report(self, df_master):
+        false_df = df_master[df_master['PDF_Downloaded'] == False]
+        true_df = df_master[df_master['PDF_Downloaded'] == True]
+        false_count = false_df['PMID'].count()
+        total_count = false_df['PMID'].count() + true_df['PMID'].count()
+        print("Failed to download: ", false_count, " of ", total_count)
+        print("Failed to download these PMIDs: ", false_df['PMID'].values)
 
     def run(self):
         """Orchestration method"""
         self.update_master_list()
         self.rename_pdfs_to_pmid()
-        self.update_master_list_v2()
+        df_master = self.update_master_list_v2()
+        self.report(df_master)

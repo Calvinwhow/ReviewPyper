@@ -177,17 +177,28 @@ class AbstractSeparator:
         with open(self.file_path, 'r') as file:
             self.content = file.read()
         self.abstracts = []
-        
-    def separate_abstracts(self):
-        """Separate the content into individual abstracts based on the described pattern."""
-        #r'(\d+\.\s)'
-        first_abstract_entry = re.search(r'(\d+\.\s[A-Z])', self.content)
+    
+    def identify_abstracts(self, reg_style ='flexbile'):
+        """Function to use regex to identify abstracts"""
+        if reg_style == 'rigid':
+            r_string = '(\d+\.\s[A-Z])'
+        elif reg_style == 'flexible':
+            r_string = '(\d+\.\s[A-Za-z])'
+        else:
+            r_string = '(d+\.\s)'
+            
+        first_abstract_entry = re.search(r'(\d+\.\s[A-Za-z])', self.content)
         first_start_position = first_abstract_entry.start() if first_abstract_entry else None
 
         #r'\n(\d+\.\s)'
         # Find subsequent abstracts using the original pattern
-        abstract_entries = re.finditer(r'\n\n\n(\d+\.\s[A-Z])', self.content)
+        abstract_entries = re.finditer(r'\n\n\n(\d+\.\s[A-Za-z])', self.content)
         start_positions = [match.start() for match in abstract_entries]
+        return first_start_position, start_positions
+
+    def separate_abstracts(self):
+        """Separate the content into individual abstracts based on the described pattern."""
+        first_start_position, start_positions = self.identify_abstracts()
         
         if first_start_position is not None:
             start_positions = [first_start_position] + start_positions
