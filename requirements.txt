@@ -9,3 +9,4 @@ numpy==1.21.6
 tqdm==4.64.1
 textract==1.6.5
 pytesseract==0.3.10
+git+https://github.com/josephisaacturner/pypaperretriever.git

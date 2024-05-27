@@ -10,6 +10,7 @@ import pandas as pd
 from tqdm import tqdm
 from PyPDF2 import PdfReader
 from pdf2image import convert_from_path
+from pypaperretriever import PyPaperRetriever
 
 class OCROperator:
     """
@@ -417,6 +418,52 @@ class BulkPDFDownloader:
         self.orchestrate_download_v1()
         self.update_master_list()
         self.iteratively_download()
+        
+class BulkPDFDownloaderV2(BulkPDFDownloader):
+    """
+    A class to bulk download PDFs for a list of DOIs from a CSV file.
+
+    Attributes:
+        csv_path (str): Path to the CSV file containing DOIs and screening info.
+        directory (str): Directory to save PDFs.
+        column (str): The column name used for filtering rows, default is "openai_screen_abstract".
+    """
+    def __init__(self, csv_path, email, allow_scihub=True, column=None):
+        self.csv_path = csv_path
+        self.master_df = pd.read_csv(self.csv_path)
+        self.master_df.columns = [col.lower() for col in self.master_df.columns]
+        self.directory = os.path.dirname(self.csv_path)
+        self.pdf_dir_path = os.path.join(self.directory, 'PDFs')
+        os.makedirs(self.pdf_dir_path, exist_ok=True)
+        self.positive_abstract = column.lower() if column is not None else "openai_screen_abstract"
+        self.email = email
+        self.allow_scihub = allow_scihub
+
+    def download_pdf(self, doi, pmid):
+        """Helper function to download a PDF using PyPaperRetriever."""
+        filename = f"{pmid}.pdf"
+        try:
+            retriever = PyPaperRetriever(email=self.email, doi=doi, download_directory=self.pdf_dir_path, allow_scihub=self.allow_scihub, filename=filename)
+            result = retriever.find_and_download()
+        except Exception as e:
+            print(f"Error in PyPaperRetriever on PMID {pmid}: {e}")
+            # Create a result object with default values in case of an error
+            result = type('Result', (object,), {'is_downloaded': False, 'filepath': None})()
+        return result.is_downloaded, result.filepath
+
+    def run(self):
+        filtered_df = self.master_df[self.master_df[self.positive_abstract] == 1]
+        for index, row in tqdm(filtered_df.iterrows(), total=len(filtered_df)):
+            doi = row['doi']
+            pmid = row['pmid']
+            success, filepath = self.download_pdf(doi, pmid)
+            if success:
+                self.master_df.loc[self.master_df['doi'] == doi, 'pdf_downloaded'] = 1
+                self.master_df.loc[self.master_df['doi'] == doi, 'pdf_path'] = filepath
+            else:
+                self.master_df.loc[self.master_df['doi'] == doi, 'pdf_downloaded'] = 0
+
+        self.master_df.to_csv(self.csv_path, index=False)
 
 class PdfPostProcess:
     def __init__(self, master_list_path):
