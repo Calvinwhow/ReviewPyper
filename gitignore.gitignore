@@ -13,6 +13,17 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
+__pycache__/
+
+# Ignore all Cython files
+*.c
+*.cpp
+*.cxx
+*.h
+*.pyx
+*.pxd
+*.pxi
+*.pyc
 
 # Ignore Jupyter Notebook checkpoints
 .ipynb_checkpoints/
