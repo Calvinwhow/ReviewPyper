@@ -13,7 +13,9 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
-__pycache__/
+*.cpython-310.pyc
+*.pyc
+/Users/cu135/Library/CloudStorage/OneDrive-Personal/OneDrive_Documents/Work/Software/ReviewPyper/__pycache__
 
 # Ignore all Cython files
 *.c
