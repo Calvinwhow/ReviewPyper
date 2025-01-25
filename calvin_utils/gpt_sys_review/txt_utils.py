@@ -308,11 +308,6 @@ class TitleReviewFilter():
 class PostProcessing:
     '''
     A class for post-processing operations on CSV files containing abstracts.
-    
-    Example usage:
-    post_process = PostProcessing("csv1.csv", "csv2.csv", "pubmed_csv.csv")
-    merged_df = post_process.merge_csvs_on_abstract()
-    final_file_path = post_process.concatenate_csvs()
     '''
     def __init__(self, file1_path, file2_path, pubmed_csv_path):
         '''
@@ -360,6 +355,7 @@ class PostProcessing:
         # Saving the concatenated DataFrame
         self.final_file_path = os.path.join(os.path.dirname(self.file1_path), "master_list.csv")
         self.concatenated_df.to_csv(self.final_file_path, index=False)
+        print(f"Found {self.concatenated_df['OpenAI_Screen_Abstract'].sum()} abstracts")
         print(f"Saved Master List to: \n {self.final_file_path}")
     
     @staticmethod
@@ -413,7 +409,17 @@ class PostProcessing:
             print("Not saving.")
         return master_df
     
+    def clean_up(self):
+        """Method to remove just the specific preprocessing CSVs"""
+        removal_list = ['_cleaned', '_filtered']
+        directory = os.path.dirname(self.final_file_path)
+        for filename in os.listdir(directory): 
+            if any(removal_tag in filename for removal_tag in removal_list):
+                try: os.remove(os.path.join(directory, filename))
+                except: pass
+    
     def run(self):
         self.merge_csvs_on_abstract()
         self.concatenate_csvs()
+        self.clean_up()
         return self.concatenated_df

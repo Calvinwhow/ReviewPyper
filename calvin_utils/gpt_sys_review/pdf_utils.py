@@ -85,6 +85,11 @@ class OCROperator:
         return len(pdf.pages)
 
     @staticmethod
+    def get_byte_size(file_path: str) -> int: 
+        file_size = os.path.getsize(file_path)
+        return file_size // (1024 * 1024)
+    
+    @staticmethod
     def save_text_to_file(text: str, output_file_path: str) -> None:
         """
         Saves the extracted text to a specified file path.
@@ -123,8 +128,7 @@ class OCROperator:
             output_dir = os.path.join(os.path.dirname(pdf_dir), 'pdf_txt')
         os.makedirs(output_dir,exist_ok=True)
         
-        pdf_paths = [f for f in os.listdir(pdf_dir) if f.endswith('.pdf')]
-        
+        pdf_paths = [os.path.join(pdf_dir, f) for f in os.listdir(pdf_dir) if f.endswith('.pdf')]
         OCROperator.pdf_text_extraction(pdf_paths=pdf_paths, output_dir=output_dir, page_threshold=page_threshold)
         return output_dir
                 
@@ -210,8 +214,11 @@ class OCROperator:
                 try:
                     page_count = OCROperator.get_pdf_page_count(file_path)
                 except Exception as e:
-                    print("Skipping due to error getting page number: " + str(e))
-                    continue
+                    if str(e) == "EOF marker not found":
+                        page_count = OCROperator.get_byte_size(file_path) # using MB count as page count surrogate
+                    else:
+                        print("Skipping due to error getting page number: " + str(e))
+                        continue
                 if page_count > page_threshold:
                     print(f"Skipping {file_name} as it has {page_count} pages, exceeding the threshold of {page_threshold}.")
                     continue
@@ -431,12 +438,10 @@ class BulkPDFDownloaderV2(BulkPDFDownloader):
     def __init__(self, csv_path, email, allow_scihub=True, column=None):
         self.csv_path = csv_path
         self.master_df = pd.read_csv(self.csv_path)
-        # self.master_df.columns = [col.lower() for col in self.master_df.columns]
         self.directory = os.path.dirname(self.csv_path)
         self.pdf_dir_path = os.path.join(self.directory, 'PDFs')
         os.makedirs(self.pdf_dir_path, exist_ok=True)
         self.positive_abstract = column if column is not None else "OpenAI_Screen_Abstract"
-        # self.positive_abstract = column.lower() if column is not None else "OpenAI_Screen_Abstract"
         self.email = email
         self.allow_scihub = allow_scihub
 
