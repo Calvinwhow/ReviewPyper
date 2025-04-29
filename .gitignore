@@ -29,3 +29,13 @@ __pycache__/
 
 # Ignore Jupyter Notebook checkpoints
 .ipynb_checkpoints/
+
+# Ignore virtual environment directories
+ReviewPygit ls-files | grep ReviewPyPerVenvPerVenv/
+*.env
+*.venv
+env/
+venv/
+ENV/
+VENV/
+ReviewPyPerVenv/

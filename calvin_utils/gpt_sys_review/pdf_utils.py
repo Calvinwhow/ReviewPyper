@@ -10,7 +10,7 @@ import pandas as pd
 from tqdm import tqdm
 from PyPDF2 import PdfReader
 from pdf2image import convert_from_path
-from pypaperretriever import PyPaperRetriever
+from pypaperretriever import PaperRetriever
 
 class OCROperator:
     """
@@ -449,8 +449,12 @@ class BulkPDFDownloaderV2(BulkPDFDownloader):
         """Helper function to download a PDF using PyPaperRetriever."""
         filename = f"{pmid}.pdf"
         try:
-            retriever = PyPaperRetriever(email=self.email, doi=doi, download_directory=self.pdf_dir_path, allow_scihub=self.allow_scihub, filename=filename)
-            result = retriever.find_and_download()
+            retriever = PaperRetriever(email=self.email, 
+                                       doi=doi, 
+                                       download_directory=self.pdf_dir_path, 
+                                       allow_scihub=self.allow_scihub, 
+                                       filename=filename)
+            result = retriever.download()
         except Exception as e:
             print(f"Error in PyPaperRetriever on PMID {pmid}: {e}")
             # Create a result object with default values in case of an error

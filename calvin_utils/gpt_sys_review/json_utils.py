@@ -1,6 +1,6 @@
 from tqdm import tqdm
 from calvin_utils.gpt_sys_review.txt_utils import TextChunker
-from calvin_utils.gpt_sys_review.gpt_utils import CaseReportLabeler
+from calvin_utils.gpt_sys_review.gpt_utils.openai_labeller import CaseReportLabeler
 from fuzzywuzzy import fuzz
 import pandas as pd
 import numpy as np
@@ -59,17 +59,26 @@ class SectionLabeler:
             self.section_headers = {
             "Case_Report": ["yes", "y", "positive", "correct"]
             }
+        elif self.article_type == "other":
+            self.section_headers = {
+                "Positive": ["yes", "y", "positive", "correct"]
+            }
         else:
             raise ValueError(f"Unknown article type {self.article_type}, choose case or research.")
             
-    def get_questions(self):
+    def get_questions(self, manual_question=None):
         if self.article_type == "research":
-            return None
+            questions = None
         elif self.article_type == "case":
             questions = {'Priotizing implicit and explicit information, do you think this contains a description of a medical case? For example, if the text refers to a patient, seemingly describes a history of presenting illness, or is seemingly describing a medical situation. This could be in referring to hospital course, imaging findings, or laboratory results. ONLY RESPOND AS YES OR NO (Y/N)': 'case_report'}
-            return questions
+        elif self.article_type == "other":
+            if manual_question is None:
+                raise ValueError(f"Error, must enter question as a string into process_files. ex: (question='this is my question')")    
+            else:
+                questions = {manual_question : 'other'}
         else:
-            return None
+            questions = None
+        return questions
 
     def label_with_exact_matching(self, text):
         labeled_sections = {}
@@ -175,7 +184,8 @@ class SectionLabeler:
         - None
         """
         # Create a new directory in the same root folders
-        out_dir = os.path.join(self.folder_path, '..', 'json')
+        root_dir = os.path.dirname(self.folder_path)
+        out_dir = os.path.join(root_dir, 'json')
         os.makedirs(out_dir, exist_ok=True)
         
         if filename is not None and not os.path.exists(filename):
@@ -189,46 +199,93 @@ class SectionLabeler:
                 print(f"Saved to: \n {save_file_path}")
                 
         return save_file_path
+   
+    def _store_results(self, filename, labeled_sections):
+        """
+        Stores the labeled sections into the output dictionary and saves them to a JSON file.
+
+        Parameters:
+        - filename (str): The name of the file being processed.
+        - labeled_sections (dict): The labeled sections of the text.
         
-    def process_files(self):
+        Returns:
+        - None
+        """
+        filename = os.path.splitext(os.path.basename(filename))[0]
+        self.save_to_json({filename: labeled_sections}, filename=filename)
+        self.output_dict[filename] = labeled_sections
+
+    def _label_sections(self, text, question=None):
+        """
+        Labels sections of the text based on the article type.
+
+        Parameters:
+        - text (str): The text to be labeled.
+        - question (str): The question for 'other' article type.
+
+        Returns:
+        - dict: Labeled sections of the text.
+        """
+        if self.article_type == 'research':
+            labeled_sections, text = self.label_text(text)
+        elif self.article_type == 'case':
+            questions = self.get_questions()
+            evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers)
+            labeled_sections = evaluator.evaluate_all_files()
+        elif self.article_type == 'other':
+            questions = self.get_questions(question)
+            evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers)
+            labeled_sections = evaluator.evaluate_all_files()
+        else:
+            raise ValueError(f"Unknown article type {self.article_type}, choose 'case', 'research', or 'other'")
+        
+        return labeled_sections
+
+    def _json_file_exists(self, filename):
+        """
+        Checks if the JSON file for the given filename already exists.
+
+        Parameters:
+        - filename (str): The name of the file being processed.
+
+        Returns:
+        - bool: True if the JSON file exists, False otherwise.
+        """
+        root_dir = os.path.dirname(self.folder_path)
+        out_dir = os.path.join(root_dir, 'json')
+        json_filename = os.path.join(out_dir, f'{os.path.splitext(filename)[0]}_labeled_sections.json')
+        return os.path.exists(json_filename)
+
+    def process_files(self, question=None):
         """
         Processes all text files in the specified folder.
         
         TODO--this can be dramatically improved by saving a JSON file for each article, instead of a single large JSON. 
         To keep it compatible with susbequent code, could combine the JSONs after. 
         """
-        output_dict = {}
+        self.output_dict = {}
 
         self.select_labels()
 
-        for filename in tqdm(os.listdir(self.folder_path), desc='Segmenting text files'):
-            if filename.endswith('.txt'):
-                try:
-                    with open(os.path.join(self.folder_path, filename), 'r') as f:
-                        text = f.read()
-                except:
-                    print("Failed to read file: ", filename)
-                    continue
+        file_list = os.listdir(self.folder_path)
+        file_list = [f for f in file_list if f.endswith('.txt')]
+        for filename in tqdm(file_list, desc='Segmenting text files'):
+            try:
+                with open(os.path.join(self.folder_path, filename), 'r') as f:
+                    text = f.read()
+            except:
+                print("Failed to read file: ", filename)
+                continue
 
-                # Initialize labeled_sections
-                labeled_sections = {}
+            if self._json_file_exists(filename):
+                print(f"Skipping {filename} as it is already processed.")
+                continue
+            
+            labeled_sections = {}
+            labeled_sections = self._label_sections(text, question)
+            self._store_results(filename, labeled_sections)
 
-                # Use keyword matching for stereotypical articles
-                if self.article_type == 'research':
-                    labeled_sections, text = self.label_text(text)
-                elif self.article_type == 'case':
-                    questions = self.get_questions()
-                    evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers)
-                    labeled_sections = evaluator.evaluate_all_files()
-                else:
-                    raise ValueError(f"Unknown article type {self.article_type}, choose case or research")
-                
-                # Store results
-                filename = os.path.splitext(os.path.basename(filename))[0]
-                self.save_to_json({filename: labeled_sections}, filename=filename)
-                output_dict[filename] = labeled_sections
-
-        self.save_to_json(output_dict)
+        self.save_to_json(self.output_dict)
 
 class FilterPapers:
     '''

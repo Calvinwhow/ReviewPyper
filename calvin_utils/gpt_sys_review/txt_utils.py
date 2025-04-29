@@ -28,7 +28,12 @@ class TextPreprocessor:
         - output_dir (str): Path to the directory where the preprocessed text files will be saved.
         """
         self.input_dir = input_dir
-        self.output_dir = os.path.join(input_dir, '..', 'preprocessed')
+        self.output_dir = input_dir + '_preprocessed'
+        self._prep_out_dir()
+        
+    def _prep_out_dir(self):
+        if not os.path.exists(self.output_dir):
+            os.makedirs(self.output_dir, exist_ok=True)
 
     @staticmethod
     def preprocess_text(text):
@@ -60,32 +65,33 @@ class TextPreprocessor:
         """
         return re.sub(r'[^\x00-\x7F]+', ' ', text)
 
+    def _extract_text(self, input_filepath, encoding='utf-8'):
+        with open(input_filepath, 'r', encoding='utf-8') as input_file:
+            return input_file.read()
+
     def process_files(self):
         """
         Reads each text file from the input directory, applies preprocessing, and saves it to the output directory.
         """
-        # Create output directory if it doesn't exist
-        if not os.path.exists(self.output_dir):
-            os.makedirs(self.output_dir)
-        
-        # Loop through each file in the input directory
-        for filename in tqdm(os.listdir(self.input_dir), desc='Preprocessing text files'):
-            if filename.endswith('.txt'):
-                input_filepath = os.path.join(self.input_dir, filename)
-                
-                output_filepath = os.path.join(self.output_dir, filename) #<-- edit
-                
-                # Read the original text
-                with open(input_filepath, 'r', encoding='utf-8') as input_file:
-                    original_text = input_file.read()
-                
-                # Apply preprocessing
-                preprocessed_text = self.preprocess_text(original_text)
-                cleaned_text = self.remove_non_ascii(preprocessed_text)
-                
-                # Save the preprocessed text
-                with open(output_filepath, 'w', encoding='utf-8') as output_file:
-                    output_file.write(cleaned_text)
+        raw_txt_files = os.listdir(self.input_dir)                          # get target files
+        raw_txt_files = [f for f in raw_txt_files if f.endswith('.txt')]    # make sure only to process .txt files
+        for filename in tqdm(raw_txt_files, desc='Preprocessing text files'):
+            input_filepath = os.path.join(self.input_dir, filename)
+            output_filepath = os.path.join(self.output_dir, filename)
+
+            try: 
+                original_text = self._extract_text(input_filepath)
+            except Exception as e:
+                print(f'Skipping {filename} due to error: {e}')
+                continue
+            
+            # Apply preprocessing
+            preprocessed_text = self.preprocess_text(original_text)
+            cleaned_text = self.remove_non_ascii(preprocessed_text)
+            
+            # Save the preprocessed text
+            with open(output_filepath, 'w', encoding='utf-8') as output_file:
+                output_file.write(cleaned_text)
         return self.output_dir
 
 class TextChunker:
@@ -106,6 +112,7 @@ class TextChunker:
         self.token_limit = token_limit
         self.chunks = []
         self.debug = debug
+        self.chunk_tokens_dict = {}
 
         if self.debug:
             print(f"Initialized with token limit: {self.token_limit}")
@@ -126,34 +133,32 @@ class TextChunker:
 
         for word in words:
             tokens_in_word = len(word.split()) + 1
-            
             if self.debug:
                 print(f"Found {tokens_in_word} tokens in word: '{word}'")
-            
             if current_chunk_tokens + tokens_in_word <= self.token_limit:
                 current_chunk.append(word)
                 current_chunk_tokens += tokens_in_word
-
                 if self.debug:
                     print(f"Added word to current chunk, total tokens now: {current_chunk_tokens}")
             else:
                 self.chunks.append(' '.join(current_chunk))
-                
                 if self.debug:
                     print(f"Chunk completed, appended to chunks list.")
-                
                 current_chunk = [word]
                 current_chunk_tokens = tokens_in_word
-                
                 if self.debug:
                     print(f"Started new chunk with word: '{word}', total tokens now: {current_chunk_tokens}")
 
         if current_chunk:
             self.chunks.append(' '.join(current_chunk))
-            
+            self.chunk_tokens_dict[len(self.chunks) - 1] = current_chunk_tokens
             if self.debug:
                 print(f"Final chunk added to chunks list.")
-    
+                
+    def chunk_tokens(self):
+        for key, value in self.chunk_tokens_dict.items():
+            print(f'chunk {key} tokens: {value}')
+            
     def get_chunks(self):
         """
         Returns the list of generated text chunks.
@@ -269,8 +274,13 @@ class TitleReviewFilter():
         """
         # Find the indices of the rows in title review results where the specified column has a value of 1
         mask_indices = self.title_df[self.title_df[self.column_name] == 1].index
-        # Filter the abstracts dataframe using the mask indices
-        self.filtered_df = self.abstracts_df.iloc[mask_indices]
+        
+        try:
+            self.filtered_df = self.abstracts_df.iloc[mask_indices]
+        except IndexError:
+            # Some of the indices in mask_indices don't exist in abstracts_df
+            valid_indices = [i for i in mask_indices if 0 <= i < len(self.abstracts_df)]
+            self.filtered_df = self.abstracts_df.iloc[valid_indices]
 
     def save_filtered_data(self, output_path=None):
         """
