@@ -1,6 +1,7 @@
 from tqdm import tqdm
 from calvin_utils.gpt_sys_review.txt_utils import TextChunker
 from calvin_utils.gpt_sys_review.gpt_utils.openai_labeller import CaseReportLabeler
+from calvin_utils.gpt_sys_review.gpt_utils.openai_summarizer import OpenAISummarizer
 from fuzzywuzzy import fuzz
 import pandas as pd
 import numpy as np
@@ -42,6 +43,7 @@ class SectionLabeler:
         self.folder_path = folder_path
         self.article_type = article_type
         self.chunker = None
+        self.output_dict = {}
 
     def select_labels(self):
         # Define section labels for each article type
@@ -255,6 +257,18 @@ class SectionLabeler:
         out_dir = os.path.join(root_dir, 'json')
         json_filename = os.path.join(out_dir, f'{os.path.splitext(filename)[0]}_labeled_sections.json')
         return os.path.exists(json_filename)
+    
+    def _open_txt_file(self, filename):
+        if self._json_file_exists(filename):
+            print(f"Skipping {filename} as it is already processed.")
+            return None
+        try:
+            with open(os.path.join(self.folder_path, filename), 'r') as f:
+                text = f.read()
+            return text
+        except Exception as e:
+            print(f"Failed to read file: {filename} ({e})")
+            return None
 
     def process_files(self, question=None):
         """
@@ -263,29 +277,17 @@ class SectionLabeler:
         TODO--this can be dramatically improved by saving a JSON file for each article, instead of a single large JSON. 
         To keep it compatible with susbequent code, could combine the JSONs after. 
         """
-        self.output_dict = {}
-
         self.select_labels()
-
         file_list = os.listdir(self.folder_path)
         file_list = [f for f in file_list if f.endswith('.txt')]
         for filename in tqdm(file_list, desc='Segmenting text files'):
-            try:
-                with open(os.path.join(self.folder_path, filename), 'r') as f:
-                    text = f.read()
-            except:
-                print("Failed to read file: ", filename)
-                continue
-
-            if self._json_file_exists(filename):
-                print(f"Skipping {filename} as it is already processed.")
-                continue
-            
+            text = self._open_txt_file(filename)
+            if not text: continue
             labeled_sections = {}
             labeled_sections = self._label_sections(text, question)
             self._store_results(filename, labeled_sections)
-
         self.save_to_json(self.output_dict)
+
 
 class FilterPapers:
     '''
@@ -451,7 +453,7 @@ class InclusionExclusionSummarizer:
         """
         return self.df[(self.df == 0).sum(axis=1) == 0]
     
-    def save_to_csv(self, dropped=False, filename='inclusion_exclusion_results'):
+    def save_to_csv(self, filename='inclusion_exclusion_results'):
         """
         Saves the DataFrame to a CSV file.
         
@@ -462,18 +464,10 @@ class InclusionExclusionSummarizer:
         - None
         """
         # Create a new directory in the same root folder
-        out_dir = os.path.join(os.path.dirname(self.json_path), filename)
+        out_dir = os.path.dirname(self.json_path)
         os.makedirs(out_dir, exist_ok=True)
-        
-        # Determine the name of the CSV file based on whether rows have been dropped
-        file_name = "processed_results.csv" if dropped else "raw_results.csv"
-        
-        # Save the DataFrame to a CSV file
-        csv_path = os.path.join(out_dir, file_name)
-        if dropped:
-            self.drop_rows_with_zeros().to_csv(csv_path)
-        else:
-            self.df.to_csv(csv_path)
+        csv_path = os.path.join(out_dir, filename + '.csv')
+        self.df.to_csv(csv_path)
         return csv_path
             
     def run(self):
@@ -496,7 +490,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
     - keyword_mapping (dict): Dictionary mapping each key to a list of acceptable values.
     """
     
-    def __init__(self, json_path, answers_binary=False):
+    def __init__(self, json_path, answers_binary=False, api_key_path=None, summary_type='llm'):
         """
         Initializes the CustomSummarizer class.
         
@@ -505,8 +499,10 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         - keyword_mapping (dict): Dictionary mapping each key to a list of acceptable values.
         """
         self.json_path = json_path
-        self.data = self.read_json()
+        self.api_key_path = api_key_path
+        self.summary_type = summary_type
         self.answers_binary = answers_binary
+        self.data = self.read_json()
         if self.answers_binary:
             self.keyword_mapping = {
             0: ["poor", "bad", "negative", "n", "no"],
@@ -516,16 +512,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
             self.keyword_mapping = None
     
     def exact_match(self, answer):
-        """
-        Checks for an exact match of keywords in the answer text.
-        
-        Parameters:
-        - answer (str): The answer text to be matched.
-        
-        Returns:
-        - int or np.nan or None: Returns the key if a match is found, otherwise None.
-        """
-        import re
+        """Checks for an exact match of keywords in the answer text."""
         cleaned_answer = re.sub(r'[^\w\s]', '', answer.lower())
         for key, keywords in self.keyword_mapping.items():
             for keyword in keywords:
@@ -544,7 +531,6 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         Returns:
         - int or np.nan or None: Returns the key if a match is found, otherwise None.
         """
-        from fuzzywuzzy import fuzz
         best_match = None
         highest_ratio = 0
         for key, keywords in self.keyword_mapping.items():
@@ -608,6 +594,23 @@ class CustomSummarizer(InclusionExclusionSummarizer):
             df[df > 0] = 1
         return df
     
+    def summarize_with_llm(self):
+        summary_dict = {}
+        for article, questions in tqdm(self.data.items(), desc='Summarizing final responses with LLM'):
+            summary_dict[article] = {}
+            for question, chunks in questions.items():
+                combined_answers = " ".join(str(answer) for answer in chunks.values())
+                summarizer = OpenAISummarizer(api_key_path=self.api_key_path, text=combined_answers, question=question)
+                summary_dict[article][question] = summarizer.evaluate_text()
+        return pd.DataFrame.from_dict(summary_dict, orient='index').fillna(np.nan)
+    
+    def summarize(self):
+        if self.summary_type == 'llm':
+            df = self.summarize_with_llm()
+        else:
+            df = self.summarize_results_with_mapping()
+        return df
+    
     def run_custom(self):
         """
         Executes all the summarization, saving, and optional row-dropping steps in one method.
@@ -615,98 +618,8 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         Returns:
         - DataFrame: Pandas DataFrame containing the summarized results.
         """
-        self.df = self.summarize_results_with_mapping()
-        raw_path = self.save_to_csv(filename='data_extraction')
-        automated_path = self.save_to_csv(dropped=True, filename='data_extraction')
+        self.df = self.summarize()
+        raw_path = self.save_to_csv(filename=f'responses_raw')
+        automated_path = self.save_to_csv(filename=f'responses_claned_with_{self.summary_type}')
         print(f"Your CSV files of filtered manuscripts have been saved to this directory: \n {os.path.dirname(raw_path)}")
         return self.df, raw_path, automated_path
-
-class LabelWithLDA:
-    """
-    This class is deprecated and not currently supported.
-    Uses Latent Dirichlet Allocation for NLP text labelling.
-    """
-    def train_lda(self, text_chunks):
-        """
-        Trains the LDA model based on the text chunks.
-
-        Parameters:
-        - text_chunks (list): List of text chunks.
-
-        Returns:
-        - object: Trained LDA model.
-        """
-        self.vectorizer = CountVectorizer(min_df=5, max_df=0.9, stop_words='english', lowercase=True, token_pattern='[a-zA-Z\-][a-zA-Z\-]{2,}')
-        data_vectorized = self.vectorizer.fit_transform(text_chunks)
-        lda_model = LatentDirichletAllocation(n_components=len(self.topic_labels), max_iter=10, learning_method='online')
-        lda_Z = lda_model.fit_transform(data_vectorized)
-        self.lda_model = lda_model
-        return lda_model      
-    
-    def train_lda_on_all_files(self):
-        """
-        Trains the LDA model on text from all files in the specified folder.
-
-        Returns:
-        - object: Trained LDA model.
-        """
-        all_text_chunks = []
-
-        for filename in tqdm(os.listdir(self.folder_path)):
-            if filename.endswith('.txt'):
-                with open(os.path.join(self.folder_path, filename), 'r') as f:
-                    text = f.read()
-
-                self.chunker = TextChunker(text, np.round(4096*0.75)) # Set to 75% max token limit
-                self.chunker.chunk_text()
-                chunks = self.chunker.get_chunks()
-
-                all_text_chunks.extend(chunks)
-
-        # Train LDA model on all text chunks
-        return self.train_lda(all_text_chunks)  
-        
-    def dominant_topic(self, text_chunk):
-        """
-        Finds the dominant topic for a given text chunk.
-
-        Parameters:
-        - text_chunk (str): The text chunk to be labeled.
-
-        Returns:
-        - int: Index of the dominant topic.
-        """
-        text_vectorized = self.vectorizer.transform([text_chunk])
-        topic_probability_scores = self.lda_model.transform(text_vectorized)
-        dominant_topic_index = topic_probability_scores.argmax()
-        return dominant_topic_index
-    
-    def label_with_lda(self, text_chunk):
-        # Get the list of section labels based on the article type
-        return self.topic_labels[self.dominant_topic(text_chunk)]
-    
-    def extract_topic_significant_words(self, dominant_topic_index):
-        """
-        Extracts significant words for a specific topic in the LDA model.
-
-        Parameters:
-        - dominant_topic_index (int): The index of the dominant topic.
-
-        Returns:
-        - list: Significant words for the dominant topic.
-        """
-        # Initialize an empty list to store the significant words for the dominant topic
-        significant_words = []
-
-        # Get the topic-word distribution for the dominant topic
-        topic_word_distribution = self.lda_model.components_[dominant_topic_index]
-
-        # Get the indices of the top N significant words
-        N = 10  # Adjust as needed
-        top_word_indices = topic_word_distribution.argsort()[-N:][::-1]
-
-        # Get the actual words from the vectorizer
-        feature_names = self.vectorizer.get_feature_names_out()
-        significant_words = [feature_names[i] for i in top_word_indices]
-
-        return significant_words

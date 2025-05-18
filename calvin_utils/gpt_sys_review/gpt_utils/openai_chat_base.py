@@ -9,9 +9,11 @@ class OpenAIChatBase(OpenAIBase):
     Base class to evaluate text chunks using OpenAI's chat models.
     """
     
-    def __init__(self, api_key_path, question, model_choice="gpt3_small"):
+    def __init__(self, api_key_path, question_type, model_choice="gpt3_small", debug=False):
         super().__init__(api_key_path)
-        self.question = question
+        self.question_type = question_type
+        self.chunk_end = None
+        self.debug= debug
         self.q_index = 0
         self.get_model_data(model_choice)
     
@@ -40,26 +42,26 @@ class OpenAIChatBase(OpenAIBase):
         """
         Sets the manner in which directives and questions are posed to the model.
         """
-        self.question_type = question_type
-        self.chunk_end = None
-        if self.question_type=="research":
+        if self.question_type=="extraction":
             self.directive = "You are a research assistant. Your task is to carefully evaluate the following research report. Use both explicit information and reasonable inferences to answer the questions. Be as concise as possible."
             self.chunk_flag = "[RESEARCH REPORT]"
-            self.dir = "research_extractions"
+            self.chunk_end = ""
         elif self.question_type=="case":
             self.directive = "You are a medical assistant. Your task is to carefully evaluate the following case report. Use both explicit information and reasonable inferences to answer the questions. Be as concise as possible."
             self.chunk_flag = "[CASE REPORT]"
-            self.dir = "case_extractions"
+            self.chunk_end = ""
+        elif self.question_type=="summarizer":
+            self.directive = "An LLM saw multiple chunks of a text file and answered the below question. What was the ultimate answer?"
+            self.chunk_flag = "[LLM ANSWERS]"
+            self.chunk_end = ""
         elif self.question_type=="inclusion":
             self.directive = "You are a helpful binary assistant, only able to speak in 1s or 0s. Your task is to carefully evaluate the following medical article. Use both explicit information and reasonable inferences to answer the questions. Responses should be: 0 for No, 1 for Y."
             self.chunk_flag = "[MEDICAL ARTICLE]"
-            self.dir = "case_extractions"
-            self.chunk_end = "\n\nRespond 0 for No, 1 for Yes."
+            self.chunk_end = "Responses should be: 0 for No, 1 for Y."
         elif self.question_type=="labelling":
-            self.directive = "You are a text labelling assistant. Your task is to carefully evaluate the following case report. Use both explicit information and reasonable inferences to answer the questions. Be as concise as possible."
+            self.directive = "You are a text labelling assistant. Your task is to carefully evaluate the following case report. Use both explicit information and reasonable inferences to answer the questions. Responses should be: 0 for No, 1 for Y."
             self.chunk_flag = "[SEGMENT]"
-            self.dir = "labelling_extractions"
-            self.token_limit = 500
+            self.chunk_end = "Responses should be: 0 for No, 1 for Y."
         else:
             raise ValueError(f"Model choice {question_type} not supported, please choose gpt4, gpt3_large, or gpt3_small.")
     
@@ -86,13 +88,13 @@ class OpenAIChatBase(OpenAIBase):
         chunks = self.add_context_to_chunks(chunks)
         return chunks
     
-    def generate_submission(self, chunk, q):
+    def generate_submission(self, chunk, question):
         """
         Prepares the submission to the OpenAI Model
         """
         conversation = [{"role": "system", "content": f"{self.directive}"},
                         {"role": "user", "content": f"{self.chunk_flag}: {chunk}"}]
-        conversation.append({"role": "user", "content": f'Based on the {self.chunk_flag} provided, {q}'})
+        conversation.append({"role": "user", "content": f'Based on the {self.chunk_flag} provided, {question}'})
         return conversation
     
     ### Methods for interfacing with openai ###

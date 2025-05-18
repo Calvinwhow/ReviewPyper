@@ -11,6 +11,7 @@ from tqdm import tqdm
 from PyPDF2 import PdfReader
 from pdf2image import convert_from_path
 from pypaperretriever import PaperRetriever
+import difflib
 
 class OCROperator:
     """
@@ -433,17 +434,30 @@ class BulkPDFDownloaderV2(BulkPDFDownloader):
     Attributes:
         csv_path (str): Path to the CSV file containing DOIs and screening info.
         directory (str): Directory to save PDFs.
-        column (str): The column name used for filtering rows, default is "OpenAI_Screen_Abstract".
+        inclusion_column (str): The column name used for filtering rows, default is "OpenAI_Screen_Abstract".
+            1s indicate included hits, 0s indicate excluded hits.
     """
-    def __init__(self, csv_path, email, allow_scihub=True, column=None):
+    def __init__(self, csv_path, email, allow_scihub=True, inclusion_column="OpenAI_Screen_Abstract"):
         self.csv_path = csv_path
         self.master_df = pd.read_csv(self.csv_path)
-        self.directory = os.path.dirname(self.csv_path)
-        self.pdf_dir_path = os.path.join(self.directory, 'PDFs')
-        os.makedirs(self.pdf_dir_path, exist_ok=True)
-        self.positive_abstract = column if column is not None else "OpenAI_Screen_Abstract"
         self.email = email
         self.allow_scihub = allow_scihub
+        self.inclusion_column = inclusion_column 
+        self.directory, self.pdf_dir_path = self._prep_paths()
+        self.filtered_df = self.get_filter_df()
+    
+    def get_filter_df(self):
+        '''Filter the DataFrame based on the positive_abstract column.'''
+        if self.inclusion_column not in self.master_df.columns:
+            return self.master_df 
+        return self.master_df[self.master_df[self.inclusion_column] == 1]
+        
+    def _prep_paths(self):
+        '''Prepare the paths for the CSV and PDF save directories.'''
+        directory = os.path.dirname(self.csv_path)
+        pdf_dir_path = os.path.join(directory, 'PDFs')
+        os.makedirs(pdf_dir_path, exist_ok=True)
+        return directory, pdf_dir_path
 
     def download_pdf(self, doi, pmid):
         """Helper function to download a PDF using PyPaperRetriever."""
@@ -453,17 +467,16 @@ class BulkPDFDownloaderV2(BulkPDFDownloader):
                                        doi=doi, 
                                        download_directory=self.pdf_dir_path, 
                                        allow_scihub=self.allow_scihub, 
-                                       filename=filename)
+                                       filename=filename
+                                       )
             result = retriever.download()
         except Exception as e:
             print(f"Error in PyPaperRetriever on PMID {pmid}: {e}")
-            # Create a result object with default values in case of an error
             result = type('Result', (object,), {'is_downloaded': False, 'filepath': None})()
         return result.is_downloaded, result.filepath
 
     def run(self):
-        filtered_df = self.master_df[self.master_df[self.positive_abstract] == 1]
-        for index, row in tqdm(filtered_df.iterrows(), total=len(filtered_df)):
+        for index, row in tqdm(self.filtered_df.iterrows(), total=len(self.filtered_df)):
             doi = row['DOI']
             pmid = row['PMID']
             success, filepath = self.download_pdf(doi, pmid)
@@ -472,167 +485,143 @@ class BulkPDFDownloaderV2(BulkPDFDownloader):
                 self.master_df.loc[self.master_df['DOI'] == doi, 'PDF_Path'] = filepath
             else:
                 self.master_df.loc[self.master_df['DOI'] == doi, 'PDF_Downloaded'] = False
-        # self.master_df.columns = [col.capitalize() for col in self.master_df.columns]
         self.master_df.to_csv(self.csv_path, index=False)
 
 class PdfPostProcess:
-    def __init__(self, master_list_path):
+    """
+    PdfPostProcess is a utility class for managing and post-processing PDF files associated with a master list (CSV) of articles, typically indexed by PMID. It provides methods to:
+    - Initialize and prepare the master list DataFrame, ensuring necessary columns exist.
+    - Update the DataFrame with the status and paths of downloaded PDFs.
+    - Normalize and match PDF filenames to article titles or PMIDs, renaming files to use PMIDs as filenames.
+    - Attempt multiple passes of matching, including loose matching for difficult cases.
+    - Generate reports on download and matching status.
+    - Orchestrate the full workflow of updating, renaming, and reporting.
+    Attributes:
+        master_list_path (str): Path to the master CSV file containing article metadata.
+        df (pd.DataFrame): DataFrame holding the master list and PDF status.
+        directory (str): Directory containing the master list.
+        pdf_dir_path (str): Path to the directory containing PDF files.
+    Methods:
+        _prep_df(): Ensures required columns exist in the DataFrame.
+        _update_df(): Updates the DataFrame with PDF download statuses and paths.
+        _clean_string(string): Normalizes a string by removing non-alphabetic characters.
+        pmid_renaming(pdf_dir_path, df): Renames PDF files to PMIDs based on exact title matches.
+        pmid_renaming_round_two(pdf_dir_path, df, unmatched_files, loose_match=False): Attempts to match and rename unmatched files using looser criteria.
+        rename_pdfs_to_pmid(): Runs the full renaming process and updates the master list.
+        report(df): Prints a summary of unmatched or undownloaded PDFs.
+        run(): Orchestrates the full post-processing workflow.
+    """
+    
+    def __init__(self, master_list_path, pdf_dir='PDFs', PMID_column='PMID', pdf_name_column='Title'):
+        """
+        Initializes the class with the provided master list CSV file and PDF directory.
+        Args:
+            master_list_path (str): Path to the master list CSV file.
+            pdf_dir (str, optional): Name of the directory containing PDF files. Defaults to 'PDFs'.
+        Attributes:
+            master_list_path (str): Stores the path to the master list CSV file.
+            df (pd.DataFrame): DataFrame loaded from the master list CSV file.
+            directory (str): Directory containing the master list file.
+            pdf_dir_path (str): Full path to the PDF directory.
+        Calls:
+            self._prep_df(): Prepares or processes the DataFrame after loading.
+        """
+        self.pdf_name_column = pdf_name_column
+        self.PMID_column = PMID_column
         self.master_list_path = master_list_path
+        self.df = pd.read_csv(self.master_list_path)
         self.directory = os.path.dirname(self.master_list_path)
+        self.pdf_directory = os.path.join(self.directory, pdf_dir)
+        self._prep_df()
 
-    def update_master_list(self):
-        """Update the master list with download statuses and paths."""
-        df_master = pd.read_csv(self.master_list_path)
-        if 'PDF_Downloaded' not in df_master.columns:
-            df_master['PDF_Downloaded'] = 0
-        if 'PDF_Path' not in df_master.columns:
-            df_master['PDF_Path'] = ''
-
-        pdf_dir_path = os.path.join(self.directory, 'PDFs')
-        for index, row in df_master.iterrows():
-            title = self.normalize_title(row['Title'])
-            pdf_name = f"{title}.pdf"
-            pdf_path = os.path.join(pdf_dir_path, pdf_name)
-
-            if os.path.exists(pdf_path):
-                
-                df_master.loc[index, 'PDF_Path'] = pdf_path
-
-        df_master.to_csv(os.path.join(self.directory, 'master_list.csv'), index=False)
-
-    def update_master_list_v2(self):
-        """Update the master list with download statuses and paths."""
-        df_master = pd.read_csv(self.master_list_path)
-        if 'PDF_Downloaded' not in df_master.columns:
-            df_master['PDF_Downloaded'] = False
-        if 'PDF_Path' not in df_master.columns:
-            df_master['PDF_Path'] = ''
-
-        pdf_dir_path = os.path.join(self.directory, 'PDFs')
-        for index, row in df_master.iterrows():
-            pdf_name = f"{row['PMID']}.pdf"
-            pdf_path = os.path.join(pdf_dir_path, pdf_name)
-            # Add the path and update the downloaded column. 
-            if  os.path.exists(pdf_path):
-                df_master.loc[index, 'PDF_Path'] = pdf_path
-                df_master.loc[index, 'PDF_Downloaded'] = True 
-            else:
-                # In this situation, we failed to download a positive hit.
-                if row['OpenAI_Screen_Abstract'] == 1:
-                    df_master.loc[index, 'PDF_Path'] = np.nan
-                    df_master.loc[index, 'PDF_Downloaded'] = False
-                # This article was not expected to be downloaded. Set blank. 
-                else:
-                    df_master.loc[index, 'PDF_Path'] = np.nan
-                    df_master.loc[index, 'PDF_Downloaded'] = np.nan
-        
-        df_master.to_csv(os.path.join(self.directory, 'master_list.csv'), index=False)
-        return df_master
-        
+    ### Internal Methods ###
+    def _prep_df(self):
+        if 'PDF_Path' not in self.df.columns:
+            self.df['PDF_Path'] = ''
+        if 'PDF_Downloaded' not in self.df.columns:
+            self.df['PDF_Downloaded'] = False
+    
+    def _update_filename(self, index, row, old_filename):
+        """Update the filename in the DataFrame and rename the file to its PMID."""
+        if index is not None:
+            new_filename = f"{row[self.PMID_column]}.pdf"
+            os.rename(os.path.join(self.pdf_directory, old_filename),
+                    os.path.join(self.pdf_directory, new_filename))
+            self.df.loc[index, 'PDF_Path'] = os.path.join(self.pdf_directory, new_filename)
+            self.df.loc[index, 'PDF_Downloaded'] = True
+    
     def normalize_title(self, title):
-        """Normalize title by removing non-alphabetic characters."""
-        return re.sub('[^a-zA-Z]', '', title).lower()
+        """Normalize a title by removing non-alphabetic characters and lowering case."""
+        return re.sub('[^a-zA-Z]', '', str(title)).lower()
+
+    def is_pmid_filename(self, filename, pmid_set):
+        """Check if the filename (without extension) is already a PMID."""
+        return filename in pmid_set
     
-    def pmid_renaming(self, pdf_dir_path, df_master):
-        unmatched_files = set()
-        # List comprehension to filter only PDF files
-        pdf_files = [f for f in os.listdir(pdf_dir_path) if f.endswith('.pdf')]
-        for filename in tqdm(pdf_files, desc="First pass processing PDF files"):
-            # Fix the filename to allow manipulation
-            title_from_file = os.path.splitext(filename)[0]
-            normalized_title_from_file = self.normalize_title(title_from_file)
-                        
-            # Only process incomplete files. 
-            pmid_set = set(df_master['PMID'].astype(str))
-            if title_from_file in pmid_set:
-                # print("Object already complete. Skipping: ", title_from_file)
+    def match_title(self, normalized_filename, filename_column, match='exact'):
+        """Try to find a row in self.df whose normalized title matches the given normalized title."""
+        for index, row in self.df.iterrows():
+            normalized_title = self.normalize_title(row[filename_column])
+            if match=='exact':
+                if normalized_filename == normalized_title:
+                    return index, row
+            if match=='substring':
+                if (normalized_filename in normalized_title) or (normalized_title in normalized_filename):
+                    return index, row
+            if match == 'fuzzy':
+                norm_file = normalized_filename
+                norm_title = self.normalize_title(row[filename_column])
+                ratio = difflib.SequenceMatcher(None, norm_file, norm_title).ratio()
+                if ratio > 0.8:
+                    return index, row
+        return None, None
+
+    def pmid_renaming(self, filename_column, match_type='exact'):
+        """Renames PDF files in the directory to use PMIDs based on matching titles from a DataFrame."""
+        for filename in tqdm(self.pdf_files, desc="First pass processing PDF files"):
+            filename_clean = os.path.splitext(filename)[0]
+            if self.is_pmid_filename(filename_clean, self.pmid_set):
+                self.pdf_files.remove(filename)
                 continue
-                
-            # Iterate to match title
-            file_matched = False
-            for index, row in df_master.iterrows():
-                title = row['Title']
-                pmid = row['PMID']
-                normalized_title = self.normalize_title(title)
-                
-                # Check if it matches. Update if it does, then move on. 
-                if normalized_title_from_file == normalized_title:
-                    new_filename = f"{pmid}.pdf"
-                    os.rename(
-                        os.path.join(pdf_dir_path, filename),
-                        os.path.join(pdf_dir_path, new_filename)
-                    )
-                    df_master.loc[index, 'PDF_Path'] = os.path.join(pdf_dir_path, new_filename)
-                    df_master.loc[index, 'PDF_Downloaded'] = True
-                    
-                    # Added for legibility
-                    file_matched = True
-                    break
-            # If it does not match, catalogue and move on. 
-            if file_matched == False:
-                unmatched_files.add(title_from_file)
-            
-        return df_master, unmatched_files
-    
-    def pmid_renaming_round_two(self, pdf_dir_path, df_master, unmatched_files, loose_match=False):
-        unmatched_files2 = set()
-        for title_from_file in tqdm(unmatched_files, desc=f"Collecting difficult to match files. Loose match {loose_match}."):
-            # Skip blank files
-            if title_from_file is None or title_from_file == 'none':
-                continue 
-            # Iterate to match titles
-            file_matched = False
-            for index, row in df_master.iterrows():
-                title = row['Title']
-                pmid = row['PMID']
-                
-                # Check if it matches. Update if it does, then move on. 
-                if (title_from_file.lower() in title.lower()) or (title.lower() in title_from_file.lower()) \
-                    or loose_match and self.normalize_title(title_from_file) in self.normalize_title(title) \
-                        or (loose_match and self.normalize_title(title) in self.normalize_title(title_from_file)):
-                    new_filename = f"{pmid}.pdf"
-                    
-                    # Do not overwrite existing files. Preceding files take precedence.
-                    if os.path.exists(os.path.join(pdf_dir_path, new_filename)):
-                        break
-                    else:
-                        os.rename(
-                            os.path.join(pdf_dir_path, (title_from_file+'.pdf')),
-                            os.path.join(pdf_dir_path, new_filename)
-                        )
-                        df_master.loc[index, 'PDF_Path'] = os.path.join(pdf_dir_path, new_filename)
-                        df_master.loc[index, 'PDF_Downloaded'] = True
-                        
-                        file_matched = True
-                    break
-            # If it does not match, catalogue and move on. 
-            if file_matched == False:
-                unmatched_files2.add(title_from_file)
-        if loose_match:       
-            print("Failed to match these files: \n" + "\n".join(unmatched_files2))
-        return df_master, unmatched_files2
+            normalized_filename = self.normalize_title(filename_clean)
+            index, row = self.match_title(normalized_filename, filename_column, match_type)
+            self._update_filename(index, row, filename)
+            if index is not None:
+                self.pdf_files.remove(filename)
 
+    ### Public Methods ###
+    def update_df(self, save):
+        """Update the master list with download statuses and paths."""
+        for index, row in self.df.iterrows():
+            pdf_name = f"{row[self.PMID_column]}.pdf"
+            pdf_path = os.path.join(self.pdf_directory, pdf_name)
+            if os.path.exists(pdf_path):
+                self.df.loc[index, 'PDF_Path'] = pdf_path
+                self.df.loc[index, 'PDF_Downloaded'] = True 
+        if save:
+            self.df.to_csv(self.master_list_path, index=False)
+            print("Updated master list saved to: ", self.master_list_path)
+                
     def rename_pdfs_to_pmid(self):
-        """Rename PDFs to PMIDs."""
-        df_master = pd.read_csv(self.master_list_path)
-        pdf_dir_path = os.path.join(self.directory, 'PDFs')
-        df_master, unmatched_files = self.pmid_renaming(pdf_dir_path, df_master)
-        df_master, unmatched_files = self.pmid_renaming_round_two(pdf_dir_path, df_master, unmatched_files)
-        df_master, unmatched_files = self.pmid_renaming_round_two(pdf_dir_path, df_master, unmatched_files, loose_match=True)
-
-        df_master.to_csv(os.path.join(self.directory, 'master_list.csv'), index=False)
+        """Rename PDFs to PMIDs. Requires the column containing the current name of the PDFs in the PDF directory."""
+        self.pdf_files = [f for f in os.listdir(self.pdf_directory) if f.endswith('.pdf')]
+        self.pmid_set = set(self.df[self.PMID_column].astype(str))
+        self.pmid_renaming(self.pdf_name_column, match_type='exact')
+        self.pmid_renaming(self.pdf_name_column, match_type='substring')
+        self.pmid_renaming(self.pdf_name_column, match_type='fuzzy')
+        
    
-    def report(self, df_master):
-        false_df = df_master[df_master['PDF_Downloaded'] == False]
-        true_df = df_master[df_master['PDF_Downloaded'] == True]
-        false_count = false_df['PMID'].count()
-        total_count = false_df['PMID'].count() + true_df['PMID'].count()
+    def report(self):
+        false_df = self.df[self.df['PDF_Downloaded'] == False]
+        true_df = self.df[self.df['PDF_Downloaded'] == True]
+        false_count = false_df[self.PMID_column].count()
+        total_count = false_df[self.PMID_column].count() + true_df[self.PMID_column].count()
         print("Failed to download: ", false_count, " of ", total_count)
-        print("Failed to download these PMIDs: ", false_df['PMID'].values)
-
+        print("Failed to download these PMIDs: ", false_df[self.PMID_column].values)
+        print("Failed to rename these PDFs: ", self.pdf_files)
+    
     def run(self):
         """Orchestration method"""
-        self.update_master_list()
         self.rename_pdfs_to_pmid()
-        df_master = self.update_master_list_v2()
-        self.report(df_master)
+        self.update_df(save=True)
+        self.report()

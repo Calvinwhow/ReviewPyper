@@ -369,54 +369,24 @@ class PostProcessing:
         print(f"Saved Master List to: \n {self.final_file_path}")
     
     @staticmethod
-    def add_raw_results_to_master_list(master_list_path, raw_results_path, debug=False):
-        """
-        Adds the results from a raw results file into a master list based on matching PMID values.
-        
-        This method takes two file paths as inputs: one pointing to the master list (a comprehensive CSV file)
-        and another pointing to a raw results file (a CSV file returned by an LLM). The method first checks for
-        and creates any new columns in the master list that are present in the raw results file but not in the
-        master list. It then iterates through the PMID values in the raw results file, locates the corresponding
-        PMID in the master list, and populates the new columns with the data from the raw results file at the
-        matching row. Finally, it saves the updated master list with the new data integrated.
-
-        Parameters:
-            master_list_path (str): The file path to the master list CSV file.
-            raw_results_path (str): The file path to the raw results CSV file returned by the LLM.
-
-        Returns:
-            None: The master list is updated and saved in place with the new data from the raw results file.
-        """
-        # Load the master list and raw results as pandas DataFrames
+    def add_raw_results_to_master_list(master_list_path, raw_results_path, debug=False, filename_col='PMID'):
+        '''Merges resutls into the master list, assuming the files have names which are stored in a column in the master list.'''
         master_df = pd.read_csv(master_list_path)
         raw_results_df = pd.read_csv(raw_results_path)
-        
-        # Identify new columns in raw results that are not in the master list
-        new_columns = raw_results_df.columns.to_list()[1:]
-        
-        # Add these new columns to the master list DataFrame, initializing with NaN values
-        for column in new_columns:
-            master_df[column] = np.nan
 
-        # Iterate over the raw results DataFrame
+        new_columns = [col for col in raw_results_df.columns if col != raw_results_df.columns[0]]
+        for column in new_columns:
+            if column not in master_df.columns:
+                master_df[column] = np.nan
+
         for _, row in tqdm(raw_results_df.iterrows(), desc='Updating master list'):
-            # Extract the PMID from the file. 
-            pmid = ''.join(re.findall('[0-9]+', row.iloc[0]))
-            
-            # Find the index in the master list DataFrame where PMID matches
-            matching_index = master_df[master_df['PMID'].astype(str) == pmid].index
-            
-            # Update the master list DataFrame
-            if len(matching_index) > 0: 
-                master_df.loc[matching_index, new_columns] = row[new_columns].values
-            else:
-                master_df.loc[matching_index, [new_columns]] = 'Error'
-                
-        # Save the updated master list back to the same file
+            filename = str(row.iloc[0]).removesuffix('_OCR')
+            matching_index = master_df[master_df[filename_col].astype(str) == filename].index
+            if len(matching_index) > 0:
+                for column in new_columns:
+                    master_df.loc[matching_index, column] = row[column]
         if not debug:
             master_df.to_csv(master_list_path, index=False)
-        else:
-            print("Not saving.")
         return master_df
     
     def clean_up(self):
