@@ -64,11 +64,14 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
     def save_to_json(self, output_dict):
         """Saves the labeled sections to a JSON file."""
         # Create a new directory in the same root folder
-        out_dir = os.path.join(os.path.dirname(self.json_path), '..', f"{self.dir}")
+        out_dir = os.path.dirname(self.json_path) + "_evaluated"
         os.makedirs(out_dir, exist_ok=True)
-        
-        # Save the dictionary to a JSON file
-        save_file = os.path.join(out_dir, f'{self.question_type}_evaluations.json')
+        base_save_file = os.path.join(out_dir, f'{self.question_type}_evaluations.json')
+        save_file = base_save_file
+        count = 1
+        while os.path.exists(save_file):
+            save_file = os.path.join(out_dir, f'{self.question_type}_evaluations_{count}.json')
+            count += 1
         with open(save_file, 'w') as f:
             json.dump(output_dict, f, indent=0)
         print(f"Saved to: {save_file}")
