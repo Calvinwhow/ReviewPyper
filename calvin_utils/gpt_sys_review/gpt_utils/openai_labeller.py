@@ -29,7 +29,7 @@ class CaseReportLabeler(OpenAIJsonEvaluator):
         evaluate_all_files():
             Processes the entire text, evaluates each chunk, and categorizes them into results_dict based on model answers.
     """
-    def __init__(self, api_key_path, text, questions, section_headers, verbose=False):
+    def __init__(self, api_key_path, text, questions, section_headers, question_token_estimate=500, verbose=False):
         """
         Initialize the CaseReportLabeler.
 
@@ -48,7 +48,8 @@ class CaseReportLabeler(OpenAIJsonEvaluator):
         self.acceptable_answers = self._get_acceptable_answers()
         super().__init__(api_key_path, 
                          json_file_path=None, 
-                         keys_to_consider=None, 
+                         keys_to_consider=None,
+                         question_token_estimate=question_token_estimate,
                          question_type="labelling", 
                          question=questions, 
                          model_choice="gpt3_small_labeler",

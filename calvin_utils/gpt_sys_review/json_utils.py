@@ -15,7 +15,7 @@ class SectionLabeler:
 
     Attributes:
     - folder_path (str): The path to the folder containing text files.
-    - article_type (str): The type of article (e.g., 'research', 'case').
+    - article_type (str): The type of article (e.g., 'research', 'case', 'emr').
     - lda_model (object): The trained LDA model for topic modeling.
     - vectorizer (object): The CountVectorizer object for text vectorization.
     - chunker (object): The TextChunker object for text chunking.
@@ -35,9 +35,9 @@ class SectionLabeler:
 
         Parameters:
         - api_key_path (str): Path to the file containing the OpenAI API key.
-        - article_type (str): The type of article (e.g., 'research' or 'case').
+        - article_type (str): The type of article (e.g., 'research', 'case', 'emr').
         - folder_path (str): The path to the folder containing text files.
-        - article_type (str): The type of article (e.g., 'research', 'case').
+        - article_type (str): The type of article (e.g., 'research', 'case', 'emr').
         """
         self.api_key_path = api_key_path
         self.folder_path = folder_path
@@ -61,18 +61,24 @@ class SectionLabeler:
             self.section_headers = {
             "Case_Report": ["yes", "y", "positive", "correct"]
             }
+        elif self.article_type == "emr":
+            self.section_headers = {
+            "emr": ["yes", "y", "positive", "correct"]
+            }
         elif self.article_type == "other":
             self.section_headers = {
                 "Positive": ["yes", "y", "positive", "correct"]
             }
         else:
-            raise ValueError(f"Unknown article type {self.article_type}, choose case or research.")
+            raise ValueError(f"Unknown article type {self.article_type}, choose 'case', 'research', or 'emr'.")
             
     def get_questions(self, manual_question=None):
         if self.article_type == "research":
             questions = None
         elif self.article_type == "case":
-            questions = {'Priotizing implicit and explicit information, do you think this contains a description of a medical case? For example, if the text refers to a patient, seemingly describes a history of presenting illness, or is seemingly describing a medical situation. This could be in referring to hospital course, imaging findings, or laboratory results. ONLY RESPOND AS YES OR NO (Y/N)': 'case_report'}
+            questions = {'Prioritizing implicit and explicit information, do you think this contains a description of a medical case? For example, if the text refers to a patient, seemingly describes a history of presenting illness, or is seemingly describing a medical situation. This could be in referring to hospital course, imaging findings, or laboratory results. ONLY RESPOND AS YES OR NO (Y/N)': 'case_report'}
+        elif self.article_type == "emr":
+            questions = {"Prioritizing implicit and explicit information, do you think this mentions anything about a medical patient? For example, if the text refers to a patient, seemingly describes a history of presenting illness, or is seemingly describing a medical situation. This could be in referring to hospital course, imaging findings, diagnoses, or laboratory results. ONLY RESPOND AS YES OR NO (Y/N)": 'emr'}
         elif self.article_type == "other":
             if manual_question is None:
                 raise ValueError(f"Error, must enter question as a string into process_files. ex: (question='this is my question')")    
@@ -232,14 +238,18 @@ class SectionLabeler:
             labeled_sections, text = self.label_text(text)
         elif self.article_type == 'case':
             questions = self.get_questions()
-            evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers)
+            evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers,question_token_estimate=150)
+            labeled_sections = evaluator.evaluate_all_files()
+        elif self.article_type == 'emr':
+            questions = self.get_questions()
+            evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers,question_token_estimate=150)
             labeled_sections = evaluator.evaluate_all_files()
         elif self.article_type == 'other':
             questions = self.get_questions(question)
-            evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers)
+            evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers,question_token_estimate=150)
             labeled_sections = evaluator.evaluate_all_files()
         else:
-            raise ValueError(f"Unknown article type {self.article_type}, choose 'case', 'research', or 'other'")
+            raise ValueError(f"Unknown article type {self.article_type}, choose 'case', 'research', 'emr', or 'other'")
         
         return labeled_sections
 

@@ -9,12 +9,13 @@ class OpenAIChatBase(OpenAIBase):
     Base class to evaluate text chunks using OpenAI's chat models.
     """
     
-    def __init__(self, api_key_path, question_type, model_choice="gpt3_small", debug=False):
+    def __init__(self, api_key_path, question_type, question_token_estimate=500, model_choice="gpt3_small", debug=False):
         super().__init__(api_key_path)
         self.question_type = question_type
         self.chunk_end = None
         self.debug= debug
         self.q_index = 0
+        self.question_token_estimate=question_token_estimate
         self.get_model_data(model_choice)
     
     ### setter/getter methods ###
@@ -23,7 +24,6 @@ class OpenAIChatBase(OpenAIBase):
         """Sets values for the OpenAI model to use."""
         self.temperature = 1.0
         self.response_tokens = 50
-        self.question_token_estimate = 500
         models = {
             "gpt4.1": {"name": "gpt-4.1", "token_limit": 32768, "cost": 0.03 / 1000},
             "gpt4": {"name": "gpt-4", "token_limit": 7000, "cost": 0.03 / 1000}, #actual limit is 8192

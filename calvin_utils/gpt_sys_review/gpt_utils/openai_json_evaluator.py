@@ -6,7 +6,7 @@ from tqdm import tqdm
 from calvin_utils.gpt_sys_review.gpt_utils.openai_chat_base import OpenAIChatBase
 
 class OpenAIJsonEvaluator(OpenAIChatBase):
-    def __init__(self, api_key_path, json_file_path, keys_to_consider, question, question_type='research',  model_choice="gpt3_small", debug=False, test_mode=True):
+    def __init__(self, api_key_path, json_file_path, keys_to_consider, question, question_token_estimate=500, question_type='research',  model_choice="gpt3_small", debug=False, test_mode=True):
         """
         Initializes the OpenAIChatEvaluator class.
         
@@ -20,7 +20,7 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         - answer_token (int): The number of tokens reserved for the answer. Default is 500.
         - test_mode (bool): Will only pass the first article to GPT. Used to iteratively refine the passed questions.
         """
-        super().__init__(api_key_path, question_type=question_type, model_choice=model_choice)
+        super().__init__(api_key_path, question_token_estimate=question_token_estimate, question_type=question_type, model_choice=model_choice)
         self.json_path = json_file_path
         self.keys_to_consider = keys_to_consider
         self.all_answers = {}
