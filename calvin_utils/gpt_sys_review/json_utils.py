@@ -412,7 +412,6 @@ class InclusionExclusionSummarizer:
         self.questions = questions
         self.data = self.read_json()
         self.df = self.summarize_results()
-
     
     def read_json(self):
         """
@@ -488,9 +487,8 @@ class InclusionExclusionSummarizer:
         - None
         """
         raw_path = self.save_to_csv()
-        automated_path = self.save_to_csv(dropped=True)
         print(f"Your CSV files of filtered manuscripts have been saved to this directory: \n {os.path.dirname(raw_path)}")
-        return self.df, raw_path, automated_path
+        return self.df, raw_path
     
 class CustomSummarizer(InclusionExclusionSummarizer):
     """
@@ -630,6 +628,5 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         """
         self.df = self.summarize()
         raw_path = self.save_to_csv(filename=f'responses_raw')
-        automated_path = self.save_to_csv(filename=f'responses_claned_with_{self.summary_type}')
         print(f"Your CSV files of filtered manuscripts have been saved to this directory: \n {os.path.dirname(raw_path)}")
-        return self.df, raw_path, automated_path
+        return self.df, raw_path
