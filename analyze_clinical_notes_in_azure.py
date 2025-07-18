@@ -3,14 +3,15 @@
 ################################################################################
 
 # Set the file you want to analyze (usually from an RPDR request) and the output directory
-notes_file='/Users/rm026/Documents/hbs_study_patient_notes/test_patient_file_anonymized.txt'
+notes_file_list=['/Users/rm026/Documents/hbs_study_patient_notes/test_patient_file_anonymized.txt',
+                 ]
 output_dir='/Users/rm026/Documents/hbs_study_patient_notes/py_testing_output/'
 
 # Provide the path to your OpenAI API key
 api_key_path = "/Users/rm026/Documents/code/openai-key.txt"
 
 # Choose which MRNs to include (optional)
-# If None, all MRNs in the notes_file will be included
+# If None, all MRNs in the notes will be included
 import pandas as pd
 mrns_to_include=pd.read_csv('/Users/rm026/Documents/hbs_study_patient_notes/sub_id_to_mrn_included.csv')['MRN_primary'].values.tolist()
 
@@ -50,7 +51,7 @@ extraction_answers_binary=False
 ################################################################################
 
 from calvin_utils.gpt_sys_review.txt_utils import ClinicalNotesExtractor
-extractor=ClinicalNotesExtractor(notes_file, output_dir)
+extractor=ClinicalNotesExtractor(notes_file_list, output_dir)
 note_df=extractor.run(selected_mrns=mrns_to_include)
 
 

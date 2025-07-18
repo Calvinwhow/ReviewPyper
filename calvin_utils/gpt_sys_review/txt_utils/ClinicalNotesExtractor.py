@@ -6,7 +6,7 @@ class ClinicalNotesExtractor:
     A class to process clinical notes from an RPDR request and organize them in a csv.
 
     Attributes:
-    - input_file (str): The path to the text file to be preprocessed.
+    - input_file_list (list): List of paths to all the text files you want to preproces.
     - output_dir (str): The directory where the output csv will be saved.
 
     Methods:
@@ -16,11 +16,11 @@ class ClinicalNotesExtractor:
     - save_master_list: saves the master list to a csv file.
     - run: runs the entire process of splitting the files, generating the master list, and filtering it.
     """
-    def __init__(self, input_file, output_dir, separator="|", MRN_str='MRN', report_end_str='[report_end]'):
+    def __init__(self, input_file_list, output_dir, separator="|", MRN_str='MRN', report_end_str='[report_end]'):
         self.MRN_str = MRN_str
         self.report_end_str=report_end_str
         self.separator=separator
-        self.input_file=input_file
+        self.input_file_list=input_file_list
         self.output_dir=output_dir
         
         self._prep_out_dir()
@@ -31,16 +31,16 @@ class ClinicalNotesExtractor:
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir, exist_ok=True)
 
-    def _file_reader(self):
+    def _file_reader(self, file):
         """Generator to read the input file line by line."""
-        for row in open(self.input_file, "r"):
+        for row in open(file, "r"):
             yield row
 
     ### Public API ###
 
-    def split_by_subject(self):
+    def split_by_subject(self, file):
         """Splits the file so that each subject is in their own file."""
-        reader=self._file_reader()
+        reader=self._file_reader(file)
         
         for row in reader:
             file_header=row
@@ -101,7 +101,8 @@ class ClinicalNotesExtractor:
 
     def run(self, selected_mrns=None):
         """ Runs the entire process of splitting the files, generating the master list, and filtering it."""
-        self.split_by_subject()
+        for file in self.input_file_list:
+            self.split_by_subject(file) 
         self.generate_master_list()
         self.filter_master_list(selected_mrns)
         self.save_master_list()
