@@ -7,6 +7,5 @@ setuptools
 opencv-python>=4.6.0
 fuzzywuzzy>=0.18.0
 tqdm
-textract
+textract-py3
 pytesseract
-git+https://github.com/josephisaacturner/pypaperretriever.git
