@@ -9,14 +9,16 @@ class OpenAIChatBase(OpenAIBase):
     Base class to evaluate text chunks using OpenAI's chat models.
     """
     
-    def __init__(self, api_key_path, question_type, question_token_estimate=500, model_choice="gpt3_small", debug=False):
-        super().__init__(api_key_path)
+    def __init__(self, api_key_path, question_type, question_token_estimate=500, model_choice="gpt3_small", is_azure=False, deployment_id=None, api_base=None, api_version=None, debug=False):
+        super().__init__(api_key_path, is_azure=is_azure, api_base=api_base, api_version=api_version)
         self.question_type = question_type
         self.chunk_end = None
         self.debug= debug
         self.q_index = 0
         self.question_token_estimate=question_token_estimate
+        self.deployment_id=deployment_id
         self.get_model_data(model_choice)
+
     
     ### setter/getter methods ###
         
@@ -115,6 +117,7 @@ class OpenAIChatBase(OpenAIBase):
     def get_response_from_openai(self, conversation):
         """Sends a conversation to OpenAI and retrieves the assistant's last answer."""
         response = openai.ChatCompletion.create(
+            deployment_id=self.deployment_id,
             model=self.model,
             messages=conversation,
             temperature=self.temperature,

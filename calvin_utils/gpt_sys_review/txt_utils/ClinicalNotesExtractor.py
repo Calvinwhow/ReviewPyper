@@ -31,16 +31,16 @@ class ClinicalNotesExtractor:
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir, exist_ok=True)
 
-    def _file_reader(self):
+    def _file_reader(self,file):
         """Generator to read the input file line by line."""
-        for row in open(self.input_file, "r"):
+        for row in open(file, "r", encoding='utf-8'):
             yield row
 
     ### Public API ###
 
-    def split_by_subject(self):
+    def split_by_subject(self, file):
         """Splits the file so that each subject is in their own file."""
-        reader=self._file_reader()
+        reader=self._file_reader(file)
         
         for row in reader:
             file_header=row
@@ -63,7 +63,7 @@ class ClinicalNotesExtractor:
                 
                 mrn=header.split(self.separator)[mrn_index]
 
-                with open(os.path.join(self.output_dir, f'{mrn}.txt'), 'a') as subject_file:
+                with open(os.path.join(self.output_dir, f'{mrn}.txt'), 'a', encoding='utf-8') as subject_file:
                     subject_file.write(note)
 
                 note=file_header
@@ -101,7 +101,8 @@ class ClinicalNotesExtractor:
 
     def run(self, selected_mrns=None):
         """ Runs the entire process of splitting the files, generating the master list, and filtering it."""
-        self.split_by_subject()
+        for file in self.input_file:
+            self.split_by_subject(file) 
         self.generate_master_list()
         self.filter_master_list(selected_mrns)
         self.save_master_list()

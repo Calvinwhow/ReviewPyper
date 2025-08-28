@@ -2,7 +2,7 @@ from tqdm import tqdm
 from calvin_utils.gpt_sys_review.txt_utils import TextChunker
 from calvin_utils.gpt_sys_review.gpt_utils.openai_labeller import CaseReportLabeler
 from calvin_utils.gpt_sys_review.gpt_utils.openai_summarizer import OpenAISummarizer
-from fuzzywuzzy import fuzz
+from rapidfuzz import fuzz
 import pandas as pd
 import numpy as np
 import json
@@ -29,7 +29,7 @@ class SectionLabeler:
     - save_to_json: Saves the labeled sections to a JSON file.
     """
 
-    def __init__(self, folder_path, article_type, api_key_path=None):
+    def __init__(self, folder_path, article_type, api_key_path=None, is_azure=False, deployment_id=None, api_base=None, api_version=None):
         """
         Initializes the SectionLabeler class with the folder path and article type.
 
@@ -44,6 +44,10 @@ class SectionLabeler:
         self.article_type = article_type
         self.chunker = None
         self.output_dict = {}
+        self.is_azure = is_azure
+        self.deployment_id=deployment_id
+        self.api_base=api_base
+        self.api_version=api_version
 
     def select_labels(self):
         # Define section labels for each article type
@@ -242,7 +246,8 @@ class SectionLabeler:
             labeled_sections = evaluator.evaluate_all_files()
         elif self.article_type == 'emr':
             questions = self.get_questions()
-            evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers,question_token_estimate=150)
+            print(f'asking chatGPT with params is_azure={self.is_azure}, api_base={self.api_base}, api_version={self.api_version}')
+            evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers,question_token_estimate=150, is_azure=self.is_azure, deployment_id=self.deployment_id, api_base=self.api_base, api_version=self.api_version)
             labeled_sections = evaluator.evaluate_all_files()
         elif self.article_type == 'other':
             questions = self.get_questions(question)
@@ -498,7 +503,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
     - keyword_mapping (dict): Dictionary mapping each key to a list of acceptable values.
     """
     
-    def __init__(self, json_path, answers_binary=False, api_key_path=None, summary_type='llm'):
+    def __init__(self, json_path, answers_binary=False, api_key_path=None, summary_type='llm', is_azure=False, deployment_id=None, api_base=None, api_version=None):
         """
         Initializes the CustomSummarizer class.
         
@@ -511,6 +516,10 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         self.summary_type = summary_type
         self.answers_binary = answers_binary
         self.data = self.read_json()
+        self.is_azure=is_azure,
+        self.deployment_id=deployment_id
+        self.api_base=api_base
+        self.api_version=api_version
         if self.answers_binary:
             self.keyword_mapping = {
             0: ["poor", "bad", "negative", "n", "no"],
@@ -608,7 +617,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
             summary_dict[article] = {}
             for question, chunks in questions.items():
                 combined_answers = " ".join(str(answer) for answer in chunks.values())
-                summarizer = OpenAISummarizer(api_key_path=self.api_key_path, text=combined_answers, question=question)
+                summarizer = OpenAISummarizer(api_key_path=self.api_key_path, text=combined_answers, question=question, is_azure=self.is_azure,deployment_id=self.deployment_id, api_base=self.api_base, api_version=self.api_version)
                 summary_dict[article][question] = summarizer.evaluate_text()
         return pd.DataFrame.from_dict(summary_dict, orient='index').fillna(np.nan)
     
