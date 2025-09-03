@@ -292,16 +292,22 @@ class SectionLabeler:
         TODO--this can be dramatically improved by saving a JSON file for each article, instead of a single large JSON. 
         To keep it compatible with susbequent code, could combine the JSONs after. 
         """
-        self.select_labels()
-        file_list = os.listdir(self.folder_path)
-        file_list = [f for f in file_list if f.endswith('.txt')]
-        for filename in tqdm(file_list, desc='Segmenting text files'):
-            text = self._open_txt_file(filename)
-            if not text: continue
-            labeled_sections = {}
-            labeled_sections = self._label_sections(text, question)
-            self._store_results(filename, labeled_sections)
-        self.save_to_json(self.output_dict)
+        if self._json_file_exists(None):
+
+            print(f'_{self.article_type}_labeled_sections.json already exists, skipping processing. If you want to re-process, please delete this file first.')
+        
+        else:
+            
+            self.select_labels()
+            file_list = os.listdir(self.folder_path)
+            file_list = [f for f in file_list if f.endswith('.txt')]
+            for filename in tqdm(file_list, desc='Segmenting text files'):
+                text = self._open_txt_file(filename)
+                if not text: continue
+                labeled_sections = {}
+                labeled_sections = self._label_sections(text, question)
+                self._store_results(filename, labeled_sections)
+            self.save_to_json(self.output_dict)
 
 
 class FilterPapers:
