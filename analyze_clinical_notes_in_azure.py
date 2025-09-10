@@ -10,6 +10,18 @@ output_dir='/Users/rm026/Documents/hbs_study_patient_notes/py_testing_output_2/'
 # Provide the path to your OpenAI API key
 api_key_path = "/Users/rm026/Documents/code/openai-key.txt"
 
+# Provide the api base for your azure enclave, and the version you want to use
+api_base = "https://mgb-risc-wrkspce-prod-e2-8-cog.openai.azure.com/"
+api_version = "2025-01-01-preview"
+
+# Provide the deployment names for the models used. 
+# These are the names of your deployments on the azure enclave, NOT the name of the underlying model they use.
+# The preprocessing model should be a very cheap model, since its jobs are simple. gpt-3.5-turbo is a good choice.
+preprocessing_model_deployment_id='gpt-3.5-turbo'
+# The extraction model, meanwhile, is for extracting the info you want from the files, 
+# and needs to be more sophisticated. gpt-4 is a good choice.
+extraction_model_deployment_id='gpt-4'
+
 
 # Define inclusion/exclusion questions. See notebook 04, section 01 for examples.
 # **Critical Note**
@@ -19,7 +31,7 @@ api_key_path = "/Users/rm026/Documents/code/openai-key.txt"
 # - If the question is negative (a yes is bad), set the value to 0.
 # - A good paper will be denoted by 1, with a bad paper denoted by 0.
 inclusion_questions = {
-"Prioritizing implicit and explicit information, does this medical record mention a stroke? For example, the text may directly mention stroke, ischemia, or an infarct. (Yes/No)": 1,
+"Does this medical record include any information about a neurological exam? For example, it might mention a movement, cognition, or memory task": 1,
 # "Prioritizing implicit and explicit information, does the patient have a documented seizure in their medical record? (Yes/No)": 1,
 # "Does this manuscript report memory outcomes? (Yes/No)": 0
 }
@@ -61,7 +73,7 @@ master_list_path = output_dir+"master_list.csv"
 
 from calvin_utils.gpt_sys_review.json_utils import SectionLabeler
 # Initialize the SectionLabeler class and process the files
-section_labeler = SectionLabeler(folder_path=preprocessed_path, article_type="emr", api_key_path=api_key_path)
+section_labeler = SectionLabeler(folder_path=preprocessed_path, article_type="emr", api_key_path=api_key_path, is_azure=True, deployment_id=preprocessing_model_deployment_id, api_version=api_version, api_base=api_base)
 section_labeler.process_files()
 
 
@@ -71,8 +83,9 @@ article_type = 'inclusion'
 
 json_file_path = output_dir+"json/_emr_labeled_sections.json"
 
+# Ask inclusion/exclusion questions
 from calvin_utils.gpt_sys_review.gpt_utils.openai_json_evaluator import OpenAIJsonEvaluator
-evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path, json_file_path=json_file_path, keys_to_consider=keys_to_consider, question_type=article_type, model_choice="gpt4",  question=inclusion_questions, test_mode=test_mode)
+evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path, json_file_path=json_file_path, keys_to_consider=keys_to_consider, question_type=article_type, model_choice="gpt4",  question=inclusion_questions, test_mode=test_mode, is_azure=True, deployment_id=preprocessing_model_deployment_id, api_version=api_version, api_base=api_base)
 exclusion_answers = evaluator.evaluate_all_files()
 new_json_path = evaluator.save_to_json(exclusion_answers)
 
@@ -87,11 +100,12 @@ PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path,
 
 csv_path = output_dir+"json_evaluated/inclusion_exclusion_results.csv"
 
-from calvin_utils.gpt_sys_review.json_utils import FilterPapers
 
 # Initialize and run the FilterPapers class
-filter_papers = FilterPapers(csv_path=csv_path, json_path=json_file_path)
-filtered_json_path = filter_papers.run()
+# I don't think we actually need this step for clinical notes. The 'papers' are the subjects, and we want to keep them all.
+# from calvin_utils.gpt_sys_review.json_utils import FilterPapers
+# filter_papers = FilterPapers(csv_path=csv_path, json_path=json_file_path)
+# filtered_json_path = filter_papers.run()
 
 
 from calvin_utils.gpt_sys_review.gpt_utils.openai_json_evaluator import OpenAIJsonEvaluator
@@ -102,13 +116,20 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 question=extraction_questions,
                                 test_mode=test_mode,
                                 model_choice="gpt4",
+                                is_azure=True,
+                                deployment_id=extraction_model_deployment_id,
+                                api_base=api_base,
+                                api_version=api_version,
                                 debug=False)
 answers = evaluator.evaluate_all_files()
 evaluated_json_path = evaluator.save_to_json(answers)
 
+# I'm getting yeses and nos already pretty reliably, so I don't think we need this?
+from calvin_utils.gpt_sys_review.json_utils import CustomSummarizer
+custom_summarizer = CustomSummarizer(json_path=evaluated_json_path, answers_binary=extraction_answers_binary, summary_type='llm', api_key_path=api_key_path, is_azure=True, deployment_id=extraction_model_deployment_id, api_base=api_base, api_version=api_version,)
+df, raw_path = custom_summarizer.run_custom()
 
-# from calvin_utils.gpt_sys_review.json_utils import CustomSummarizer
-# custom_summarizer = CustomSummarizer(json_path=evaluated_json_path, answers_binary=extraction_answers_binary, summary_type='llm', api_key_path=api_key_path)
-# df, raw_path = custom_summarizer.run_custom()
+PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, raw_results_path=raw_path, filename_col='MRN')
 
-# PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, raw_results_path=raw_path, filename_col='MRN')
+print("Done!")
+
