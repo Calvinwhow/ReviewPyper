@@ -6,7 +6,7 @@ from tqdm import tqdm
 from calvin_utils.gpt_sys_review.gpt_utils.openai_chat_base import OpenAIChatBase
 
 class OpenAIJsonEvaluator(OpenAIChatBase):
-    def __init__(self, api_key_path, json_file_path, keys_to_consider, question, question_token_estimate=500, question_type='research',  model_choice="gpt3_small", response_tokens=None, is_azure=False, deployment_id=None, api_base=None, api_version=None, debug=False, test_mode=True):
+    def __init__(self, api_key_path, json_file_path, keys_to_consider, question, question_token_estimate=500, question_type='research',  model_choice="gpt3_small", include_explanations=False,response_tokens=None, is_azure=False, deployment_id=None, api_base=None, api_version=None, debug=False, test_mode=True):
         """
         Initializes the OpenAIChatEvaluator class.
         
@@ -28,6 +28,7 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         self.all_answers = {}
         self.debug = debug
         self.questions = question
+        self.include_explanations = include_explanations
         self.json_data = self.read_json(json_file_path)
         self.get_model_data(model_choice)
         self.get_question_settings(question_type)
@@ -85,16 +86,24 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         """Estimated cost: {tokens_used*self.cost*len(self.questions.items())*len(chunks)}')"""
         try:
             total_tokens_used = 0
+            if self.include_explanations:
+                formatted_questions = f'''For each of the following questions about the {self.chunk_flag} provided, output a yes or no and also output the text found that supports this conclusion. Each answer should be followed by the "|" character as a separator. For example : 'Yes'|'He does not walk very well'|'No'|'No text was found' etc. The questions are: '''
+                questions_w_explanations=[]                
+                for i, question in enumerate(self.questions.keys()):
 
-            formatted_questions = f'''For each of the following questions about the {self.chunk_flag} provided, output a yes or no and also output all the text found that supports this conclusion. The output should strictly follow a csv format, with the "|" character as a separator. For example : 'Yes'|'He does not walk very well'|'No'|'No text was found' etc. The questions are:'''
-            questions_w_explanations=[]
+                    formatted_questions += f"{i+1}. {question}"
+                    questions_w_explanations.append(question)
+                    questions_w_explanations.append('EXPLANATION: '+question)
 
-            for i, question in enumerate(self.questions.keys()):
+            else:
+                questions_w_explanations=list(self.questions.keys())
+                formatted_questions = f'''For each of the following questions about the {self.chunk_flag} provided, output a yes or no. Each answer should be followed by the "|" character as a separator. For example : 'Yes'|'No'|'No' etc. The questions are: '''
+                formatted_questions += " ".join(questions_w_explanations)
 
-                formatted_questions += f"{i+1}. {question}"
-
-                questions_w_explanations.append(question)
-                questions_w_explanations.append('EXPLANATION: '+question)
+            with open('debug_formatted_questions.txt', 'w') as f:
+                f.write(formatted_questions)
+                f.write('\n\n')
+                f.write('\n'.join(questions_w_explanations))
 
             answers={}
             for file_name, file_text in tqdm(self.relevant_text_by_file.items()):
@@ -108,6 +117,8 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
                     answer, tokens_used = self.evaluate_with_openai(conversation) # Evaluate the chunk with OpenAI
                     total_tokens_used += tokens_used
                     answer=answer.replace('\n', ' ')
+                    if answer[-1]=="|":
+                        answer=answer[:-1]
 
                     answer_formatted={questions_w_explanations[i]:response for i, response in enumerate(answer.split("|"))}
 

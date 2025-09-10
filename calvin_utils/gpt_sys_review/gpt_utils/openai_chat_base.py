@@ -17,9 +17,13 @@ class OpenAIChatBase(OpenAIBase):
         self.q_index = 0
         self.question_token_estimate=question_token_estimate
         self.deployment_id=deployment_id
-        self.response_tokens = response_tokens
         self.is_azure = is_azure
         self.get_model_data(model_choice)
+        if response_tokens > self.token_limit:
+            print(f"Warning: desired response_tokens {response_tokens} exceeds token limit {self.token_limit}. Setting response_tokens to {self.token_limit}.")
+            self.response_tokens = self.token_limit
+        else:
+            self.response_tokens = int(response_tokens)
 
     
     ### setter/getter methods ###
@@ -127,14 +131,14 @@ class OpenAIChatBase(OpenAIBase):
                 model=self.model,
                 messages=conversation,
                 temperature=self.temperature,
-                max_tokens=self.response_tokens
+                max_tokens=int(self.response_tokens)
             )
         else:
             response = openai.ChatCompletion.create(
                 model=self.model,
                 messages=conversation,
                 temperature=self.temperature,
-                max_tokens=self.response_tokens
+                max_tokens=int(self.response_tokens)
             )
         return response['choices'][-1]['message']['content'], response["usage"]["total_tokens"]
 

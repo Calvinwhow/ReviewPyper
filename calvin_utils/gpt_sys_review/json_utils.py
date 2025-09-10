@@ -246,7 +246,7 @@ class SectionLabeler:
             labeled_sections = evaluator.evaluate_all_files()
         elif self.article_type == 'emr':
             questions = self.get_questions()
-            print(f'asking chatGPT with params is_azure={self.is_azure}, api_base={self.api_base}, api_version={self.api_version}')
+            # print(f'asking chatGPT with params is_azure={self.is_azure}, api_base={self.api_base}, api_version={self.api_version}')
             evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers,question_token_estimate=150, is_azure=self.is_azure, deployment_id=self.deployment_id, api_base=self.api_base, api_version=self.api_version)
             labeled_sections = evaluator.evaluate_all_files()
         elif self.article_type == 'other':
@@ -447,7 +447,7 @@ class InclusionExclusionSummarizer:
             for question, chunks in questions.items():
                 # Get the polarity value for the question from the questions dictionary
                 if question[:11] == 'EXPLANATION': # just skipping these for now. At some point we should probably add the explanations to the output csv.
-                    summary_dict[article][question] = chunks.values()
+                    summary_dict[article][question] = list(chunks.values())
                     continue
                 polarity = self.questions.get(question)
                 if polarity is None:
@@ -524,7 +524,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         self.summary_type = summary_type
         self.answers_binary = answers_binary
         self.data = self.read_json()
-        self.is_azure=is_azure,
+        self.is_azure=is_azure
         self.deployment_id=deployment_id
         self.api_base=api_base
         self.api_version=api_version
@@ -593,7 +593,10 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         for article, questions in self.data.items():
             summary_dict[article] = {}
             for question, chunks in questions.items():
-                #Extract binary data and process
+                #Extract binary data and process                
+                if question[:11]=='EXPLANATION':
+                    summary_dict[article][question] = combined_answers
+                    continue
                 if self.keyword_mapping:
                     mapped_answers = [self.keyword_or_fuzzy_match(answer) for answer in chunks.values()]
                     if all(x is np.nan for x in mapped_answers) or all(x is None for x in mapped_answers):
@@ -604,7 +607,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                 #Extract raw data for research articles
                 elif self.keyword_mapping is None:
                     try:
-                        combined_answers = tuple(chunks.values())
+                        combined_answers = chunks.values()[0]
                         if not combined_answers:
                             summary_dict[article][question] = 'No Answers'
                         else:
