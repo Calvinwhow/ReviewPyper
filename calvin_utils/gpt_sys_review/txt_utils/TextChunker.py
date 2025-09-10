@@ -13,7 +13,7 @@ class TextChunker:
         - token_limit (int): The maximum number of tokens allowed in each chunk.
         - debug (bool): Flag to enable debug print statements.
         """
-        self.text = text
+        self.text = text.replace('|', ',')  # Replace "|", since we use it as a separator for the answers
         self.token_limit = token_limit
         self.chunks = []
         self.debug = debug

@@ -14,7 +14,7 @@ class OpenAIBase:
     - read_api_key: Reads the OpenAI API key from a file.
     - evaluate_with_openai: Evaluates a text chunk based on the question corresponding to the article type.
     """
-    def __init__(self, api_key_path, is_azure=False, api_base=None, api_version=None,):
+    def __init__(self, api_key_path, is_azure=False, api_base=None, api_version=None):
         """
         Initializes the OpenAIEvaluator class.
 
@@ -23,8 +23,9 @@ class OpenAIBase:
         - article_type (str): The type of article (e.g., 'research', 'case').
         """
         self.api_key = self.read_api_key(api_key_path)
+        self.is_azure = is_azure
         openai.api_key = self.api_key
-        if is_azure:
+        if self.is_azure:
             openai.api_type = "azure"
             openai.api_base = api_base
             openai.api_version = api_version

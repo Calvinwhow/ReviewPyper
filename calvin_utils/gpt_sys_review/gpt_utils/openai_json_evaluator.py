@@ -6,7 +6,7 @@ from tqdm import tqdm
 from calvin_utils.gpt_sys_review.gpt_utils.openai_chat_base import OpenAIChatBase
 
 class OpenAIJsonEvaluator(OpenAIChatBase):
-    def __init__(self, api_key_path, json_file_path, keys_to_consider, question, question_token_estimate=500, question_type='research',  model_choice="gpt3_small", is_azure=False,deployment_id=None, api_base=None, api_version=None, debug=False, test_mode=True):
+    def __init__(self, api_key_path, json_file_path, keys_to_consider, question, question_token_estimate=500, question_type='research',  model_choice="gpt3_small", response_tokens=None, is_azure=False, deployment_id=None, api_base=None, api_version=None, debug=False, test_mode=True):
         """
         Initializes the OpenAIChatEvaluator class.
         
@@ -20,7 +20,9 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         - answer_token (int): The number of tokens reserved for the answer. Default is 500.
         - test_mode (bool): Will only pass the first article to GPT. Used to iteratively refine the passed questions.
         """
-        super().__init__(api_key_path, question_token_estimate=question_token_estimate, question_type=question_type, model_choice=model_choice, is_azure=is_azure,deployment_id=deployment_id, api_base=api_base, api_version=api_version)
+        if response_tokens is None:
+            response_tokens = len(question)*50
+        super().__init__(api_key_path, question_token_estimate=question_token_estimate, question_type=question_type, model_choice=model_choice, response_tokens=response_tokens, is_azure=is_azure, deployment_id=deployment_id, api_base=api_base, api_version=api_version)
         self.json_path = json_file_path
         self.keys_to_consider = keys_to_consider
         self.all_answers = {}
@@ -82,20 +84,41 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
     def evaluate_all_files(self):
         """Estimated cost: {tokens_used*self.cost*len(self.questions.items())*len(chunks)}')"""
         try:
+            total_tokens_used = 0
+
+            formatted_questions = f'''For each of the following questions about the {self.chunk_flag} provided, output a yes or no and also output all the text found that supports this conclusion. The output should strictly follow a csv format, with the "|" character as a separator. For example : 'Yes'|'He does not walk very well'|'No'|'No text was found' etc. The questions are:'''
+            questions_w_explanations=[]
+
+            for i, question in enumerate(self.questions.keys()):
+
+                formatted_questions += f"{i+1}. {question}"
+
+                questions_w_explanations.append(question)
+                questions_w_explanations.append('EXPLANATION: '+question)
+
+            answers={}
             for file_name, file_text in tqdm(self.relevant_text_by_file.items()):
+
                 print('evaluating '+file_name)
                 chunks = self.call_chunker(file_text)  # Chunk text by token limits
-                self.all_answers[file_name] = {}            # Initialize a dictionary to store chunk-level answers for each question
-                for question in self.questions.keys():
-                    self.all_answers[file_name][question] = {}
+                answers[file_name] = {}            # Initialize a dictionary to store chunk-level answers for each question
 
                 for chunk_index, chunk in enumerate(chunks):     # Send a query for each chunk
-                    for q_index, q in enumerate(self.questions.keys()): # Initialize a conversation with OpenAI for this chunk
-                        conversation = self.generate_submission(chunk, q)   # Generate the conversation to submit
-                        answer, tokens_used = self.evaluate_with_openai(conversation) # Evaluate the chunk with OpenAI
-                        self.all_answers[file_name][q][f"chunk_{chunk_index+1}"] = answer       # Store the answer for this question and this chunk
+                    conversation = self.generate_submission(chunk, formatted_questions)   # Generate the conversation to submit
+                    answer, tokens_used = self.evaluate_with_openai(conversation) # Evaluate the chunk with OpenAI
+                    total_tokens_used += tokens_used
+                    answer=answer.replace('\n', ' ')
+
+                    answer_formatted={questions_w_explanations[i]:response for i, response in enumerate(answer.split("|"))}
+
+                    answers[file_name][f"chunk_{chunk_index+1}"] = answer_formatted       # Store the answer for this question and this chunk
+            
+            print(f'Total tokens used: {total_tokens_used}. Estimated cost: {total_tokens_used*self.cost}')
+            for record, dict in answers.items():
+                dict = {key2: {key1: dict[key1][key2] for key1 in answers[record]} for key2 in answers[record][next(iter(answers[record]))]}
+                self.all_answers[record] = dict
             return self.all_answers
-        
+
         except KeyboardInterrupt:
             print("KeyboardInterrupt detected. Saving results to JSON and closing.")
             self.save_to_json(self.all_answers)

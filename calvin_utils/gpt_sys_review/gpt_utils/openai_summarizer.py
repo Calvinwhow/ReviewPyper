@@ -29,7 +29,7 @@ class OpenAISummarizer(OpenAIJsonEvaluator):
         evaluate_all_files():
             Processes the entire text, evaluates each chunk, and categorizes them into results_dict based on model answers.
     """
-    def __init__(self, api_key_path, text, question, is_azure=False,deployment_id=None, api_base=None, api_version=None, verbose=False):
+    def __init__(self, api_key_path, text, question, is_azure=False, deployment_id=None, api_base=None, api_version=None, verbose=False):
         """
         Initialize the CaseReportLabeler.
 

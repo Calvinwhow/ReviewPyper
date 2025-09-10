@@ -98,7 +98,7 @@ from calvin_utils.gpt_sys_review.gpt_utils.openai_json_evaluator import OpenAIJs
 evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 json_file_path=json_file_path, 
                                 keys_to_consider=keys_to_consider,
-                                question_type="extraction",
+                                question_type="emr_extraction",
                                 question=extraction_questions,
                                 test_mode=test_mode,
                                 model_choice="gpt4",
@@ -107,8 +107,8 @@ answers = evaluator.evaluate_all_files()
 evaluated_json_path = evaluator.save_to_json(answers)
 
 
-from calvin_utils.gpt_sys_review.json_utils import CustomSummarizer
-custom_summarizer = CustomSummarizer(json_path=evaluated_json_path, answers_binary=extraction_answers_binary, summary_type='llm', api_key_path=api_key_path)
-df, raw_path = custom_summarizer.run_custom()
+# from calvin_utils.gpt_sys_review.json_utils import CustomSummarizer
+# custom_summarizer = CustomSummarizer(json_path=evaluated_json_path, answers_binary=extraction_answers_binary, summary_type='llm', api_key_path=api_key_path)
+# df, raw_path = custom_summarizer.run_custom()
 
-PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, raw_results_path=raw_path, filename_col='MRN')
+# PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, raw_results_path=raw_path, filename_col='MRN')

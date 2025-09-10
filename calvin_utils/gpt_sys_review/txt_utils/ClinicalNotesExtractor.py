@@ -39,7 +39,6 @@ class ClinicalNotesExtractor:
     ### Public API ###
 
     def split_by_subject(self, file):
-    def split_by_subject(self, file):
         """Splits the file so that each subject is in their own file."""
         reader=self._file_reader(file)
         reader=self._file_reader(file)
@@ -103,7 +102,7 @@ class ClinicalNotesExtractor:
 
     def run(self, selected_mrns=None):
         """ Runs the entire process of splitting the files, generating the master list, and filtering it."""
-        for file in self.input_file:
+        for file in self.input_file_list:
             self.split_by_subject(file) 
         self.generate_master_list()
         self.filter_master_list(selected_mrns)

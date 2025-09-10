@@ -9,7 +9,7 @@ class OpenAIChatBase(OpenAIBase):
     Base class to evaluate text chunks using OpenAI's chat models.
     """
     
-    def __init__(self, api_key_path, question_type, question_token_estimate=500, model_choice="gpt3_small", is_azure=False, deployment_id=None, api_base=None, api_version=None, debug=False):
+    def __init__(self, api_key_path, question_type, question_token_estimate=500, model_choice="gpt3_small", response_tokens=50, is_azure=False, deployment_id=None, api_base=None, api_version=None, debug=False):
         super().__init__(api_key_path, is_azure=is_azure, api_base=api_base, api_version=api_version)
         self.question_type = question_type
         self.chunk_end = None
@@ -17,6 +17,8 @@ class OpenAIChatBase(OpenAIBase):
         self.q_index = 0
         self.question_token_estimate=question_token_estimate
         self.deployment_id=deployment_id
+        self.response_tokens = response_tokens
+        self.is_azure = is_azure
         self.get_model_data(model_choice)
 
     
@@ -25,7 +27,6 @@ class OpenAIChatBase(OpenAIBase):
     def get_model_data(self, model_choice):
         """Sets values for the OpenAI model to use."""
         self.temperature = 1.0
-        self.response_tokens = 50
         models = {
             "gpt4.1": {"name": "gpt-4.1", "token_limit": 32768, "cost": 0.03 / 1000},
             "gpt4": {"name": "gpt-4", "token_limit": 7000, "cost": 0.03 / 1000}, #actual limit is 8192
@@ -48,9 +49,13 @@ class OpenAIChatBase(OpenAIBase):
             self.directive = "You are a research assistant. Your task is to carefully evaluate the following research report. Use both explicit information and reasonable inferences to answer the questions. Be as concise as possible."
             self.chunk_flag = "[RESEARCH REPORT]"
             self.chunk_end = ""
+        elif self.question_type=="emr_extraction":
+            self.directive = "You are a medical assistant. Your task is to carefully evaluate the following medical record. Use both explicit information and reasonable inferences to answer the questions. Be as concise as possible."
+            self.chunk_flag = "[EMR REPORT]"
+            self.chunk_end = ""
         elif self.question_type=="case":
             self.directive = "You are a medical assistant. Your task is to carefully evaluate the following case report. Use both explicit information and reasonable inferences to answer the questions. Be as concise as possible."
-            self.chunk_flag = "[CASE REPORT]"
+            self.chunk_flag = "[MEDICAL RECORD]"
             self.chunk_end = ""
         elif self.question_type=="summarizer":
             self.directive = "An LLM saw multiple chunks of a text file and answered the below question. What was the ultimate answer?"
@@ -96,7 +101,7 @@ class OpenAIChatBase(OpenAIBase):
         """
         conversation = [{"role": "system", "content": f"{self.directive}"},
                         {"role": "user", "content": f"{self.chunk_flag}: {chunk}"}]
-        conversation.append({"role": "user", "content": f'Based on the {self.chunk_flag} provided, {question}'})
+        conversation.append({"role": "user", "content": question})
         return conversation
     
     ### Methods for interfacing with openai ###
@@ -116,13 +121,21 @@ class OpenAIChatBase(OpenAIBase):
 
     def get_response_from_openai(self, conversation):
         """Sends a conversation to OpenAI and retrieves the assistant's last answer."""
-        response = openai.ChatCompletion.create(
-            deployment_id=self.deployment_id,
-            model=self.model,
-            messages=conversation,
-            temperature=self.temperature,
-            max_tokens=self.response_tokens
-        )
+        if self.is_azure:
+            response = openai.ChatCompletion.create(
+                deployment_id=self.deployment_id,
+                model=self.model,
+                messages=conversation,
+                temperature=self.temperature,
+                max_tokens=self.response_tokens
+            )
+        else:
+            response = openai.ChatCompletion.create(
+                model=self.model,
+                messages=conversation,
+                temperature=self.temperature,
+                max_tokens=self.response_tokens
+            )
         return response['choices'][-1]['message']['content'], response["usage"]["total_tokens"]
 
     def handle_response_exception(self, e, retry_count, q_index=0):

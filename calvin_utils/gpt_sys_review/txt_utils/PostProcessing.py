@@ -58,7 +58,7 @@ class PostProcessing:
     
     @staticmethod
     def add_raw_results_to_master_list(master_list_path, raw_results_path, debug=False, filename_col='PMID'):
-        '''Merges resutls into the master list, assuming the files have names which are stored in a column in the master list.'''
+        '''Merges results into the master list, assuming the files have names which are stored in a column in the master list.'''
         master_df = pd.read_csv(master_list_path)
         raw_results_df = pd.read_csv(raw_results_path)
 

@@ -2,7 +2,7 @@ from tqdm import tqdm
 from calvin_utils.gpt_sys_review.txt_utils import TextChunker
 from calvin_utils.gpt_sys_review.gpt_utils.openai_labeller import CaseReportLabeler
 from calvin_utils.gpt_sys_review.gpt_utils.openai_summarizer import OpenAISummarizer
-from rapidfuzz import fuzz
+from fuzzywuzzy import fuzz
 import pandas as pd
 import numpy as np
 import json
@@ -292,7 +292,7 @@ class SectionLabeler:
         TODO--this can be dramatically improved by saving a JSON file for each article, instead of a single large JSON. 
         To keep it compatible with susbequent code, could combine the JSONs after. 
         """
-        if self._json_file_exists(None):
+        if self._json_file_exists(self.article_type):
 
             print(f'_{self.article_type}_labeled_sections.json already exists, skipping processing. If you want to re-process, please delete this file first.')
         
@@ -446,6 +446,9 @@ class InclusionExclusionSummarizer:
             summary_dict[article] = {}
             for question, chunks in questions.items():
                 # Get the polarity value for the question from the questions dictionary
+                if question[:11] == 'EXPLANATION': # just skipping these for now. At some point we should probably add the explanations to the output csv.
+                    summary_dict[article][question] = chunks.values()
+                    continue
                 polarity = self.questions.get(question)
                 if polarity is None:
                     raise ValueError(f"The question from the JSON: \n\n'{question}' \n\n was not found in the questions dictionary.")
@@ -455,12 +458,11 @@ class InclusionExclusionSummarizer:
                 
                 # Sum up the binary answers for each question
                 summary_dict[article][question] = sum(binary_answers)
-        
         # Convert the summary dictionary to a DataFrame
         df = pd.DataFrame.from_dict(summary_dict, orient='index')
         
         # Set all values above 0 to 1
-        df[df > 0] = 1
+        # df[df > 0] = 1
         
         return df
     
@@ -623,8 +625,14 @@ class CustomSummarizer(InclusionExclusionSummarizer):
             summary_dict[article] = {}
             for question, chunks in questions.items():
                 combined_answers = " ".join(str(answer) for answer in chunks.values())
-                summarizer = OpenAISummarizer(api_key_path=self.api_key_path, text=combined_answers, question=question, is_azure=self.is_azure,deployment_id=self.deployment_id, api_base=self.api_base, api_version=self.api_version)
-                summary_dict[article][question] = summarizer.evaluate_text()
+                
+                if question[:11]=='EXPLANATION':
+                    summary_dict[article][question] = combined_answers
+
+                else:
+                    summarizer = OpenAISummarizer(api_key_path=self.api_key_path, text=combined_answers, question=question, is_azure=self.is_azure, deployment_id=self.deployment_id, api_base=self.api_base, api_version=self.api_version)
+                    summary_dict[article][question] = summarizer.evaluate_text()
+                    
         return pd.DataFrame.from_dict(summary_dict, orient='index').fillna(np.nan)
     
     def summarize(self):
