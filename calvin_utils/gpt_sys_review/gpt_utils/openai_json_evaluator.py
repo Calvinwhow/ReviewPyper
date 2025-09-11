@@ -87,7 +87,7 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         try:
             total_tokens_used = 0
             if self.include_explanations:
-                formatted_questions = f'''For each of the following questions about the {self.chunk_flag} provided, output a yes or no and also output the text found that supports this conclusion. Each answer should be followed by the "|" character as a separator. For example : 'Yes'|'He does not walk very well'|'No'|'No text was found' etc. The questions are: '''
+                formatted_questions = f'''For each of the following questions about the {self.chunk_flag} provided, output a yes or no and an explanation for your answer. Each answer should be followed by the "|" character as a separator. For example : 'Yes'|'The text mentions that the patient needs a cane to walk'|'No'|'No text was found' etc. The questions are: '''
                 questions_w_explanations=[]                
                 for i, question in enumerate(self.questions.keys()):
 
@@ -100,16 +100,17 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
                 formatted_questions = f'''For each of the following questions about the {self.chunk_flag} provided, output a yes or no. Each answer should be followed by the "|" character as a separator. For example : 'Yes'|'No'|'No' etc. The questions are: '''
                 formatted_questions += " ".join(questions_w_explanations)
 
-            with open('debug_formatted_questions.txt', 'w') as f:
-                f.write(formatted_questions)
-                f.write('\n\n')
-                f.write('\n'.join(questions_w_explanations))
+            # with open('debug_formatted_questions.txt', 'w') as f:
+            #     f.write(formatted_questions)
+            #     f.write('\n\n')
+            #     f.write('\n'.join(questions_w_explanations))
 
             answers={}
             for file_name, file_text in tqdm(self.relevant_text_by_file.items()):
 
                 print('evaluating '+file_name)
                 chunks = self.call_chunker(file_text)  # Chunk text by token limits
+                
                 answers[file_name] = {}            # Initialize a dictionary to store chunk-level answers for each question
 
                 for chunk_index, chunk in enumerate(chunks):     # Send a query for each chunk
@@ -119,9 +120,10 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
                     answer=answer.replace('\n', ' ')
                     if answer[-1]=="|":
                         answer=answer[:-1]
-
-                    answer_formatted={questions_w_explanations[i]:response for i, response in enumerate(answer.split("|"))}
-
+                    try:
+                        answer_formatted={questions_w_explanations[i]:response for i, response in enumerate(answer.split("|"))}
+                    except:
+                        raise IndexError(f"List index out of range. The answer was {answer} and the questions were {questions_w_explanations}")
                     answers[file_name][f"chunk_{chunk_index+1}"] = answer_formatted       # Store the answer for this question and this chunk
             
             print(f'Total tokens used: {total_tokens_used}. Estimated cost: {total_tokens_used*self.cost}')

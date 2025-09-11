@@ -242,16 +242,16 @@ class SectionLabeler:
             labeled_sections, text = self.label_text(text)
         elif self.article_type == 'case':
             questions = self.get_questions()
-            evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers,question_token_estimate=150)
+            evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers,question_token_estimate=500)
             labeled_sections = evaluator.evaluate_all_files()
         elif self.article_type == 'emr':
             questions = self.get_questions()
             # print(f'asking chatGPT with params is_azure={self.is_azure}, api_base={self.api_base}, api_version={self.api_version}')
-            evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers,question_token_estimate=150, is_azure=self.is_azure, deployment_id=self.deployment_id, api_base=self.api_base, api_version=self.api_version)
+            evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers,question_token_estimate=500, is_azure=self.is_azure, deployment_id=self.deployment_id, api_base=self.api_base, api_version=self.api_version)
             labeled_sections = evaluator.evaluate_all_files()
         elif self.article_type == 'other':
             questions = self.get_questions(question)
-            evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers,question_token_estimate=150)
+            evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers,question_token_estimate=500)
             labeled_sections = evaluator.evaluate_all_files()
         else:
             raise ValueError(f"Unknown article type {self.article_type}, choose 'case', 'research', 'emr', or 'other'")
@@ -589,13 +589,14 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         Returns:
         - DataFrame: Pandas DataFrame containing the summarized results.
         """
-        summary_dict = {}
+        summary_dict = {}           
         for article, questions in self.data.items():
             summary_dict[article] = {}
             for question, chunks in questions.items():
-                #Extract binary data and process                
+                #Extract binary data and process
                 if question[:11]=='EXPLANATION':
-                    summary_dict[article][question] = combined_answers
+                    
+                    summary_dict[article][question] = '|'.join(list(chunks.values()))
                     continue
                 if self.keyword_mapping:
                     mapped_answers = [self.keyword_or_fuzzy_match(answer) for answer in chunks.values()]
@@ -619,7 +620,9 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         df = pd.DataFrame.from_dict(summary_dict, orient='index').fillna(np.nan)
         if self.answers_binary:
             # Set all values above 0 to 1
-            df[df > 0] = 1
+            for question in df.columns:
+                if question[:11]!='EXPLANATION':
+                    df[question]=[1 if x>0 else 0 for x in df[question]]
         return df
     
     def summarize_with_llm(self):
