@@ -122,11 +122,19 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 api_version=api_version,
                                 debug=False)
 answers = evaluator.evaluate_all_files()
+extraction_chunks_dir=evaluator.chunk_dir
 evaluated_json_path = evaluator.save_to_json(answers)
 
 # I'm getting yeses and nos already pretty reliably, so I don't think we need this?
 from calvin_utils.gpt_sys_review.json_utils import CustomSummarizer
-custom_summarizer = CustomSummarizer(json_path=evaluated_json_path, answers_binary=extraction_answers_binary, summary_type='mapping', api_key_path=api_key_path, is_azure=True, deployment_id=extraction_model_deployment_id, api_base=api_base, api_version=api_version,)
+custom_summarizer = CustomSummarizer(json_path=evaluated_json_path, 
+                                     answers_binary=extraction_answers_binary, 
+                                     summary_type='mapping', 
+                                     api_key_path=api_key_path, 
+                                     chunks_dir=extraction_chunks_dir, 
+                                     is_azure=True, 
+                                     deployment_id=extraction_model_deployment_id, 
+                                     api_base=api_base, api_version=api_version,)
 df, raw_path = custom_summarizer.run_custom()
 
 PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, raw_results_path=raw_path, filename_col='MRN')

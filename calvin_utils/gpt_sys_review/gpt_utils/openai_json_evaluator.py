@@ -6,7 +6,7 @@ from tqdm import tqdm
 from calvin_utils.gpt_sys_review.gpt_utils.openai_chat_base import OpenAIChatBase
 
 class OpenAIJsonEvaluator(OpenAIChatBase):
-    def __init__(self, api_key_path, json_file_path, keys_to_consider, question, question_token_estimate=500, question_type='research',  model_choice="gpt3_small", include_explanations=False,response_tokens=None, is_azure=False, deployment_id=None, api_base=None, api_version=None, debug=False, test_mode=True):
+    def __init__(self, api_key_path, json_file_path, keys_to_consider, question, retain_chunks=False, question_token_estimate=500, question_type='research',  model_choice="gpt3_small", include_explanations=False,response_tokens=None, is_azure=False, deployment_id=None, api_base=None, api_version=None, debug=False, test_mode=True):
         """
         Initializes the OpenAIChatEvaluator class.
         
@@ -28,6 +28,10 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         self.all_answers = {}
         self.debug = debug
         self.questions = question
+        self.retain_chunks = retain_chunks
+        if self.retain_chunks:
+            self.chunk_dir = os.path.dirname(self.json_path) + "_chunks"
+            os.makedirs(self.chunk_dir, exist_ok=True)
         self.include_explanations = include_explanations
         self.json_data = self.read_json(json_file_path)
         self.get_model_data(model_choice)
@@ -80,6 +84,21 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         print(f"Saved to: {save_file}")
         return save_file
     
+    def save_chunks(self, file_name, chunks):
+
+        base_save_file = os.path.join(self.chunk_dir, f'{file_name}_chunks.json')
+        save_file = base_save_file
+        count = 1
+        chunk_dict = {f'chunk_{i+1}': chunk for i, chunk in enumerate(chunks)}
+        while os.path.exists(save_file):
+            save_file = os.path.join(self.chunk_dir, f'{file_name}_chunks_{count}.json')
+            count += 1
+        with open(save_file, 'w') as f:
+            json.dump(chunk_dict, f, indent=0)
+        print(f"Saved to: {save_file}")
+        return save_file
+
+
     ### Evlaluation Methods ###
  
     def evaluate_all_files(self):
@@ -100,18 +119,16 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
                 formatted_questions = f'''For each of the following questions about the {self.chunk_flag} provided, output a yes or no. Each answer should be followed by the "|" character as a separator. For example : 'Yes'|'No'|'No' etc. The questions are: '''
                 formatted_questions += " ".join(questions_w_explanations)
 
-            # with open('debug_formatted_questions.txt', 'w') as f:
-            #     f.write(formatted_questions)
-            #     f.write('\n\n')
-            #     f.write('\n'.join(questions_w_explanations))
-
             answers={}
             for file_name, file_text in tqdm(self.relevant_text_by_file.items()):
 
                 print('evaluating '+file_name)
                 chunks = self.call_chunker(file_text)  # Chunk text by token limits
-                
-                answers[file_name] = {}            # Initialize a dictionary to store chunk-level answers for each question
+
+                if self.retain_chunks:
+                    chunk_path=self.save_chunks(file_name, chunks)
+
+                answers[file_name] = {} # Initialize a dictionary to store chunk-level answers for each question
 
                 for chunk_index, chunk in enumerate(chunks):     # Send a query for each chunk
                     conversation = self.generate_submission(chunk, formatted_questions)   # Generate the conversation to submit

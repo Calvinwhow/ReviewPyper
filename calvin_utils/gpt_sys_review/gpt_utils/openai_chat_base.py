@@ -140,10 +140,10 @@ class OpenAIChatBase(OpenAIBase):
                 temperature=self.temperature,
                 max_tokens=int(self.response_tokens)
             )
-        if self.question_type=='emr_extraction':
-            with open('debug_openai_chat.txt', 'a') as f:
-                f.write('Conversation: '+str(conversation)+'\n\n')
-                f.write('Response: '+str(response['choices'][-1]['message']['content'])+'\n\n\n')
+        # if self.question_type=='emr_extraction':
+        #     with open('debug_openai_chat.txt', 'a') as f:
+        #         f.write('Conversation: '+str(conversation)+'\n\n')
+        #         f.write('Response: '+str(response['choices'][-1]['message']['content'])+'\n\n\n')
 
         return response['choices'][-1]['message']['content'], response["usage"]["total_tokens"]
 

@@ -424,14 +424,16 @@ class InclusionExclusionSummarizer:
         self.data = self.read_json()
         self.df = self.summarize_results()
     
-    def read_json(self):
+    def read_json(self, json_file_path=None):
         """
         Reads JSON data from a file.
         
         Returns:
         - dict: The data read from the JSON file.
         """
-        with open(self.json_path, 'r') as file:
+        if json_file_path is None:
+            json_file_path = self.json_path
+        with open(json_file_path, 'r') as file:
             return json.load(file)
     
     def summarize_results(self):
@@ -511,7 +513,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
     - keyword_mapping (dict): Dictionary mapping each key to a list of acceptable values.
     """
     
-    def __init__(self, json_path, answers_binary=False, api_key_path=None, summary_type='llm', is_azure=False, deployment_id=None, api_base=None, api_version=None):
+    def __init__(self, json_path, answers_binary=False, api_key_path=None, summary_type='llm',chunks_dir=None, is_azure=False, deployment_id=None, api_base=None, api_version=None):
         """
         Initializes the CustomSummarizer class.
         
@@ -524,6 +526,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         self.summary_type = summary_type
         self.answers_binary = answers_binary
         self.data = self.read_json()
+        self.chunks_dir=chunks_dir
         self.is_azure=is_azure
         self.deployment_id=deployment_id
         self.api_base=api_base
@@ -589,9 +592,13 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         Returns:
         - DataFrame: Pandas DataFrame containing the summarized results.
         """
-        summary_dict = {}           
+        summary_dict = {}
         for article, questions in self.data.items():
             summary_dict[article] = {}
+
+            if self.chunks_dir is not None:
+                chunks_dict=self.read_json(self.chunks_dir+'/'+article+'_chunks.json') 
+                print('correctly loads chunks dict')
             for question, chunks in questions.items():
                 #Extract binary data and process
                 if question[:11]=='EXPLANATION':
@@ -602,6 +609,13 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                     mapped_answers = [self.keyword_or_fuzzy_match(answer) for answer in chunks.values()]
                     if all(x is np.nan for x in mapped_answers) or all(x is None for x in mapped_answers):
                         summary_dict[article][question] = np.nan
+                    elif self.chunks_dir is not None: 
+                        valid_answers = [x for x in mapped_answers if x is not np.nan and x is not None]
+                        summary_dict[article][question] = np.sum(valid_answers) if valid_answers else 'Unidentified'
+
+                        pos_chunks=[chunks_dict[f'chunk_{i+1}'] for i, answer in enumerate(mapped_answers) if answer==1]
+                        summary_dict[article]['CHUNKS: '+question] = '|'.join(pos_chunks)
+                        print('correctly adds chunks to summary dict')
                     else:
                         valid_answers = [x for x in mapped_answers if x is not np.nan and x is not None]
                         summary_dict[article][question] = np.sum(valid_answers) if valid_answers else 'Unidentified'
@@ -621,7 +635,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         if self.answers_binary:
             # Set all values above 0 to 1
             for question in df.columns:
-                if question[:11]!='EXPLANATION':
+                if question[:11]!='EXPLANATION' and question[:6]!='CHUNKS':
                     df[question]=[1 if x>0 else 0 for x in df[question]]
         return df
     
