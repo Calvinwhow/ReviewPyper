@@ -598,7 +598,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
 
             if self.chunks_dir is not None:
                 chunks_dict=self.read_json(self.chunks_dir+'/'+article+'_chunks.json') 
-                print('correctly loads chunks dict')
+                
             for question, chunks in questions.items():
                 #Extract binary data and process
                 if question[:11]=='EXPLANATION':
@@ -615,7 +615,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
 
                         pos_chunks=[chunks_dict[f'chunk_{i+1}'] for i, answer in enumerate(mapped_answers) if answer==1]
                         summary_dict[article]['CHUNKS: '+question] = '|'.join(pos_chunks)
-                        print('correctly adds chunks to summary dict')
+                        
                     else:
                         valid_answers = [x for x in mapped_answers if x is not np.nan and x is not None]
                         summary_dict[article][question] = np.sum(valid_answers) if valid_answers else 'Unidentified'
