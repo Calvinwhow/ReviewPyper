@@ -650,7 +650,8 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                     summary_dict[article][question] = combined_answers
 
                 else:
-                    summarizer = OpenAISummarizer(api_key_path=self.api_key_path, text=combined_answers, question=question, is_azure=self.is_azure, deployment_id=self.deployment_id, api_base=self.api_base, api_version=self.api_version)
+                    question_formatted = f'Please summarize the following answers to the question: "{question}" Respond with 1 for yes or 0 for no, and do not include any explanations. If the answers are mixed or unclear, please respond with 0.'
+                    summarizer = OpenAISummarizer(api_key_path=self.api_key_path, text=combined_answers, question=question_formatted, is_azure=self.is_azure, deployment_id=self.deployment_id, api_base=self.api_base, api_version=self.api_version)
                     summary_dict[article][question] = summarizer.evaluate_text()
                     
         return pd.DataFrame.from_dict(summary_dict, orient='index').fillna(np.nan)
