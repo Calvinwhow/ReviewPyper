@@ -135,12 +135,13 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
                     answer, tokens_used = self.evaluate_with_openai(conversation) # Evaluate the chunk with OpenAI
                     total_tokens_used += tokens_used
                     answer=answer.replace('\n', ' ')
-                    if answer[-1]=="|":
+                    while answer[-1] in ["|",' ']:
                         answer=answer[:-1]
                     try:
-                        answer_formatted={questions_w_explanations[i]:response for i, response in enumerate(answer.split("|"))}
+                        answer_list = answer.split("|")
+                        answer_formatted={questions_w_explanations[i]:response for i, response in enumerate(answer_list)}
                     except:
-                        raise IndexError(f"List index out of range. The answer was {answer} and the questions were {questions_w_explanations}")
+                        raise IndexError(f"List index out of range. Had {len(questions_w_explanations)} questions but {len(answer)} answers: {answer}")
                     answers[file_name][f"chunk_{chunk_index+1}"] = answer_formatted       # Store the answer for this question and this chunk
             
             print(f'Total tokens used: {total_tokens_used}. Estimated cost: {total_tokens_used*self.cost}')
