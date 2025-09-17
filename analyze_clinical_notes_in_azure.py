@@ -70,6 +70,11 @@ preprocessed_path = preprocessor.process_files()
 article_type = 'emr'  # 'case', 'research', 'emr', or 'other'
 master_list_path = output_dir+"master_list.csv"
 
+#Additional files for auc calculation
+ground_truth_path = output_dir+"ground_truth.csv"
+iteration_history_path = output_dir+"iteration_history.csv"
+accuracy_image = output_dir+"iteration_accuracy.png"
+
 
 from calvin_utils.gpt_sys_review.json_utils import SectionLabeler
 # Initialize the SectionLabeler class and process the files
@@ -138,6 +143,17 @@ custom_summarizer = CustomSummarizer(json_path=evaluated_json_path,
 df, raw_path = custom_summarizer.run_custom()
 
 PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, raw_results_path=raw_path, filename_col='MRN')
+
+from calvin_utils.evaluate_iterations import IterationEvaluator
+ev = IterationEvaluator(
+    ground_path=ground_truth_path,
+    master_path=master_list_path,
+    history_path=iteration_history_path,
+    plot_path=accuracy_image,
+    reset=True,
+)
+row = ev.run()
+print(row)
 
 print("Done!")
 
