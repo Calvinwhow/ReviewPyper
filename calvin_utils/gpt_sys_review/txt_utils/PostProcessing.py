@@ -64,8 +64,12 @@ class PostProcessing:
 
         new_columns = [col for col in raw_results_df.columns if col != raw_results_df.columns[0]]
         for column in new_columns:
+            if column[:11].upper()=='EXPLANATION' or column[:5].upper()=='CHUNK':
+                default_value = ''
+            else: 
+                default_value = np.nan
             if column not in master_df.columns:
-                master_df[column] = np.nan
+                master_df[column] = default_value
 
         for _, row in tqdm(raw_results_df.iterrows(), desc='Updating master list'):
             filename = str(row.iloc[0]).removesuffix('_OCR')
