@@ -108,7 +108,7 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         try:
             total_tokens_used = 0
             if self.include_explanations:
-                formatted_questions = f'''For each of the following questions about the {self.chunk_flag} provided, output a yes or no and an explanation for your answer. Each answer should be followed by the "|" character as a separator. For example : 'Yes'|'The text mentions that the patient needs a cane to walk'|'No'|'No text was found' etc. Ignore any text which is part of a standardized questionnaire. The questions are: '''
+                formatted_questions = f'''For each of the following questions about the {self.chunk_flag} provided, output a yes or no and an explanation for your answer. Each answer and explanation should be separated by the "|" character. For example : 'Yes'|'The text mentions that the patient needs a cane to walk'|'No'|'No text was found' etc. Ignore any text which is part of a standardized questionnaire. The questions are: '''
                 questions_w_explanations=[]                
                 for i, question in enumerate(self.questions.keys()):
 

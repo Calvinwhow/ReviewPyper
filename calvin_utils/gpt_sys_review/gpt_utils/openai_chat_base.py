@@ -34,6 +34,7 @@ class OpenAIChatBase(OpenAIBase):
         models = {
             "gpt4.1": {"name": "gpt-4.1", "token_limit": 32768, "cost": 0.03 / 1000},
             "gpt4": {"name": "gpt-4", "token_limit": 7000, "cost": 0.03 / 1000}, #actual limit is 8192
+            "gpt4o-mini": {"name": "gpt-4o-mini", "token_limit": 10000, "cost": 0.00015 / 1000}, #actual limit is 128k, but that's impractical for testing.
             "gpt3_large": {"name": "gpt-3.5-turbo-16k", "token_limit": 16385, "cost": 0.003 / 1000},
             "gpt3_small": {"name": "gpt-3.5-turbo", "token_limit": 4097, "cost": 0.0015 / 1000},
             "gpt3_small_labeler": {"name": "gpt-3.5-turbo", "token_limit": 1000, "cost": 0.0015 / 1000}
@@ -140,10 +141,10 @@ class OpenAIChatBase(OpenAIBase):
                 temperature=self.temperature,
                 max_tokens=int(self.response_tokens)
             )
-        # if self.question_type=='emr_extraction':
-        #     with open('debug_openai_chat.txt', 'a') as f:
-        #         f.write('Conversation: '+str(conversation)+'\n\n')
-        #         f.write('Response: '+str(response['choices'][-1]['message']['content'])+'\n\n\n')
+        if self.debug:
+            with open('debug_openai_chat.txt', 'a') as f:
+                f.write('Conversation: '+str(conversation)+'\n\n')
+                f.write('Response: '+str(response['choices'][-1]['message']['content'])+'\n\n\n')
 
         return response['choices'][-1]['message']['content'], response["usage"]["total_tokens"]
 
