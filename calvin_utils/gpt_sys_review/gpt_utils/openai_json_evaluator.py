@@ -22,11 +22,10 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         """
         if response_tokens is None:
             response_tokens = len(question)*50
-        super().__init__(api_key_path, question_token_estimate=question_token_estimate, question_type=question_type, model_choice=model_choice, response_tokens=response_tokens, is_azure=is_azure, deployment_id=deployment_id, api_base=api_base, api_version=api_version)
+        super().__init__(api_key_path, question_token_estimate=question_token_estimate, question_type=question_type, model_choice=model_choice, response_tokens=response_tokens, is_azure=is_azure, deployment_id=deployment_id, api_base=api_base, api_version=api_version, debug=debug)
         self.json_path = json_file_path
         self.keys_to_consider = keys_to_consider
         self.all_answers = {}
-        self.debug = debug
         self.questions = question
         self.retain_chunks = retain_chunks
         if self.retain_chunks:
@@ -108,11 +107,15 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         try:
             total_tokens_used = 0
             if self.include_explanations:
-                formatted_questions = f'''For each of the following questions about the {self.chunk_flag} provided, output a yes or no and an explanation for your answer. Each answer and explanation should be separated by the "|" character. For example : 'Yes'|'The text mentions that the patient needs a cane to walk'|'No'|'No text was found' etc. Ignore any text which is part of a standardized questionnaire. The questions are: '''
+                formatted_questions = f'''For each of the following questions about the {self.chunk_flag} provided,
+                                        output a yes or no and an explanation for your answer. Each answer and explanation 
+                                        should be separated by the "|" character. For example: "Yes|The text mentions that 
+                                        the patient needs a cane to walk|No|The text does not mention the heel-shin test" etc. 
+                                        Ignore any text which is part of a standardized questionnaire. The questions are: '''
                 questions_w_explanations=[]                
                 for i, question in enumerate(self.questions.keys()):
 
-                    formatted_questions += f"{i+1}. {question}"
+                    formatted_questions += f"{i+1}. {question} "
                     questions_w_explanations.append(question)
                     questions_w_explanations.append('EXPLANATION: '+question)
 
@@ -136,14 +139,23 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
                     conversation = self.generate_submission(chunk, formatted_questions)   # Generate the conversation to submit
                     answer, tokens_used = self.evaluate_with_openai(conversation) # Evaluate the chunk with OpenAI
                     total_tokens_used += tokens_used
-                    answer=answer.replace('\n', ' ')
+                    answer=answer.replace('\n', '')
                     while answer[-1] in ["|",' ']:
                         answer=answer[:-1]
+                    while '||' in answer:
+                        answer=answer.replace('||','|')
                     try:
                         answer_list = answer.split("|")
+
+                        if len(answer_list)>len(questions_w_explanations) and self.question_type=='inclusion':
+                            print(f"Warning: More answers than questions. Truncating extra answers. Had {len(answer_list)} answers but {len(questions_w_explanations)} questions. The answers are: {answer}")
+                            answer_list = answer_list[:len(questions_w_explanations)]
+
                         answer_formatted={questions_w_explanations[i]:response for i, response in enumerate(answer_list)}
+
                     except:
-                        raise IndexError(f"List index out of range. Had {len(questions_w_explanations)} questions but {len(answer)} answers: {answer}")
+                        self.save_to_json(self.all_answers) 
+                        raise IndexError(f"List index out of range. Had {len(questions_w_explanations)} questions but {len(answer_list)} answers: {answer}")
                     answers[file_name][f"chunk_{chunk_index+1}"] = answer_formatted       # Store the answer for this question and this chunk
             
             print(f'Total tokens used: {total_tokens_used}. Estimated cost: {total_tokens_used*self.cost}')
