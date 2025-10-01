@@ -107,17 +107,16 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         try:
             total_tokens_used = 0
             if self.include_explanations:
-                formatted_questions = f'''For each of the following questions about the {self.chunk_flag} provided,
-                                        output a yes or no and an explanation for your answer. Each answer and explanation 
-                                        should be separated by the "|" character. For example: "Yes|The text mentions that 
-                                        the patient needs a cane to walk|No|The text does not mention the heel-shin test" etc. 
-                                        Ignore any text which is part of a standardized questionnaire. The questions are: '''
+                formatted_questions = (f'''For each of the following questions about the {self.chunk_flag} provided, '''
+                f'''output a yes or no and an explanation for your answer. All answers and explanations '''
+                f'''should be on one line, separated by the "|" character. For example: "Yes|The text mentions that '''
+                f'''the patient needs a cane to walk|No|The text does not mention the heel-shin test" etc. ''' 
+                f'''Ignore any text which is part of a standardized questionnaire. The questions are:''')
                 questions_w_explanations=[]                
                 for i, question in enumerate(self.questions.keys()):
 
-                    formatted_questions += f"{i+1}. {question} "
-                    questions_w_explanations.append(question)
-                    questions_w_explanations.append('EXPLANATION: '+question)
+                    formatted_questions += f" {i+1}. {question}"
+                    questions_w_explanations += [question,'EXPLANATION: '+question]
 
             else:
                 questions_w_explanations=list(self.questions.keys())
@@ -136,32 +135,23 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
                 answers[file_name] = {} # Initialize a dictionary to store chunk-level answers for each question
 
                 for chunk_index, chunk in enumerate(chunks):     # Send a query for each chunk
+
                     conversation = self.generate_submission(chunk, formatted_questions)   # Generate the conversation to submit
-                    answer, tokens_used = self.evaluate_with_openai(conversation) # Evaluate the chunk with OpenAI
+                    answer, tokens_used = self.evaluate_with_openai(conversation, questions_w_explanations) # Evaluate the chunk with OpenAI
                     total_tokens_used += tokens_used
-                    answer=answer.replace('\n', '')
-                    while answer[-1] in ["|",' ']:
-                        answer=answer[:-1]
-                    while '||' in answer:
-                        answer=answer.replace('||','|')
-                    try:
-                        answer_list = answer.split("|")
+                    if answer=="Unidentified":
+                        answer_dict={q:"Unidentified" for q in questions_w_explanations}
+                    else:
+                        answer_dict=dict(zip(questions_w_explanations,answer.split("|")))  # Convert the answer string to a dictionary
 
-                        if len(answer_list)>len(questions_w_explanations) and self.question_type=='inclusion':
-                            print(f"Warning: More answers than questions. Truncating extra answers. Had {len(answer_list)} answers but {len(questions_w_explanations)} questions. The answers are: {answer}")
-                            answer_list = answer_list[:len(questions_w_explanations)]
-
-                        answer_formatted={questions_w_explanations[i]:response for i, response in enumerate(answer_list)}
-
-                    except:
-                        self.save_to_json(self.all_answers) 
-                        raise IndexError(f"List index out of range. Had {len(questions_w_explanations)} questions but {len(answer_list)} answers: {answer}")
-                    answers[file_name][f"chunk_{chunk_index+1}"] = answer_formatted       # Store the answer for this question and this chunk
+                    answers[file_name][f"chunk_{chunk_index+1}"] = answer_dict       # Store the answer for this question and this chunk
             
             print(f'Total tokens used: {total_tokens_used}. Estimated cost: {total_tokens_used*self.cost}')
-            for record, dict in answers.items():
-                dict = {key2: {key1: dict[key1][key2] for key1 in answers[record]} for key2 in answers[record][next(iter(answers[record]))]}
-                self.all_answers[record] = dict
+            with open('debug_answer.json', 'w') as f:
+                json.dump(answers, f, indent=0)
+            for record, mydict in answers.items():
+                mydict = {key2: {key1: mydict[key1][key2] for key1 in answers[record]} for key2 in answers[record][next(iter(answers[record]))]}
+                self.all_answers[record] = mydict
             return self.all_answers
 
         except KeyboardInterrupt:

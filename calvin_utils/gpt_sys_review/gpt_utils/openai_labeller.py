@@ -121,7 +121,7 @@ class CaseReportLabeler(OpenAIJsonEvaluator):
         """
         for q_index, q in enumerate(self.questions.keys()):
             conversation = self.generate_submission(chunk, q)
-            answer, tokens_used = self.evaluate_with_openai(conversation)
+            answer, tokens_used = self.evaluate_with_openai(conversation, [q])
             yield q, answer, tokens_used
     
     def _evaluate_response(self, answer, chunk, chunk_idx):

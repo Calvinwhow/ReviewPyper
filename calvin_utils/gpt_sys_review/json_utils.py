@@ -541,6 +541,8 @@ class CustomSummarizer(InclusionExclusionSummarizer):
     
     def exact_match(self, answer):
         """Checks for an exact match of keywords in the answer text."""
+        if answer == 'Unidentified':
+            return np.nan
         cleaned_answer = re.sub(r'[^\w\s]', '', answer.lower())
         for key, keywords in self.keyword_mapping.items():
             for keyword in keywords:
@@ -606,9 +608,15 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                     summary_dict[article][question] = '|'.join(list(chunks.values()))
                     continue
                 if self.keyword_mapping:
+
                     mapped_answers = [self.keyword_or_fuzzy_match(answer) for answer in chunks.values()]
+                    if np.nan in mapped_answers and not all(x is np.nan for x in mapped_answers):
+                        print(f"Warning: Failed to interpret a chunk from '{article}'. The answers for that subject may be incorrect.")
+
+
                     if all(x is np.nan for x in mapped_answers) or all(x is None for x in mapped_answers):
                         summary_dict[article][question] = np.nan
+
                     elif self.chunks_dir is not None: 
                         valid_answers = [x for x in mapped_answers if x is not np.nan and x is not None]
                         summary_dict[article][question] = np.sum(valid_answers) if valid_answers else 'Unidentified'

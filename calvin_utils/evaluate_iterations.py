@@ -90,9 +90,15 @@ class IterationEvaluator:
     def load_inputs(self):
         self.gt = pd.read_csv(self.ground_path)
         self.gpt = pd.read_csv(self.master_path)
+        # self.gt.rename(columns={col:col.replace('"','').replace("'",'') for col in self.gt.columns}, inplace=True)
+        # self.gpt.rename(columns={col:col.replace('"','').replace("'",'') for col in self.gpt.columns}, inplace=True)
 
-        if "MRN" not in self.gt.columns or "MRN" not in self.gpt.columns:
-            raise ValueError("Both groundTruth.csv and gptMasterList.csv must contain an 'MRN' column.")
+        if "MRN" not in self.gt.columns:
+            # print(self.gt.columns[0],len(self.gt.columns))
+            raise ValueError("groundTruth.csv must contain an 'MRN' column.")
+        if "MRN" not in self.gpt.columns:
+            # print(self.gpt.columns[0],len(self.gpt.columns))
+            raise ValueError("gptMasterList.csv must contain an 'MRN' column.")
 
         self.gt_q_cols = [c for c in self.gt.columns if c != "MRN"]
         missing_in_gpt = [c for c in self.gt_q_cols if c not in self.gpt.columns]

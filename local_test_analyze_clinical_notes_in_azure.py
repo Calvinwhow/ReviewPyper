@@ -5,11 +5,11 @@
 # Set the file you want to analyze (usually from an RPDR request) and the output directory
 notes_file_list=['/Users/rm026/Documents/code/ReviewPyper_testing/msa_prg_and_dis_deidentified.txt'
                  ]
-output_dir='/Users/rm026/Documents/code/ReviewPyper_testing/tests/all_subs_gpt3/'
+output_dir='/Users/rm026/Documents/code/ReviewPyper_testing/tests/msa_full_run_gpt3/'
 
 #Additional files for auc calculation
 ground_truth_path = "/Users/rm026/Documents/code/ReviewPyper_testing/redacted_msa_ground_truth_no_maybes.csv"
-iteration_history_path = "/Users/rm026/Documents/code/ReviewPyper_testing/1_patient_iteration_history.csv"
+iteration_history_path = "/Users/rm026/Documents/code/ReviewPyper_testing/all_patients_iteration_history.csv"
 accuracy_image = output_dir+"iteration_accuracy.png"
 
 # Provide the path to your OpenAI API key
@@ -31,7 +31,7 @@ inclusion_questions = {
 
 # Set test_mode=True during your first few runs, while you tune your questions to get the answers you need
 # - Always run this first, at least once. 
-test_mode=False
+test_mode=True
 
 # Set the questions for data extraction. This is where you extract what you want to know from the included notes.
 # These are more open-ended than inclusion/exclusion questions, and don't have to be yes/no.
@@ -84,28 +84,28 @@ else:
 json_file_path = output_dir+"json/_emr_labeled_sections.json"
 
 # Ask inclusion/exclusion questions
-# from calvin_utils.gpt_sys_review.gpt_utils.openai_json_evaluator import OpenAIJsonEvaluator
-# evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
-#                                 json_file_path=json_file_path, 
-#                                 keys_to_consider=["emr"], 
-#                                 question_type='inclusion', 
-#                                 model_choice="gpt3_small",
-#                                 include_explanations=True,
-#                                 question=inclusion_questions, 
-#                                 test_mode=test_mode,
-#                                 debug=True)
-# exclusion_answers = evaluator.evaluate_all_files()
-# new_json_path = evaluator.save_to_json(exclusion_answers)
+from calvin_utils.gpt_sys_review.gpt_utils.openai_json_evaluator import OpenAIJsonEvaluator
+evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
+                                json_file_path=json_file_path, 
+                                keys_to_consider=["emr"], 
+                                question_type='inclusion', 
+                                model_choice="gpt3_small",
+                                include_explanations=True,
+                                question=inclusion_questions, 
+                                test_mode=test_mode,
+                                debug=True)
+exclusion_answers = evaluator.evaluate_all_files()
+new_json_path = evaluator.save_to_json(exclusion_answers)
 
-# from calvin_utils.gpt_sys_review.json_utils import InclusionExclusionSummarizer
-# summarizer = InclusionExclusionSummarizer(new_json_path, questions=inclusion_questions)
-# result_df, exclusion_raw_path = summarizer.run()
+from calvin_utils.gpt_sys_review.json_utils import InclusionExclusionSummarizer
+summarizer = InclusionExclusionSummarizer(new_json_path, questions=inclusion_questions)
+result_df, exclusion_raw_path = summarizer.run()
 
 
 from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
-# PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, 
-#                                               raw_results_path=exclusion_raw_path, 
-#                                               filename_col='MRN')
+PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, 
+                                              raw_results_path=exclusion_raw_path, 
+                                              filename_col='MRN')
 
 
 csv_path = output_dir+"json_evaluated/inclusion_exclusion_results.csv"
@@ -117,7 +117,9 @@ csv_path = output_dir+"json_evaluated/inclusion_exclusion_results.csv"
 # filter_papers = FilterPapers(csv_path=csv_path, json_path=json_file_path)
 # filtered_json_path = filter_papers.run()
 
-
+extraction_debug=True
+if extraction_debug:
+    os.remove('/Users/rm026/Documents/code/ReviewPyper/debug_openai_chat.txt')
 from calvin_utils.gpt_sys_review.gpt_utils.openai_json_evaluator import OpenAIJsonEvaluator
 evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 json_file_path=json_file_path, 
@@ -127,8 +129,8 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 # retain_chunks=True, 
                                 include_explanations=True,
                                 test_mode=test_mode,
-                                model_choice="gpt4",
-                                debug=True)
+                                model_choice="gpt3_small",
+                                debug=extraction_debug)
 answers = evaluator.evaluate_all_files()
 extraction_chunks_dir=evaluator.chunk_dir
 evaluated_json_path = evaluator.save_to_json(answers)
