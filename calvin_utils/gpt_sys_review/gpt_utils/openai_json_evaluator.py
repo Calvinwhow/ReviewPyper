@@ -104,13 +104,18 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
  
     def evaluate_all_files(self):
         """Estimated cost: {tokens_used*self.cost*len(self.questions.items())*len(chunks)}')"""
+        total_failed_chunks=0
+        total_chunks=0
+        total_retries=0
         try:
             total_tokens_used = 0
             if self.include_explanations:
                 formatted_questions = (f'''For each of the following questions about the {self.chunk_flag} provided, '''
-                f'''output a yes or no and an explanation for your answer. All answers and explanations '''
+                f'''output a separate yes or no and an explanation for your answer. If the answer is not clearly '''
+                f'''stated in the text, respond no and do not try to make inferences. All answers and explanations '''
                 f'''should be on one line, separated by the "|" character. For example: "Yes|The text mentions that '''
-                f'''the patient needs a cane to walk|No|The text does not mention the heel-shin test" etc. ''' 
+                f'''the patient needs a cane to walk|No|The text does not mention the heel-shin test" etc. Be sure to '''
+                f'''answer every question separately and do not combine multiple questions into one answer. ''' 
                 f'''Ignore any text which is part of a standardized questionnaire. The questions are:''')
                 questions_w_explanations=[]                
                 for i, question in enumerate(self.questions.keys()):
@@ -120,7 +125,13 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
 
             else:
                 questions_w_explanations=list(self.questions.keys())
-                formatted_questions = f'''For each of the following questions about the {self.chunk_flag} provided, output a yes or no. Each answer should be followed by the "|" character as a separator. For example : 'Yes'|'No'|'No' etc. The questions are: '''
+                # formatted_questions = f'''For each of the following questions about the {self.chunk_flag} provided, output a yes or no. Each answer should be followed by the "|" character as a separator. For example : 'Yes'|'No'|'No' etc. The questions are: '''
+                formatted_questions = (f'''For each of the following questions about the {self.chunk_flag} provided, '''
+                f'''output a separate yes or no. If the answer is not clearly '''
+                f'''stated in the text, respond no and do not try to make inferences. All answers '''
+                f'''should be on one line, separated by the "|" character. For example: "Yes|Yes|No|Yes" etc. Be sure to  '''
+                f'''answer every question separately and do not combine multiple questions into one answer. ''' 
+                f'''Ignore any text which is part of a standardized questionnaire. The questions are:''')
                 formatted_questions += " ".join(questions_w_explanations)
 
             answers={}
@@ -135,11 +146,13 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
                 answers[file_name] = {} # Initialize a dictionary to store chunk-level answers for each question
 
                 for chunk_index, chunk in enumerate(chunks):     # Send a query for each chunk
-
+                    total_chunks+=1 
                     conversation = self.generate_submission(chunk, formatted_questions)   # Generate the conversation to submit
-                    answer, tokens_used = self.evaluate_with_openai(conversation, questions_w_explanations) # Evaluate the chunk with OpenAI
+                    answer, tokens_used, retries = self.evaluate_with_openai(conversation, questions_w_explanations) # Evaluate the chunk with OpenAI
                     total_tokens_used += tokens_used
+                    total_retries+=retries
                     if answer=="Unidentified":
+                        total_failed_chunks+=1
                         answer_dict={q:"Unidentified" for q in questions_w_explanations}
                     else:
                         answer_dict=dict(zip(questions_w_explanations,answer.split("|")))  # Convert the answer string to a dictionary
@@ -147,6 +160,7 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
                     answers[file_name][f"chunk_{chunk_index+1}"] = answer_dict       # Store the answer for this question and this chunk
             
             print(f'Total tokens used: {total_tokens_used}. Estimated cost: {total_tokens_used*self.cost}')
+            print(f'Total chunks: {total_chunks}. total number of retries: {total_retries}. Total failed chunks: {total_failed_chunks} ({total_failed_chunks/total_chunks*100:.1f}%)')
             with open('debug_answer.json', 'w') as f:
                 json.dump(answers, f, indent=0)
             for record, mydict in answers.items():
@@ -155,10 +169,12 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
             return self.all_answers
 
         except KeyboardInterrupt:
-            print("KeyboardInterrupt detected. Saving results to JSON and closing.")
-            self.save_to_json(self.all_answers)
+            print("KeyboardInterrupt detected. Saving preliminary results to JSON and closing.")
+            with open('debug_answer.json', 'w') as f:
+                json.dump(answers, f, indent=0)
             sys.exit(0)
         except Exception as e:
-            self.save_to_json(self.all_answers)
-            raise RuntimeError(f"Critical error occured: \n\t{e}. Saving results and aborting.")
+            with open('debug_answer.json', 'w') as f:
+                json.dump(answers, f, indent=0)
+            raise RuntimeError(f"Critical error occured: \n\t{e}. Saving preliminary results and aborting.")
         

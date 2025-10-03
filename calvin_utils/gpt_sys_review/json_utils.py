@@ -587,7 +587,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         exact_result = self.exact_match(answer)
         return exact_result if exact_result is not None else self.fuzzy_match(answer)
     
-    def summarize_results_with_mapping(self):
+    def summarize_results_with_mapping(self, positive_explanations_only=False):
         """
         Summarizes the results based on keyword mapping and fuzzy matching.
         
@@ -604,8 +604,11 @@ class CustomSummarizer(InclusionExclusionSummarizer):
             for question, chunks in questions.items():
                 #Extract binary data and process
                 if question[:11]=='EXPLANATION':
-                    
-                    summary_dict[article][question] = '|'.join(list(chunks.values()))
+                    if positive_explanations_only:
+                        pos_explanations = [explanation for explanation,answer_bool in zip(chunks.values(),mapped_answers) if answer_bool==1]
+                        summary_dict[article][question] = '|'.join(pos_explanations)
+                    else:
+                        summary_dict[article][question] = '|'.join(list(chunks.values()))
                     continue
                 if self.keyword_mapping:
 
@@ -664,21 +667,21 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                     
         return pd.DataFrame.from_dict(summary_dict, orient='index').fillna(np.nan)
     
-    def summarize(self):
+    def summarize(self, positive_explanations_only=False):
         if self.summary_type == 'llm':
             df = self.summarize_with_llm()
         else:
-            df = self.summarize_results_with_mapping()
+            df = self.summarize_results_with_mapping(positive_explanations_only=positive_explanations_only)
         return df
     
-    def run_custom(self):
+    def run_custom(self, positive_explanations_only=False):
         """
         Executes all the summarization, saving, and optional row-dropping steps in one method.
         
         Returns:
         - DataFrame: Pandas DataFrame containing the summarized results.
         """
-        self.df = self.summarize()
+        self.df = self.summarize(positive_explanations_only=positive_explanations_only)
         raw_path = self.save_to_csv(filename=f'responses_raw')
         print(f"Your CSV files of filtered manuscripts have been saved to this directory: \n {os.path.dirname(raw_path)}")
         return self.df, raw_path

@@ -117,8 +117,8 @@ class OpenAIChatBase(OpenAIBase):
             try:
                 answer, tokens_used = self.get_response_from_openai(conversation)
                 
-                answer=answer.replace('\n', '')
-                while answer[-1] in ["|",' ']:
+                # answer=answer.replace('\n', '')
+                while answer[-1] in ["|",' ', '\n']:
                     answer=answer[:-1]
                 while '||' in answer:
                     answer=answer.replace('||','|')
@@ -126,16 +126,19 @@ class OpenAIChatBase(OpenAIBase):
                 is_answer_good, answer = self.verify_response_formatting(answer,questions_list)
                 # is_answer_good=False
                 if not is_answer_good:
-                    raise IndexError("ChatGPT response not formatted correctly: does not have the correct number of answers.")
+                    with open('error_log.txt', 'a') as f:
+                        answer_count=len(answer.replace('\n','|').replace('||','|').split('|'))
+                        f.write(f"{answer_count} {answer}\n\n")
+                    raise IndexError("ChatGPT response does not have the correct number of answers")
                 
                 self.q_index += 1
-                return answer, tokens_used
+                return answer, tokens_used, retry_count
             
             except Exception as e:
                 retry_count, sleep_time = self.handle_response_exception(e, retry_count)
                 time.sleep(sleep_time)
         print("Failed to get a response after 4 attempts. Setting chunk to Unidentified")
-        return "Unidentified", tokens_used
+        return "Unidentified", tokens_used, retry_count
 
     def get_response_from_openai(self, conversation):
         """Sends a conversation to OpenAI and retrieves the assistant's last answer."""
@@ -165,19 +168,24 @@ class OpenAIChatBase(OpenAIBase):
 
         if len(answer.split("|"))==len(questions):
             return True, answer
-        elif len(answer.replace('\n','|').split("|"))==len(questions):
-            return True, answer.replace('\n','|')
-        else:
-            return False, answer
+        
+        new_answer=answer.replace('\n','|')
+        while '||' in new_answer:
+            new_answer=new_answer.replace('||','|')
+
+        if len(new_answer.split("|"))==len(questions):
+            return True, new_answer
+    
+        return False, answer
 
     def handle_response_exception(self, e, retry_count, q_index=0):
         """Handles exceptions during API calls to OpenAI"""
         if type(e).__name__ == 'RateLimitError':
-            print(f"Rate limit error: {e}. Retrying Question No. {q_index} Attempt:({retry_count+1})")
+            print(f"Rate limit error: {e}. Retrying submission. Attempt:({retry_count+1})")
             return retry_count + 1, 30
         elif  type(e).__name__ == 'IndexError':
-            print(f"Index error: {e}. Retrying Question No. {q_index} Attempt:({retry_count+1})")
+            print(f"Index error: {e}. Retrying submission. Attempt:({retry_count+1})")
             return retry_count + 1, 5
         else:
-            print(f"An error occurred: {e}. Retrying Question No. {q_index} Attempt:({retry_count+1})")
+            print(f"An error occurred: {e}. Retrying submission. Attempt:({retry_count+1})")
             return retry_count + 1, 1
