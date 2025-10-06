@@ -115,6 +115,7 @@ class OpenAIChatBase(OpenAIBase):
         retry_count = 0
         while retry_count < 4:
             try:
+                tokens_used=0 # if there's an error in get_response_from_openai, tokens_used won't be defined and can't be returned, so set it to 0 here.
                 answer, tokens_used = self.get_response_from_openai(conversation)
                 
                 # answer=answer.replace('\n', '')

@@ -7,6 +7,11 @@ notes_file_list=['/Users/rm026/Documents/hbs_study_patient_notes/test_patient_fi
                  ]
 output_dir='/Users/rm026/Documents/hbs_study_patient_notes/py_testing_output_2/'
 
+#Additional files for auc calculation
+ground_truth_path = "/Users/rm026/Documents/code/ReviewPyper_testing/redacted_msa_ground_truth_no_maybes.csv"
+iteration_history_path = "/Users/rm026/Documents/code/ReviewPyper_testing/all_patients_gpt4_iteration_history.csv"
+accuracy_image = output_dir+"iteration_accuracy.png"
+
 # Provide the path to your OpenAI API key
 api_key_path = "/Users/rm026/Documents/code/openai-key.txt"
 
@@ -35,7 +40,6 @@ inclusion_questions = {
 # "Prioritizing implicit and explicit information, does the patient have a documented seizure in their medical record? (Yes/No)": 1,
 # "Does this manuscript report memory outcomes? (Yes/No)": 0
 }
-
 # Set test_mode=True during your first few runs, while you tune your questions to get the answers you need
 # - Always run this first, at least once. 
 test_mode=False
@@ -44,10 +48,15 @@ test_mode=False
 # These are more open-ended than inclusion/exclusion questions, and don't have to be yes/no.
 # See notebook 05, section 02 for examples.
 extraction_questions = {
-    "Prioritizing implicit and explicit information, report the date in MM/DD/YY format that the patient experienced their first stroke?": "stroke_date",
-    "Prioritizing implicit and explicit information, does the patient have a documented seizure in their medical record? ": "seizure",
-    }
-
+                        "Does this patient have difficulty walking or disturbed gait? For instance, they may mention the patient staggering, difficulties in half turn, requiring support from a wall or stick, or being entirely unable to walk on their own.":'gait',
+                        "Does this patient have difficulty performing the heel-shin maneuver such as lowering their heel jerkily, or with lateral movements?":'knee-tibia',
+                        "Does this patient’s speech show dysarthria or slurring to the point that some words are not intelligible? For instance, the text may mention having to ask the patient to repeat themselves multiple times. Do not consider hypophonia.":'dysarthria',
+                        "Does this patient have oculomotor abnormalities? For example, the text may mention slowed pursuit, saccadic intrusions, hypo/hypermetric saccade, or nystagmus.":'oculomotor',
+                        "Does this patient show dysmetria, oscillating movement, or segmented movement of the arm or hand when performing the finger-nose maneuver? Ignore any slowness.":'finger-nose',
+                        "Does this medical record state that the patient has had a seizure?":'seizure',
+                        "Is this patient afraid of having a seizure during the next month?":'seizure_fear',
+                        "Does this medical record state that the patient has had a stroke? Ignore any family histories of stroke or transient ischemic attacks. ":'stroke',
+}
 # - Set extraction_answers_binary to False if the extraction questions you asked do not have binary answers. 
 #    - We will extract the raw data, like specific result values, for you to review.
 # - Set extraction_answers_binary to True if the extraction questions you asked do have binary answers. 
@@ -57,6 +66,7 @@ extraction_answers_binary=True
 ################################################################################
 # DO NOT CHANGE ANYTHING BELOW THIS LINE UNLESS YOU KNOW WHAT YOU ARE DOING! #
 ################################################################################
+import os 
 
 from calvin_utils.gpt_sys_review.txt_utils import ClinicalNotesExtractor
 extractor=ClinicalNotesExtractor(notes_file_list, output_dir)
@@ -70,16 +80,19 @@ preprocessed_path = preprocessor.process_files()
 article_type = 'emr'  # 'case', 'research', 'emr', or 'other'
 master_list_path = output_dir+"master_list.csv"
 
-#Additional files for auc calculation
-ground_truth_path = output_dir+"ground_truth.csv"
-iteration_history_path = output_dir+"iteration_history.csv"
-accuracy_image = output_dir+"iteration_accuracy.png"
-
-
 from calvin_utils.gpt_sys_review.json_utils import SectionLabeler
 # Initialize the SectionLabeler class and process the files
-section_labeler = SectionLabeler(folder_path=preprocessed_path, article_type="emr", api_key_path=api_key_path, is_azure=True, deployment_id=preprocessing_model_deployment_id, api_version=api_version, api_base=api_base)
-section_labeler.process_files()
+if os.path.exists(output_dir+"json/_emr_labeled_sections.json"):
+    print(f"Found existing labeled sections at {output_dir+'json/_emr_labeled_sections.json'}. Skipping section labeling step.")
+else:
+    section_labeler = SectionLabeler(folder_path=preprocessed_path, 
+                                    article_type="emr", 
+                                    api_key_path=api_key_path, 
+                                    is_azure=True, 
+                                    deployment_id=preprocessing_model_deployment_id, 
+                                    api_version=api_version, 
+                                    api_base=api_base)
+    section_labeler.process_files()
 
 
 keys_to_consider = [ "emr"]  # Add or remove keys as per your requirement
@@ -90,7 +103,17 @@ json_file_path = output_dir+"json/_emr_labeled_sections.json"
 
 # Ask inclusion/exclusion questions
 from calvin_utils.gpt_sys_review.gpt_utils.openai_json_evaluator import OpenAIJsonEvaluator
-evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path, json_file_path=json_file_path, keys_to_consider=keys_to_consider, question_type=article_type, model_choice="gpt4",  question=inclusion_questions, test_mode=test_mode, is_azure=True, deployment_id=preprocessing_model_deployment_id, api_version=api_version, api_base=api_base)
+evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path, 
+                                json_file_path=json_file_path, 
+                                keys_to_consider=['emr'], 
+                                question_type='inclusion', 
+                                model_choice="gpt3_small",  
+                                question=inclusion_questions, 
+                                test_mode=test_mode, 
+                                is_azure=True, 
+                                deployment_id=preprocessing_model_deployment_id, 
+                                api_version=api_version, 
+                                api_base=api_base)
 exclusion_answers = evaluator.evaluate_all_files()
 new_json_path = evaluator.save_to_json(exclusion_answers)
 
@@ -112,6 +135,11 @@ csv_path = output_dir+"json_evaluated/inclusion_exclusion_results.csv"
 # filter_papers = FilterPapers(csv_path=csv_path, json_path=json_file_path)
 # filtered_json_path = filter_papers.run()
 
+extraction_debug=True
+if extraction_debug and os.path.exists('/Users/rm026/Documents/code/ReviewPyper/debug_openai_chat.txt'):
+    os.remove('/Users/rm026/Documents/code/ReviewPyper/debug_openai_chat.txt')
+elif extraction_debug and os.path.exists('/Users/rm026/Documents/code/ReviewPyper/error_log.txt'):
+    os.remove('/Users/rm026/Documents/code/ReviewPyper/error_log.txt')
 
 from calvin_utils.gpt_sys_review.gpt_utils.openai_json_evaluator import OpenAIJsonEvaluator
 evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
@@ -120,12 +148,14 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 question_type="emr_extraction",
                                 question=extraction_questions,
                                 test_mode=test_mode,
+                                retain_chunks=True, 
+                                include_explanations=True,
                                 model_choice="gpt4",
                                 is_azure=True,
                                 deployment_id=extraction_model_deployment_id,
                                 api_base=api_base,
                                 api_version=api_version,
-                                debug=False)
+                                debug=extraction_debug)
 answers = evaluator.evaluate_all_files()
 extraction_chunks_dir=evaluator.chunk_dir
 evaluated_json_path = evaluator.save_to_json(answers)
