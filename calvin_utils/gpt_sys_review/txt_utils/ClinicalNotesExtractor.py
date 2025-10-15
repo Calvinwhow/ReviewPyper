@@ -48,7 +48,7 @@ class ClinicalNotesExtractor:
             mrn_index=file_header.split(self.separator).index(self.MRN_str)
             break
         
-        note=file_header
+        note=''
 
         for row in reader:
             
@@ -67,7 +67,7 @@ class ClinicalNotesExtractor:
                 with open(os.path.join(self.output_dir, f'{mrn}.txt'), 'a', encoding='utf-8') as subject_file:
                     subject_file.write(note)
 
-                note=file_header
+                note=''
                 header=''
     
     def generate_master_list(self):

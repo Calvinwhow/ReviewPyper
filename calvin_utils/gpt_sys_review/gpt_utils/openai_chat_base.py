@@ -43,7 +43,7 @@ class OpenAIChatBase(OpenAIBase):
             raise ValueError(f"Model choice {model_choice} not supported. Please choose from: {', '.join(models.keys())}.")
         
         self.model = models[model_choice]["name"]
-        self.token_limit = models[model_choice]["token_limit"] - np.round(1.2*(self.question_token_estimate))
+        self.token_limit = (models[model_choice]["token_limit"] - np.round(1.2*(self.question_token_estimate)))//2
         self.cost = models[model_choice]["cost"]
         
     def get_question_settings(self, question_type):

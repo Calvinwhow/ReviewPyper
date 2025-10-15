@@ -625,7 +625,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                         summary_dict[article][question] = np.sum(valid_answers) if valid_answers else 'Unidentified'
 
                         pos_chunks=[chunks_dict[f'chunk_{i+1}'] for i, answer in enumerate(mapped_answers) if answer==1]
-                        summary_dict[article]['CHUNKS: '+question] = '|'.join(pos_chunks)
+                        summary_dict[article]['CHUNKS: '+question] = '\n|\n'.join(pos_chunks)
                         
                     else:
                         valid_answers = [x for x in mapped_answers if x is not np.nan and x is not None]
