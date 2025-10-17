@@ -42,7 +42,7 @@ class OpenAIChatBase(OpenAIBase):
             raise ValueError(f"Model choice {model_choice} not supported. Please choose from: {', '.join(models.keys())}.")
         
         self.model = models[model_choice]["name"]
-        self.token_limit = (models[model_choice]["token_limit"] - np.round(1.2*(self.question_token_estimate)))//2
+        self.token_limit = (models[model_choice]["token_limit"] - np.round(1.2*(self.question_token_estimate)))//4
         self.cost = models[model_choice]["cost"]
         
     def get_question_settings(self, question_type):
@@ -73,14 +73,6 @@ class OpenAIChatBase(OpenAIBase):
             raise ValueError(f"Model choice {question_type} not supported, please choose gpt4, gpt3_large, or gpt3_small.")
     
     ### Chunking methods ###
-    # def add_context_to_chunks(self, chunks, debug=False):
-    #     """Method to append a message to the end of every chunk. Set in self.get_question_settings"""
-    #     if self.chunk_end is not None:
-    #         for i in range(len(chunks)):
-    #             chunks[i] += self.chunk_end
-    #     print(chunks) if debug else None
-    #     return chunks
-        
     def call_chunker(self, selected_text):
         """
         Uses TextChunker defined in text_utils.py to extract text in chunks
@@ -113,14 +105,8 @@ class OpenAIChatBase(OpenAIBase):
                 tokens_used=0 # if there's an error in get_response_from_openai, tokens_used won't be defined and can't be returned, so set it to 0 here.
                 answer, tokens_used = self.get_response_from_openai(conversation)
                 
-                is_answer_good, answer = self.verify_response_formatting(answer,questions_list)
+                answer = self.verify_response_formatting(answer,questions_list)
 
-                if not is_answer_good:
-                    with open('error_log.txt', 'a') as f:
-                        answer_count=len(answer.replace('\n','|').replace('||','|').split('|'))
-                        f.write(f"{answer_count} {answer}\n\n")
-                    raise IndexError("ChatGPT response does not have the correct number of answers")
-                
                 self.q_index += 1
                 return answer, tokens_used, retry_count
             
@@ -164,15 +150,19 @@ class OpenAIChatBase(OpenAIBase):
         answer=answer.replace('||','|')
 
         if len(answer.split("|"))==len(questions):
-            return True, answer
+            return answer
         
         new_answer=answer.replace('\n','|')
         new_answer=new_answer.replace('||','|')
 
         if len(new_answer.split("|"))==len(questions):
-            return True, new_answer
-    
-        return False, answer
+            return new_answer
+        else:
+            with open('error_log.txt', 'a') as f:
+                answer_count=len(answer.replace('\n','|').replace('||','|').split('|'))
+                f.write(f"{answer_count} {answer}\n\n")
+            raise IndexError("ChatGPT response does not have the correct number of answers")
+
 
     def handle_response_exception(self, e, retry_count, q_index=0):
         """Handles exceptions during API calls to OpenAI"""

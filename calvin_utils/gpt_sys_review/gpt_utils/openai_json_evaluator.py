@@ -112,13 +112,14 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         file_answers = {} # Initialize a dictionary to store chunk-level answers for each question
         file_retries=0
         file_tokens_used=0
+        file_failed_chunks=0
 
         for chunk_index, chunk in enumerate(chunks):     # Send a query for each chunk
-            total_chunks+=1 
+
             conversation = self.generate_submission(chunk, formatted_questions)   # Generate the conversation to submit
             answer, tokens_used, retries = self.evaluate_with_openai(conversation, questions_w_explanations) # Evaluate the chunk with OpenAI
             file_tokens_used += tokens_used
-            file_total_retries += retries
+            file_retries += retries
 
             if answer=="Unidentified":
                 file_failed_chunks+=1
@@ -136,11 +137,13 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
             prompt_choice='binary_questions_with_explanations'
             questions_w_explanations=[prepend+q for q in questions_list for prepend in ['','EXPLANATION: ']]     
         else:
-            prompt_choice='binary_questions_no_explanations'
+            prompt_choice='binary_questions_without_explanations'
             questions_w_explanations=questions_list
         
         formatted_questions = json.load(open(os.path.join(os.path.dirname(__file__), 'prompts.json')))[prompt_choice]
+        formatted_questions = formatted_questions.replace("[CHUNK_FLAG]", self.chunk_flag)
         formatted_questions += " ".join(questions_w_explanations)
+
         return formatted_questions, questions_w_explanations
     
 
@@ -158,15 +161,16 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
 
     def evaluate_all_files(self):
         """Estimated cost: {tokens_used*self.cost*len(self.questions.items())*len(chunks)}')"""
-        total_failed_chunks=0
-        total_chunks=0
-        total_retries=0
+
         try:
             total_tokens_used = 0
 
             formatted_questions, questions_w_explanations = self.format_questions(list(self.questions.keys()))
 
             answers_dict={}
+            total_failed_chunks=0
+            total_retries=0
+            total_chunks=0
             for file_name, file_text in tqdm(self.relevant_text_by_file.items()):
 
                 answers_dict[file_name], file_tokens_used, file_retries, file_failed_chunks=self.evaluate_single_file(file_name, file_text, formatted_questions, questions_w_explanations)
@@ -174,6 +178,7 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
                 total_tokens_used += file_tokens_used
                 total_retries+=file_retries
                 total_failed_chunks+=file_failed_chunks
+                total_chunks+=len(answers_dict[file_name])
 
             # print(f'Total tokens used: {total_tokens_used}. Estimated cost: {total_tokens_used*self.cost}')
             print(f'Total chunks: {total_chunks}. total number of retries: {total_retries}. Total failed chunks: {total_failed_chunks} ({total_failed_chunks/total_chunks*100:.1f}%)')
