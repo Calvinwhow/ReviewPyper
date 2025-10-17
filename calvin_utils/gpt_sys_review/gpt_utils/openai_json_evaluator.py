@@ -101,7 +101,61 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
 
 
     ### Evlaluation Methods ###
- 
+    def evaluate_single_file(self, file_name, file_text, formatted_questions, questions_w_explanations):
+
+        print('evaluating '+file_name)
+        chunks = self.call_chunker(file_text)  # Chunk text by token limits
+
+        if self.retain_chunks:
+            chunk_path=self.save_chunks(file_name, chunks)
+
+        file_answers = {} # Initialize a dictionary to store chunk-level answers for each question
+        file_retries=0
+        file_tokens_used=0
+
+        for chunk_index, chunk in enumerate(chunks):     # Send a query for each chunk
+            total_chunks+=1 
+            conversation = self.generate_submission(chunk, formatted_questions)   # Generate the conversation to submit
+            answer, tokens_used, retries = self.evaluate_with_openai(conversation, questions_w_explanations) # Evaluate the chunk with OpenAI
+            file_tokens_used += tokens_used
+            file_total_retries += retries
+
+            if answer=="Unidentified":
+                file_failed_chunks+=1
+                chunk_answers={q:"Unidentified" for q in questions_w_explanations}
+            else:
+                chunk_answers=dict(zip(questions_w_explanations,answer.split("|")))  # Convert the answer string to a dictionary
+
+            file_answers[f"chunk_{chunk_index+1}"] = chunk_answers      # Store the answer for this question and this chunk
+        
+        return file_answers, file_tokens_used, file_retries, file_failed_chunks
+    
+    def format_questions(self, questions_list):
+        """Formats the questions for submission to the OpenAI API."""
+        if self.include_explanations:
+            prompt_choice='binary_questions_with_explanations'
+            questions_w_explanations=[prepend+q for q in questions_list for prepend in ['','EXPLANATION: ']]     
+        else:
+            prompt_choice='binary_questions_no_explanations'
+            questions_w_explanations=questions_list
+        
+        formatted_questions = json.load(open(os.path.join(os.path.dirname(__file__), 'prompts.json')))[prompt_choice]
+        formatted_questions += " ".join(questions_w_explanations)
+        return formatted_questions, questions_w_explanations
+    
+
+    def swap_heirarchy(self, answers_dict):
+        """Swaps the hierarchy of the answers dictionary from 
+        {file: {chunk: {question: answer}}} to {file: {question: {chunk: answer}}}"""
+        reorganized_answers = {}
+        for record, mydict in answers_dict.items():
+
+            mydict = {key2: {key1: mydict[key1][key2] for key1 in answers_dict[record]} for key2 in answers_dict[record][next(iter(answers_dict[record]))]}
+            reorganized_answers[record] = mydict
+
+        return reorganized_answers
+
+
     def evaluate_all_files(self):
         """Estimated cost: {tokens_used*self.cost*len(self.questions.items())*len(chunks)}')"""
         total_failed_chunks=0
@@ -109,60 +163,32 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         total_retries=0
         try:
             total_tokens_used = 0
-            if self.include_explanations:
-                formatted_questions = json.load(open(os.path.join(os.path.dirname(__file__), 'prompts.json')))[ 'binary_questions_with_explanations']
-                formatted_questions += " ".join(list(self.questions.keys()))
-                questions_w_explanations=[prepend+question for question in self.questions.keys() for prepend in ['','EXPLANATION: ']]         
-                # for i, question in enumerate(self.questions.keys()):
 
-                #     formatted_questions += f" {i+1}. {question}"
-                #     questions_w_explanations += [question,'EXPLANATION: '+question]
-            else:
-                questions_w_explanations=list(self.questions.keys())
-                formatted_questions = json.load(open(os.path.join(os.path.dirname(__file__), 'prompts.json')))[ 'binary_questions_with_explanations']
-                formatted_questions += " ".join(questions_w_explanations)
+            formatted_questions, questions_w_explanations = self.format_questions(list(self.questions.keys()))
 
-            answers={}
+            answers_dict={}
             for file_name, file_text in tqdm(self.relevant_text_by_file.items()):
 
-                print('evaluating '+file_name)
-                chunks = self.call_chunker(file_text)  # Chunk text by token limits
+                answers_dict[file_name], file_tokens_used, file_retries, file_failed_chunks=self.evaluate_single_file(file_name, file_text, formatted_questions, questions_w_explanations)
 
-                if self.retain_chunks:
-                    chunk_path=self.save_chunks(file_name, chunks)
+                total_tokens_used += file_tokens_used
+                total_retries+=file_retries
+                total_failed_chunks+=file_failed_chunks
 
-                answers[file_name] = {} # Initialize a dictionary to store chunk-level answers for each question
-
-                for chunk_index, chunk in enumerate(chunks):     # Send a query for each chunk
-                    total_chunks+=1 
-                    conversation = self.generate_submission(chunk, formatted_questions)   # Generate the conversation to submit
-                    answer, tokens_used, retries = self.evaluate_with_openai(conversation, questions_w_explanations) # Evaluate the chunk with OpenAI
-                    total_tokens_used += tokens_used
-                    total_retries+=retries
-                    if answer=="Unidentified":
-                        total_failed_chunks+=1
-                        answer_dict={q:"Unidentified" for q in questions_w_explanations}
-                    else:
-                        answer_dict=dict(zip(questions_w_explanations,answer.split("|")))  # Convert the answer string to a dictionary
-
-                    answers[file_name][f"chunk_{chunk_index+1}"] = answer_dict       # Store the answer for this question and this chunk
-            
-            print(f'Total tokens used: {total_tokens_used}. Estimated cost: {total_tokens_used*self.cost}')
+            # print(f'Total tokens used: {total_tokens_used}. Estimated cost: {total_tokens_used*self.cost}')
             print(f'Total chunks: {total_chunks}. total number of retries: {total_retries}. Total failed chunks: {total_failed_chunks} ({total_failed_chunks/total_chunks*100:.1f}%)')
-            with open('debug_answer.json', 'w') as f:
-                json.dump(answers, f, indent=0)
-            for record, mydict in answers.items():
-                mydict = {key2: {key1: mydict[key1][key2] for key1 in answers[record]} for key2 in answers[record][next(iter(answers[record]))]}
-                self.all_answers[record] = mydict
+
+            self.all_answers=self.swap_heirarchy(answers_dict)
+
             return self.all_answers
 
         except KeyboardInterrupt:
             print("KeyboardInterrupt detected. Saving preliminary results to JSON and closing.")
             with open('debug_answer.json', 'w') as f:
-                json.dump(answers, f, indent=0)
+                json.dump(answers_dict, f, indent=0)
             sys.exit(0)
         except Exception as e:
             with open('debug_answer.json', 'w') as f:
-                json.dump(answers, f, indent=0)
+                json.dump(answers_dict, f, indent=0)
             raise RuntimeError(f"Critical error occured: \n\t{e}. Saving preliminary results and aborting.")
         

@@ -54,6 +54,8 @@ class OpenAIChatBase(OpenAIBase):
             self.chunk_flag = "[RESEARCH REPORT]"
         elif self.question_type=="emr_extraction":
             self.directive = "You are a medical assistant. Your task is to carefully evaluate the following medical record. Use both explicit information and reasonable inferences to answer the questions. Be as concise as possible."
+        elif self.question_type=="emr_strict_extraction":
+            self.directive = "You are a medical assistant. Your task is to carefully evaluate the following medical record. Use only explicit information to answer the questions and do not make inferences. Be as concise as possible."
             self.chunk_flag = "[EMR REPORT]"
         elif self.question_type=="case":
             self.directive = "You are a medical assistant. Your task is to carefully evaluate the following case report. Use both explicit information and reasonable inferences to answer the questions. Be as concise as possible."
@@ -111,14 +113,8 @@ class OpenAIChatBase(OpenAIBase):
                 tokens_used=0 # if there's an error in get_response_from_openai, tokens_used won't be defined and can't be returned, so set it to 0 here.
                 answer, tokens_used = self.get_response_from_openai(conversation)
                 
-                # answer=answer.replace('\n', '')
-                while answer[-1] in ["|",' ', '\n']:
-                    answer=answer[:-1]
-                while '||' in answer:
-                    answer=answer.replace('||','|')
-                
                 is_answer_good, answer = self.verify_response_formatting(answer,questions_list)
-                # is_answer_good=False
+
                 if not is_answer_good:
                     with open('error_log.txt', 'a') as f:
                         answer_count=len(answer.replace('\n','|').replace('||','|').split('|'))
@@ -131,6 +127,7 @@ class OpenAIChatBase(OpenAIBase):
             except Exception as e:
                 retry_count, sleep_time = self.handle_response_exception(e, retry_count)
                 time.sleep(sleep_time)
+
         print("Failed to get a response after 4 attempts. Setting chunk to Unidentified")
         return "Unidentified", tokens_used, retry_count
 
@@ -159,13 +156,18 @@ class OpenAIChatBase(OpenAIBase):
         return response['choices'][-1]['message']['content'], response["usage"]["total_tokens"]
 
     def verify_response_formatting(self, answer,questions):
+        """Verifies that the response from ChatGPT has the correct formatting, i.e. there is an answer
+        for each question and they are separated by a '|' character."""
+
+        while answer[-1] in ["|",' ', '\n']:
+            answer=answer[:-1]
+        answer=answer.replace('||','|')
 
         if len(answer.split("|"))==len(questions):
             return True, answer
         
         new_answer=answer.replace('\n','|')
-        while '||' in new_answer:
-            new_answer=new_answer.replace('||','|')
+        new_answer=new_answer.replace('||','|')
 
         if len(new_answer.split("|"))==len(questions):
             return True, new_answer
