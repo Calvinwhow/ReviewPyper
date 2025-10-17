@@ -69,11 +69,11 @@ class OpenAIChatBase(OpenAIBase):
         elif self.question_type=="inclusion":
             self.directive = "You are a helpful binary assistant, only able to speak in 1s or 0s. Your task is to carefully evaluate the following medical article. Use both explicit information and reasonable inferences to answer the questions. Responses should be: 0 for No, 1 for Y."
             self.chunk_flag = "[MEDICAL ARTICLE]"
-            self.chunk_end = "Responses should be: 0 for No, 1 for Y."
+            self.chunk_end = ""
         elif self.question_type=="labelling":
             self.directive = "You are a text labelling assistant. Your task is to carefully evaluate the following case report. Use both explicit information and reasonable inferences to answer the questions. Responses should be: 0 for No, 1 for Y."
             self.chunk_flag = "[SEGMENT]"
-            self.chunk_end = "Responses should be: 0 for No, 1 for Y."
+            self.chunk_end = ""
         else:
             raise ValueError(f"Model choice {question_type} not supported, please choose gpt4, gpt3_large, or gpt3_small.")
     

@@ -111,16 +111,16 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
             total_tokens_used = 0
             if self.include_explanations:
                 formatted_questions = (f'''For each of the following questions about the {self.chunk_flag} provided, '''
-                f'''output a separate yes or no and an explanation for your answer. If the answer is not clearly '''
-                f'''stated in the text, respond no and do not try to make inferences. All answers and explanations '''
-                f'''should be on one line, separated by the "|" character. For example: "Yes|The text mentions that '''
-                f'''the patient needs a cane to walk|No|The text does not mention the heel-shin test" etc. Be sure to '''
+                f'''output an integer followed by an explanation for your answer. If the answer is not clearly '''
+                f'''stated in the text, respond 0 and do not try to make inferences. All answers and explanations '''
+                f'''should be on one line, separated by the "|" character. Suppose there are n questions. The format of your output should look like "integer_1|explanation_1|integer_2|explanation_2...integer_n|explanation_n" For example: "2|The text mentions that '''
+                f'''the patient needs a cane to walk|0|The text does not mention the heel-shin test" etc. Be sure to '''
                 f'''answer every question separately and do not combine multiple questions into one answer. ''' 
                 f'''Ignore any text which is part of a standardized questionnaire. The questions are:''')
                 questions_w_explanations=[]                
                 for i, question in enumerate(self.questions.keys()):
 
-                    formatted_questions += f" {i+1}. {question}"
+                    formatted_questions += f" | {question}"
                     questions_w_explanations += [question,'EXPLANATION: '+question]
 
             else:

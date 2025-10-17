@@ -135,11 +135,11 @@ class CaseReportLabeler(OpenAIJsonEvaluator):
         """
         first_key = next(iter(self.results_dict))
         if any(ans in answer.lower() for ans in self.acceptable_answers):
-            self.results_dict[first_key].append(f"Chunk {chunk_idx}: {chunk}")
+            self.results_dict[first_key].append(chunk)
         else:
             if 'other' not in self.results_dict:
                 self.results_dict['other'] = []
-            self.results_dict['other'].append(f"Chunk {chunk_idx}: {chunk}")
+            self.results_dict['other'].append(chunk)
         if self.verbose: print(f"Evaluating chunk {chunk_idx} with answer: {answer}")
     
     def _finalize_results(self):
