@@ -458,13 +458,13 @@ class InclusionExclusionSummarizer:
                 # Convert all chunk answers to lowercase and check for "yes" keywords
                 binary_answers = [polarity if any(s in answer.lower() for s in self.acceptable_strings) else abs(1 - polarity) for answer in chunks.values()]
                 
-                # Sum up the binary answers for each question
-                summary_dict[article][question] = sum(binary_answers)
+                # Set answer to 1 if any chunk is positive, otherwise 0
+                summary_dict[article][question] = 1 if sum(binary_answers) > 0 else 0
         # Convert the summary dictionary to a DataFrame
         df = pd.DataFrame.from_dict(summary_dict, orient='index')
         
         # Set all values above 0 to 1
-        # df[df > 0] = 1
+        # df[(type(df)!=str) and (df > 0)] = 1
         
         return df
     

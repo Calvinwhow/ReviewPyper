@@ -110,28 +110,16 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         try:
             total_tokens_used = 0
             if self.include_explanations:
-                formatted_questions = (f'''For each of the following questions about the {self.chunk_flag} provided, '''
-                f'''output a separate yes or no and an explanation for your answer. If the answer is not clearly '''
-                f'''stated in the text, respond no and do not try to make inferences. All answers and explanations '''
-                f'''should be on one line, separated by the "|" character. For example: "Yes|The text mentions that '''
-                f'''the patient needs a cane to walk|No|The text does not mention the heel-shin test" etc. Be sure to '''
-                f'''answer every question separately and do not combine multiple questions into one answer. ''' 
-                f'''Ignore any text which is part of a standardized questionnaire. The questions are:''')
-                questions_w_explanations=[]                
-                for i, question in enumerate(self.questions.keys()):
+                formatted_questions = json.load(open(os.path.join(os.path.dirname(__file__), 'prompts.json')))[ 'binary_questions_with_explanations']
+                formatted_questions += " ".join(list(self.questions.keys()))
+                questions_w_explanations=[prepend+question for question in self.questions.keys() for prepend in ['','EXPLANATION: ']]         
+                # for i, question in enumerate(self.questions.keys()):
 
-                    formatted_questions += f" {i+1}. {question}"
-                    questions_w_explanations += [question,'EXPLANATION: '+question]
-
+                #     formatted_questions += f" {i+1}. {question}"
+                #     questions_w_explanations += [question,'EXPLANATION: '+question]
             else:
                 questions_w_explanations=list(self.questions.keys())
-                # formatted_questions = f'''For each of the following questions about the {self.chunk_flag} provided, output a yes or no. Each answer should be followed by the "|" character as a separator. For example : 'Yes'|'No'|'No' etc. The questions are: '''
-                formatted_questions = (f'''For each of the following questions about the {self.chunk_flag} provided, '''
-                f'''output a separate yes or no. If the answer is not clearly '''
-                f'''stated in the text, respond no and do not try to make inferences. All answers '''
-                f'''should be on one line, separated by the "|" character. For example: "Yes|Yes|No|Yes" etc. Be sure to  '''
-                f'''answer every question separately and do not combine multiple questions into one answer. ''' 
-                f'''Ignore any text which is part of a standardized questionnaire. The questions are:''')
+                formatted_questions = json.load(open(os.path.join(os.path.dirname(__file__), 'prompts.json')))[ 'binary_questions_with_explanations']
                 formatted_questions += " ".join(questions_w_explanations)
 
             answers={}

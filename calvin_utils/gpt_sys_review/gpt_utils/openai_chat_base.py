@@ -12,7 +12,6 @@ class OpenAIChatBase(OpenAIBase):
     def __init__(self, api_key_path, question_type, question_token_estimate=500, model_choice="gpt3_small", response_tokens=50, is_azure=False, deployment_id=None, api_base=None, api_version=None, debug=False):
         super().__init__(api_key_path, is_azure=is_azure, api_base=api_base, api_version=api_version)
         self.question_type = question_type
-        self.chunk_end = None
         self.debug= debug
         self.q_index = 0
         self.question_token_estimate=question_token_estimate
@@ -53,38 +52,32 @@ class OpenAIChatBase(OpenAIBase):
         if self.question_type=="extraction":
             self.directive = "You are a research assistant. Your task is to carefully evaluate the following research report. Use both explicit information and reasonable inferences to answer the questions. Be as concise as possible."
             self.chunk_flag = "[RESEARCH REPORT]"
-            self.chunk_end = ""
         elif self.question_type=="emr_extraction":
             self.directive = "You are a medical assistant. Your task is to carefully evaluate the following medical record. Use both explicit information and reasonable inferences to answer the questions. Be as concise as possible."
             self.chunk_flag = "[EMR REPORT]"
-            self.chunk_end = ""
         elif self.question_type=="case":
             self.directive = "You are a medical assistant. Your task is to carefully evaluate the following case report. Use both explicit information and reasonable inferences to answer the questions. Be as concise as possible."
             self.chunk_flag = "[MEDICAL RECORD]"
-            self.chunk_end = ""
         elif self.question_type=="summarizer":
             self.directive = "An LLM saw multiple chunks of a text file and answered the below question. What was the ultimate answer?"
             self.chunk_flag = "[LLM ANSWERS]"
-            self.chunk_end = ""
         elif self.question_type=="inclusion":
             self.directive = "You are a helpful binary assistant, only able to speak in 1s or 0s. Your task is to carefully evaluate the following medical article. Use both explicit information and reasonable inferences to answer the questions. Responses should be: 0 for No, 1 for Y."
             self.chunk_flag = "[MEDICAL ARTICLE]"
-            self.chunk_end = "Responses should be: 0 for No, 1 for Y."
         elif self.question_type=="labelling":
             self.directive = "You are a text labelling assistant. Your task is to carefully evaluate the following case report. Use both explicit information and reasonable inferences to answer the questions. Responses should be: 0 for No, 1 for Y."
             self.chunk_flag = "[SEGMENT]"
-            self.chunk_end = "Responses should be: 0 for No, 1 for Y."
         else:
             raise ValueError(f"Model choice {question_type} not supported, please choose gpt4, gpt3_large, or gpt3_small.")
     
     ### Chunking methods ###
-    def add_context_to_chunks(self, chunks, debug=False):
-        """Method to append a message to the end of every chunk. Set in self.get_question_settings"""
-        if self.chunk_end is not None:
-            for i in range(len(chunks)):
-                chunks[i] += self.chunk_end
-        print(chunks) if debug else None
-        return chunks
+    # def add_context_to_chunks(self, chunks, debug=False):
+    #     """Method to append a message to the end of every chunk. Set in self.get_question_settings"""
+    #     if self.chunk_end is not None:
+    #         for i in range(len(chunks)):
+    #             chunks[i] += self.chunk_end
+    #     print(chunks) if debug else None
+    #     return chunks
         
     def call_chunker(self, selected_text):
         """
@@ -97,7 +90,7 @@ class OpenAIChatBase(OpenAIBase):
         #         print('Text associated with file:', selected_text)
         #         print(f'Allowing {self.token_limit} tokens per submission')
         #         print('Number of chunks:', len(chunks))
-        chunks = self.add_context_to_chunks(chunks)
+        # chunks = self.add_context_to_chunks(chunks)
         return chunks
     
     def generate_submission(self, chunk, question):
