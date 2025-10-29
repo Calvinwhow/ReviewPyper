@@ -133,7 +133,10 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
     
     def format_questions(self, questions_list):
         """Formats the questions for submission to the OpenAI API."""
-        if self.include_explanations:
+        if self.question_type=='inclusion':
+            prompt_choice='inclusion_questions'
+            questions_w_explanations=[prepend+q for q in questions_list for prepend in ['','EXPLANATION: ']]  
+        elif self.include_explanations:
             prompt_choice='binary_questions_with_explanations'
             questions_w_explanations=[prepend+q for q in questions_list for prepend in ['','EXPLANATION: ']]     
         else:
