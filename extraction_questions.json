@@ -5,6 +5,16 @@
     "Does this patient have oculomotor abnormalities? For example, the text may mention slowed pursuit, saccadic intrusions, hypo/hypermetric saccade, or nystagmus.":"binary",
     "Does this patient show dysmetria, oscillating movement, or segmented movement of the arm or hand when performing the finger-nose maneuver? Ignore any slowness.":"binary"
     },
+"bars_severity":{
+    "For this patient, rate the severity of disturbed gait or walking difficulty (staggering, trouble turning, needs cane/wall, cannot walk unaided) on a 0–3 scale. 0=none/absent, 1=mild, 2=moderate, 3=severe. Return only a single integer between 0 and 3; if not mentioned, return 0.": "gait",
+    "For this patient, rate the severity of difficulty performing heel–shin (jerky lowering or lateral movements) on a 0–3 scale. 0=none/absent, 1=mild, 2=moderate, 3=severe. Return only a single integer 0–3; if not mentioned, return 0.": "knee-tibia",
+    "For this patient, rate the severity of dysarthria or slurred, partly unintelligible speech (not hypophonia) on a 0–3 scale. 0=none/absent, 1=mild, 2=moderate, 3=severe. Return only a single integer 0–3; if not mentioned, return 0.": "dysarthria",
+    "For this patient, rate the severity of oculomotor abnormalities (slowed pursuit, saccadic intrusions, hypo/hypermetric saccades, nystagmus) on a 0–3 scale. 0=none/absent, 1=mild, 2=moderate, 3=severe. Return only a single integer 0–3; if not mentioned, return 0.": "oculomotor",
+    "For this patient, rate the severity of finger–nose test abnormalities (dysmetria, oscillating/segmented movement; ignore slowness) on a 0–3 scale. 0=none/absent, 1=mild, 2=moderate, 3=severe. Return only a single integer 0–3; if not mentioned, return 0.": "finger-nose",
+    "For this patient, rate the severity/presence of documented seizures on a 0–3 scale. 0=none/absent, 1=mild/past isolated mention, 2=moderate/recurrent or concerning, 3=severe/active or high clinical concern. Return only a single integer 0–3; if not mentioned, return 0.": "seizure",
+    "For this patient, rate the severity/presence of fear of having a seizure in the next month on a 0–3 scale. 0=none/absent, 1=mild, 2=moderate, 3=severe. Return only a single integer 0–3; if not mentioned, return 0.": "seizure_fear",
+    "For this patient, rate the severity/presence of documented stroke (exclude family history/TIA-only) on a 0–3 scale. 0=none/absent, 1=mild/past historical mention, 2=moderate/documented with some deficits, 3=severe/significant deficits. Return only a single integer 0–3; if not mentioned, return 0.": "stroke"
+    },
 "moca":{
     "Does this patient have difficulty performing visuospatial or executive tasks such as a path task, copying a line drawing of a bed, or drawing a clock?":"binary",
     "Does this patient struggle with naming tasks such as naming animals based on pictures?":"binary",

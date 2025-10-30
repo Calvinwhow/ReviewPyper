@@ -124,22 +124,30 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 retain_chunks=True, 
                                 include_explanations=True,
                                 test_mode=test_mode,
-                                model_choice="gpt4",
+                                model_choice="gpt3_small",
                                 debug=extraction_debug)
 answers = evaluator.evaluate_all_files()
 extraction_chunks_dir=evaluator.chunk_dir
 evaluated_json_path = evaluator.save_to_json(answers)
-extraction_chunks_dir=output_dir+"json_chunks"
 
+
+severity_dict = {
+    0: ["none", "absent", "no"],
+    1: ["mild", "slight"],
+    2: ["moderate"],
+    3: ["severe", "marked", "significant"]
+}
 
 from calvin_utils.gpt_sys_review.json_utils import CustomSummarizer
 custom_summarizer = CustomSummarizer(json_path=output_dir+"json_evaluated/emr_strict_extraction_evaluations.json",
                                     #  json_path=evaluated_json_path, 
-                                     answers_binary=extraction_answers_binary, 
+                                    # answers_binary=extraction_answers_binary, 
+                                     answers_binary=False,
                                      summary_type='mapping', 
                                      api_key_path=api_key_path,
                                      chunks_dir=extraction_chunks_dir, 
-                                     is_azure=False)
+                                     is_azure=False,
+                                     severity_mapping=severity_dict)
 df, raw_path = custom_summarizer.run_custom(positive_explanations_only=True,)
 
 from calvin_utils.gpt_sys_review.txt_utils import PostProcessing

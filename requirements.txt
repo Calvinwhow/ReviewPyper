@@ -7,3 +7,4 @@ fuzzywuzzy>=0.18.0
 tqdm
 textract-py3
 pytesseract
+matplotlib
