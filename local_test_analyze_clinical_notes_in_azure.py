@@ -2,9 +2,9 @@
 # MODIFY THE VARIABLES BELOW TO FIT YOUR USE CASE! # 
 ################################################################################
 # Set the file(s) you want to analyze (usually from an RPDR request) and the output directory
-notes_file_list=['/Users/rm026/Documents/code/ReviewPyper_testing/msa_prg_and_dis_deidentified.txt'
-                 ]
-output_dir='/Users/rm026/Documents/code/ReviewPyper_testing/tests/msa_pt_5_moca_ccas_cnrs_test_5_gpt3.5/'
+notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/msa_prg_and_dis_deidentified_bars_redacted.txt',]
+# notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/00000016.txt',]
+output_dir='/Users/rm026/Documents/Code/reviewpyper_testing/tests/bars_redacted_severity_gpt4_test_1/'
 
 # Provide the path to your OpenAI API key
 api_key_path = "/Users/rm026/Documents/code/openai-key.txt"
@@ -20,12 +20,12 @@ inclusion_question_sets =['emr_inclusion']
 
 # Set test_mode=True during your first few runs, while you tune your questions to get the answers you need
 # - Always run this first, at least once. 
-test_mode=False
+test_mode=True
 
 # Set the questions for data extraction. This is where you extract what you want to know from the included notes.
 # These are more open-ended than inclusion/exclusion questions, and don't have to be yes/no.
 # See notebook 05, section 02 for examples.
-extraction_question_sets = ['moca', 'ccas','cnrs']
+extraction_question_sets = ['bars_severity']
 
 # - Set extraction_answers_binary to False if the extraction questions you asked do not have binary answers. 
 #    - We will extract the raw data, like specific result values, for you to review.
@@ -87,6 +87,7 @@ from calvin_utils.gpt_sys_review.gpt_utils.openai_json_evaluator import OpenAIJs
 evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 json_file_path=json_file_path, 
                                 keys_to_consider=["emr"], 
+                                answer_type='binary',
                                 question_type='inclusion', 
                                 model_choice="gpt3_small",
                                 include_explanations=True, # TODO: currently always includes explanations for inclusion questions, and this has to be set to True here. 
@@ -121,6 +122,7 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 keys_to_consider=['emr'],
                                 question_type="emr_strict_extraction",
                                 question=extraction_questions,
+                                answer_type='binary' if extraction_answers_binary else 'integer',
                                 retain_chunks=True, 
                                 include_explanations=True,
                                 test_mode=test_mode,
