@@ -57,6 +57,7 @@ for questionnaire in extraction_question_sets:
     extraction_questions.update(extraction_questions_json[questionnaire])
 
 master_list_path = output_dir+"master_list.csv"
+master_list_excel_path = output_dir+"master_list.xlsx"
 json_file_path = output_dir+"json/_emr_labeled_sections.json"
 
 from calvin_utils.gpt_sys_review.txt_utils import ClinicalNotesExtractor
@@ -156,6 +157,12 @@ from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
 PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, 
                                               raw_results_path=raw_path, 
                                               filename_col='MRN')
+
+#Create excel file with masterListPath results
+import pandas as pd
+excelDf = pd.read_csv(master_list_path)
+df.to_excel(master_list_excel_path, index=False)
+
 if evaluate_accuracy:
     from calvin_utils.evaluate_iterations import IterationEvaluator
     ev = IterationEvaluator(
