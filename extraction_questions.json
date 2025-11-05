@@ -17,7 +17,7 @@
     "Does this patient struggle with naming tasks such as naming animals based on pictures?":"binary",
     "Does this patient have difficulty with memory, such as being unable to remember a list of words read to them?":"binary",
     "Does this patient have difficulty paying attention? For instance, they may be unable to repeat a list of numbers or letters read to them, either forwards or backwards, or may struggle with a serial subtraction task.":"binary",
-    "Does this patient have difficulty with language skills? For instance, they may have difficulty repeating a sentence told to them.":"binary",
+    "Does this patient have difficulty with language skills? For instance, they may have difficulty repeating a sentence told to them. Only consider cognitive problems, and Ignore dysarthria, slurring, and any other motor issues":"binary",
     "Does this patient have difficulty with abstraction? For instance, they may struggle to identify similarities between a hammer and screwdriver, or matches and lamps.":"binary",
     "Does this patient have difficulty with delayed recall? For instance, if given a list of words, they may have difficulty repeating them back five minutes later.":"binary",
     "Does this patient have difficulty orienting themselves? For instance, they may not know the date, month, year, day, city, or place they are in.":"binary"
@@ -28,16 +28,16 @@
     "Does this patient have difficulty with category switching? For instance, they may not be able to alternate between naming vegetables and types of jobs for more than 9 words in one minute.":"binary",
     "Does this patient have difficulty with verbal registration? For instance, they may not be able to repeat a list of 5 words given to them within 4 attempts.":"binary",
     "Does this patient have difficulty repeating strings of digits, forwards or backwards?":"binary",
-    "Is this patient able to draw a cube, with the correct number of lines?":"binary",
-    "Is this patient able to copy a drawing of a cube, with the correct number of lines?":"binary",
+    "Is this patient unable to correctly draw a cube, with the correct number of lines?":"binary",
+    "Is this patient unable to correctly copy a drawing of a cube?":"binary",
     "Is this patient able to identify similarities between objects, such as nose/ear, sheep/elephant, lake/river, or airplane/motorcycle?":"binary",
-    "Is this patient able to correctly complete a go-no go task, where they raise their finger if the doctor taps the table once, but not if they tap twice?":"binary",
-    "Does this patient have unusual affect? For instance, they may have difficulty with focusing attention or mental flexibility; be emotionally labile or show incongruous emotions; show easy sensory overload or avoidant behaviors; express illogical thoughts or paranoia; lack empathy, be apathetic, or have blunted affect; or be angry or aggressive, irritable, oppositional, with difficulty with social cues and social boundaries.":"binary"
+    "Does this patient have difficulty completing a go-no go task, where they raise their finger if the doctor taps the table once, but not if they tap twice?":"binary",
+    "Does this patient have unusual affect? For instance, they may have difficulty with focusing attention or mental flexibility; be emotionally labile or show incongruous emotions; show easy sensory overload or avoidant behaviors; express illogical thoughts; lack empathy, be apathetic, or have blunted affect; or be angry or aggressive, irritable, oppositional, with difficulty with social cues and social boundaries. Ignore depression or anxiety symptoms.":"binary"
     },
 "cnrs":{
     "Does this patient have difficulty maintaining focus or sustained attention? For example, they may make careless mistakes or not attend to details; be easily distracted by non-essential or irrelevant stimuli; often be “on the go,” acting as if “driven by a motor” (e.g., is unable to be or uncomfortable being still for extended time); feel compelled to perform habits that are excessive and repetitive, and become distressed when prevented from doing so; or feel driven to complete tasks or behave in a rigid, inflexible way according to specific, personal rules.":"binary",
     "Does this patient get mentally “stuck” or have trouble shifting thoughts or mental focus from one activity or situation to another? For example, they may repeat the same responses (e.g., word, phrase, gesture, behavior) despite being ineffective or inappropriate, worry repeatedly or too much about their own emotional/physical state, or be unable to unable to stop repetitive thoughts, urges or images that seem to cause distress.":"binary",
-    "Does this patient struggle to control their emotions? For instance, they may act hastily or carelessly in the moment without thinking (e.g., interrupting others, trouble waiting his/her turn); show rapid changes in emotion that are more intense than usual or unrelated to the situation; cry and/or laugh without an apparent trigger inappropriately; be overly anxious; or experiences sudden episodes of intense fear or discomfort (e.g., heart racing, shortness of breath, dizziness)":"binary",
+    "Does this patient struggle to control their emotions? For instance, they may act hastily or carelessly in the moment without thinking (e.g., interrupting others, trouble waiting his/her turn); show rapid changes in emotion that are more intense than usual or unrelated to the situation; cry and/or laugh without an apparent trigger inappropriately; be overly anxious; or experiences sudden episodes of intense fear or discomfort (e.g., heart racing, shortness of breath, dizziness). Ignore depression or anxiety symptoms.":"binary",
     "Does this patient seem very sad or depressed in life? For instance, they may lack pleasure from activities or interactions that used to be enjoyable, hold Negative attitudes or pessimism about the future and a sense of hopelessness, or be uneasy or generally dissatisfied with life.":"binary",
     "Does this patient have habits characteristic of the autism spectrum? For instance, they may show repetitive movements, postures, or utterances that follow a particular pattern (e.g., hand flapping, finger flicking, body rocking, repeating noises or phrases) or be drawn to sensory experiences, such as excessive smelling or touching of objects, or fascination with lights or spinning objects.":"binary",
     "Does this patient show sensitivities characteristic of the autism spectrum? For instance, they may avoid or be very sensitive to light touch or texture (including clothing and the mouth-feel of foods), or they may be easily overwhelmed by, or have an extreme reaction to, sounds, textures, tastes, smells, temperature or lights.":"binary",
@@ -50,5 +50,12 @@
     "Does this medical record state that the patient has had a seizure?":"binary",
     "Is this patient afraid of having a seizure during the next month?":"binary",
     "Does this medical record state that the patient has had a stroke? Ignore any family histories of stroke or transient ischemic attacks.":"binary"
-    }
+    },
+"edited_questions_for_testing":{
+    "Does this patient have difficulty with language skills? For instance, they may have difficulty repeating a sentence told to them. Only consider cognitive problems, and Ignore dysarthria, slurring, and any other motor issues":"binary",
+    "Is this patient unable to correctly draw a cube, with the correct number of lines?":"binary",
+    "Is this patient unable to correctly copy a drawing of a cube?":"binary",
+    "Does this patient have unusual affect? For instance, they may have difficulty with focusing attention or mental flexibility; be emotionally labile or show incongruous emotions; show easy sensory overload or avoidant behaviors; express illogical thoughts; lack empathy, be apathetic, or have blunted affect; or be angry or aggressive, irritable, oppositional, with difficulty with social cues and social boundaries. Ignore depression or anxiety symptoms.":"binary",
+    "Does this patient struggle to control their emotions? For instance, they may act hastily or carelessly in the moment without thinking (e.g., interrupting others, trouble waiting his/her turn); show rapid changes in emotion that are more intense than usual or unrelated to the situation; cry and/or laugh without an apparent trigger inappropriately; be overly anxious; or experiences sudden episodes of intense fear or discomfort (e.g., heart racing, shortness of breath, dizziness). Ignore depression or anxiety symptoms.":"binary"
+}
 }

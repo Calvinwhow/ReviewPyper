@@ -563,7 +563,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         """Checks for an exact match of keywords in the answer text."""
         if answer == 'Unidentified':
             return np.nan
-        cleaned_answer = re.sub(r'[^\w\s]', '', str(answer).lower()).strip()
+        cleaned_answer = re.sub(r'[^\w\s\.\-]', '', str(answer).lower()).strip()
         # If model already returns a pure number, respect it
         try:
             val = float(cleaned_answer)
