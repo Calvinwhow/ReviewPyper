@@ -17,7 +17,7 @@
     "Does this patient struggle with naming tasks such as naming animals based on pictures?":"binary",
     "Does this patient have difficulty with memory, such as being unable to remember a list of words read to them?":"binary",
     "Does this patient have difficulty paying attention? For instance, they may be unable to repeat a list of numbers or letters read to them, either forwards or backwards, or may struggle with a serial subtraction task.":"binary",
-    "Does this patient have difficulty with language skills? For instance, they may have difficulty repeating a sentence told to them. Only consider cognitive problems, and Ignore dysarthria, slurring, and any other motor issues":"binary",
+    "Does this patient have difficulty with language skills? For instance, they may have difficulty repeating a sentence told to them. Only consider cognitive problems, and ignore dysarthria, slurring, and any other motor issues":"binary",
     "Does this patient have difficulty with abstraction? For instance, they may struggle to identify similarities between a hammer and screwdriver, or matches and lamps.":"binary",
     "Does this patient have difficulty with delayed recall? For instance, if given a list of words, they may have difficulty repeating them back five minutes later.":"binary",
     "Does this patient have difficulty orienting themselves? For instance, they may not know the date, month, year, day, city, or place they are in.":"binary"
@@ -52,10 +52,10 @@
     "Does this medical record state that the patient has had a stroke? Ignore any family histories of stroke or transient ischemic attacks.":"binary"
     },
 "edited_questions_for_testing":{
-    "Does this patient have difficulty with language skills? For instance, they may have difficulty repeating a sentence told to them. Only consider cognitive problems, and Ignore dysarthria, slurring, and any other motor issues":"binary",
+    "Does this patient have difficulty with language skills? For instance, they may have difficulty repeating a sentence told to them. Only consider cognitive problems, and ignore dysarthria, slurring, and any other motor issues":"binary",
     "Is this patient unable to correctly draw a cube, with the correct number of lines?":"binary",
-    "Is this patient unable to correctly copy a drawing of a cube?":"binary",
     "Does this patient have unusual affect? For instance, they may have difficulty with focusing attention or mental flexibility; be emotionally labile or show incongruous emotions; show easy sensory overload or avoidant behaviors; express illogical thoughts; lack empathy, be apathetic, or have blunted affect; or be angry or aggressive, irritable, oppositional, with difficulty with social cues and social boundaries. Ignore depression or anxiety symptoms.":"binary",
+    "Is this patient unable to correctly copy a drawing of a cube?":"binary",
     "Does this patient struggle to control their emotions? For instance, they may act hastily or carelessly in the moment without thinking (e.g., interrupting others, trouble waiting his/her turn); show rapid changes in emotion that are more intense than usual or unrelated to the situation; cry and/or laugh without an apparent trigger inappropriately; be overly anxious; or experiences sudden episodes of intense fear or discomfort (e.g., heart racing, shortness of breath, dizziness). Ignore depression or anxiety symptoms.":"binary"
 }
 }

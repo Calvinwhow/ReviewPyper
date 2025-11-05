@@ -2,9 +2,9 @@
 # MODIFY THE VARIABLES BELOW TO FIT YOUR USE CASE! # 
 ################################################################################
 # Set the file(s) you want to analyze (usually from an RPDR request) and the output directory
-notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/msa_prg_and_dis_deidentified_bars_redacted.txt',]
+notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/msa_prg_and_dis_deidentified.txt',]
 # notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/00000016.txt',]
-output_dir='/Users/rm026/Documents/Code/reviewpyper_testing/tests/bars_redacted_severity_gpt4_test_1/'
+output_dir='/Users/rm026/Documents/Code/reviewpyper_testing/tests/msa_moca_ccas_cnrs_fixing_questions_test_1/'
 
 # Provide the path to your OpenAI API key
 api_key_path = "/Users/rm026/Documents/code/openai-key.txt"
@@ -25,7 +25,7 @@ test_mode=False
 # Set the questions for data extraction. This is where you extract what you want to know from the included notes.
 # These are more open-ended than inclusion/exclusion questions, and don't have to be yes/no.
 # See notebook 05, section 02 for examples.
-extraction_question_sets = ['bars_severity']
+extraction_question_sets = ['edited_questions_for_testing']
 
 # - Set extraction_answers_binary to False if the extraction questions you asked do not have binary answers. 
 #    - We will extract the raw data, like specific result values, for you to review.
