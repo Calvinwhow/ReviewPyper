@@ -631,24 +631,25 @@ class CustomSummarizer(InclusionExclusionSummarizer):
             if self.chunks_dir is not None:
                 chunks_dict = self.read_json(self.chunks_dir + '/' + article + '_chunks.json')
 
-            for question, chunks in questions.items():
+            for question, responses in questions.items():
                 # Keep explanations untouched
-                if question[:11] == 'EXPLANATION':
-                    if positive_explanations_only and self.keyword_mapping:
-                        # Only keep explanations for “positive” chunks
-                        mapped_answers = [self.keyword_or_fuzzy_match(ans) for ans in chunks.values()]
-                        pos_explanations = [
-                            expl for expl, m in zip(chunks.values(), mapped_answers)
-                            if (self.severity_mode and (m is not None and m is not np.nan and m > 0))
-                               or (not self.severity_mode and m == 1)
-                        ]
-                        summary_dict[article][question] = '|'.join(pos_explanations)
-                    else:
-                        summary_dict[article][question] = '|'.join(list(chunks.values()))
-                    continue
+                if question[:11] == 'EXPLANATION' and positive_explanations_only:
+                    # Only keep explanations for “positive” responses
+                    # Note: mapped_answers is the answers for the previous question at this point, ie
+                    # the numerical answers which this answer is explaining. We can't determine if the answer
+                    # is positive from the explanations, so we use the numbers. Ugly but works for now.
+                    pos_explanations = [
+                        expl for expl, m in zip(responses.values(), mapped_answers)
+                        if (self.severity_mode and (m is not None and m is not np.nan and m > 0))
+                            or (not self.severity_mode and m == 1)
+                    ]
+                    summary_dict[article][question] = '|'.join(pos_explanations)
 
-                if self.keyword_mapping:
-                    mapped_answers = [self.keyword_or_fuzzy_match(ans) for ans in chunks.values()]
+                elif question[:11] == 'EXPLANATION':
+                    summary_dict[article][question] = '|'.join(list(responses.values()))
+
+                elif self.keyword_mapping:
+                    mapped_answers = [self.keyword_or_fuzzy_match(ans) for ans in responses.values()]
                     # if any mapped is np.nan while others are valid, warn
                     if (np.nan in mapped_answers) and not all(x is np.nan for x in mapped_answers):
                         print(f"Warning: Failed to interpret a chunk from '{article}'. The answers for that subject may be partially incorrect.")
@@ -685,7 +686,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                 elif self.keyword_mapping is None:
                     # Raw text passthrough (research-style)
                     try:
-                        combined_answers = list(chunks.values())[0]
+                        combined_answers = list(responses.values())[0]
                         if not combined_answers:
                             summary_dict[article][question] = 'No Answers'
                         else:
@@ -703,8 +704,8 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         summary_dict = {}
         for article, questions in tqdm(self.data.items(), desc='Summarizing final responses with LLM'):
             summary_dict[article] = {}
-            for question, chunks in questions.items():
-                combined_answers = " ".join(str(answer) for answer in chunks.values())
+            for question, responses in questions.items():
+                combined_answers = " ".join(str(answer) for answer in responses.values())
 
                 if question[:11] == 'EXPLANATION':
                     summary_dict[article][question] = combined_answers
