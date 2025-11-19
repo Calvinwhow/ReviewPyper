@@ -79,6 +79,7 @@ preprocessed_path = preprocessor.process_files()
 
 article_type = 'emr'  # 'case', 'research', 'emr', or 'other'
 master_list_path = output_dir+"master_list.csv"
+master_list_excel_path = output_dir+"master_list.xlsx"
 
 from calvin_utils.gpt_sys_review.json_utils import SectionLabeler
 # Initialize the SectionLabeler class and process the files
@@ -173,6 +174,11 @@ custom_summarizer = CustomSummarizer(json_path=evaluated_json_path,
 df, raw_path = custom_summarizer.run_custom()
 
 PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, raw_results_path=raw_path, filename_col='MRN')
+#Create excel file with masterListPath results
+
+import pandas as pd
+excelDf = pd.read_csv(master_list_path)
+df.to_excel(master_list_excel_path, index=False)
 
 from calvin_utils.evaluate_iterations import IterationEvaluator
 ev = IterationEvaluator(

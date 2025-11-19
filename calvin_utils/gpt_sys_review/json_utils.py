@@ -521,7 +521,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
 
     def __init__(self, json_path, answers_binary=False, api_key_path=None, summary_type='llm',
                  chunks_dir=None, is_azure=False, deployment_id=None, api_base=None, api_version=None,
-                 severity_mapping=None):
+                 severity_mapping=None, debug=False):
         """
         Initializes the CustomSummarizer class.
 
@@ -542,16 +542,21 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         self.deployment_id = deployment_id
         self.api_base = api_base
         self.api_version = api_version
+        self.debug = debug
 
         # --- NEW: allow severity mapping; else fall back to binary mapping if answers_binary=True ---
         self.severity_mode = False
         if severity_mapping and isinstance(severity_mapping, dict) and len(severity_mapping) > 0:
             # Normalize keys to ints and values to lowercase lists
+            if self.debug:
+                print('Found severity mapping, enabling severity mode')
             self.keyword_mapping = {
                 int(k): [str(v).lower() for v in vals] for k, vals in severity_mapping.items()
             }
             self.severity_mode = True
         elif self.answers_binary:
+            if self.debug:
+                print('Using binary mapping')
             self.keyword_mapping = {
                 0: ["poor", "bad", "negative", "n", "no", "false", "absent"],
                 1: ["good", "excellent", "positive", "y", "yes", "true", "present"]
@@ -656,11 +661,15 @@ class CustomSummarizer(InclusionExclusionSummarizer):
 
                     valid_answers = [x for x in mapped_answers if (x is not None and not (isinstance(x, float) and np.isnan(x)))]
 
+                    if self.debug:
+                        print(valid_answers)
                     if len(valid_answers) == 0:
                         summary_dict[article][question] = np.nan
                         
                     else:
                         if self.severity_mode:
+                            if self.debug:
+                                print('evaluating severity with mapping for article:', article, 'question:', question)
                             # Aggregate severity as MAX (can be changed to mean/sum if you prefer)
                             agg_value = np.max(valid_answers)
                             summary_dict[article][question] = agg_value
@@ -670,6 +679,8 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                                               if (m is not None and not (isinstance(m, float) and np.isnan(m)) and m > 0)]
                                 summary_dict[article]['CHUNKS: '+question] = '\n|\n'.join(pos_chunks)
                         else:
+                            if self.debug:
+                                print('evaluating binaruy answers with mapping for article:', article, 'question:', question)
                             # Binary aggregation = sum of positives > 0 ⇒ positive
                             s = np.sum([1 if v == 1 else 0 for v in valid_answers])
                             
