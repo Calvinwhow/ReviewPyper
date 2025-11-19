@@ -1,0 +1,12 @@
+{
+"bars": {
+    "1": {"gait": "Do you think this patient is able to walk normally, or do have some sort of impairment limiting ability to walk?"},
+    "2": {"knee-tibia": "Do you think this patient is able to perform the heel-shin maneuver normally, or do they have jerkiness of the lower extremity?"},
+    "3": {"finger-nose": "Do you think this patient is able to perform the finger-nose maneuver normally, or do they have jerkiness of the lower extremity?"},
+    "4": {"dysarthria": "Do you think this patient is able to speak normally, or do they have some degree of dysarthria or slurring?"},
+    "5": {"oculomotor": "Do you think this patient has normal eye movements on the physical exam, or do they have abnormalities like slowed pursuit, saccadic intrusions, hypo/hypermetric sacces, or nystagmus?"}
+},
+"moca": {},
+"emotional":{},
+"neuroanatomic": {}
+}

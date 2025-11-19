@@ -4,9 +4,10 @@
 # Project Repository README
 
 **Installation**
-   - Find the folder you saved this repository to. Copy it. 
-   - Open your terminal and run the following command:
-   - pip install -r /path/to/your/repository/requirements.txt
+   - open your terminal and run the below code:
+   - > git clone https://github.com/Calvinwhow/ReviewPyper.git
+   - > pip install -r /path/to/your/repository/requirements.txt
+   - if issues, get Calvin
 
 ## Notebooks Overview
 
