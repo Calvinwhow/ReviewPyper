@@ -8,6 +8,7 @@ import numpy as np
 import json
 import os
 import re
+from fractions import Fraction
 
 class SectionLabeler:
     """
@@ -411,7 +412,7 @@ class InclusionExclusionSummarizer:
     - df (DataFrame): Pandas DataFrame to store summarized results.
     """
     
-    def __init__(self, json_path, questions, acceptable_strings=["1", "good", "excellent", "positive", " y " " y.", "yes", "correct", "is likely", "is possible", "is probable"]):
+    def __init__(self, json_path, questions, acceptable_strings=["1", "good", "excellent", "positive", " y " " y.", "yes", "1.0",  "correct", "is likely", "is possible", "is probable"]):
         """
         Initializes the InclusionExclusionSummarizer class.
         
@@ -553,37 +554,106 @@ class CustomSummarizer(InclusionExclusionSummarizer):
             self.keyword_mapping = {
                 int(k): [str(v).lower() for v in vals] for k, vals in severity_mapping.items()
             }
-            self.severity_mode = True
+            # self.severity_mode = True
         elif self.answers_binary:
             if self.debug:
                 print('Using binary mapping')
             self.keyword_mapping = {
-                0: ["poor", "bad", "negative", "n", "no", "false", "absent"],
-                1: ["good", "excellent", "positive", "y", "yes", "true", "present"]
+                0: ["poor", "bad", "negative", "n", "no", "false", "absent", "No"],
+                1: ["good", "excellent", "positive", "y", "yes", "true", "present", "Yes"]
             }
         else:
             self.keyword_mapping = None
+
+    # def exact_match(self, answer):
+    #     """Checks for an exact match of keywords in the answer text."""
+    #     if answer == 'Unidentified':
+    #         return np.nan
+    #     cleaned_answer = re.sub(r'[^\w\s\.\-]', '', str(answer).lower()).strip()
+    #     # If model already returns a pure number, respect it
+    #     try:
+    #         val = float(cleaned_answer)
+    #         # accept integer-like numeric outputs directly
+    #         if val.is_integer():
+    #             return int(val)
+    #         return val
+    #     except Exception:
+    #         pass
+
+    #     for key, keywords in self.keyword_mapping.items():
+    #         for keyword in keywords:
+    #             if keyword in cleaned_answer.split():
+    #                 return key
+    #     return None
 
     def exact_match(self, answer):
         """Checks for an exact match of keywords in the answer text."""
         if answer == 'Unidentified':
             return np.nan
-        cleaned_answer = re.sub(r'[^\w\s\.\-]', '', str(answer).lower()).strip()
-        # If model already returns a pure number, respect it
+
+        raw = str(answer).strip().lower()
+
+        # --- NEW: explicit binary mapping first ---
+        # This catches pure yes/no outputs for binary-style questions.
+        if raw in ("Yes", "yes", "y", "true", "1"):
+            return 1
+        if raw in ("No", "no", "n", "false", "0"):
+            return 0
+        # ------------------------------------------
+
+        # Keep digits, dot, minus, and slash (so we can handle fractions like 1/4)
+        cleaned_answer = re.sub(r'[^0-9\.\-\/]', '', raw)
+
+        # Try numeric interpretation (for scales like 0/1/2/3, or "1/4", etc.)
         try:
-            val = float(cleaned_answer)
-            # accept integer-like numeric outputs directly
-            if val.is_integer():
+            if '/' in cleaned_answer and any(ch.isdigit() for ch in cleaned_answer):
+                val = float(Fraction(cleaned_answer))
+            else:
+                val = float(cleaned_answer)
+
+            if float(val).is_integer():
                 return int(val)
             return val
         except Exception:
             pass
 
+        # Fall back to keyword mapping (severity words etc.)
         for key, keywords in self.keyword_mapping.items():
             for keyword in keywords:
-                if keyword in cleaned_answer.split():
+                if keyword in raw.split():
                     return key
         return None
+
+
+    # def exact_match(self, answer):
+    #     """Checks for an exact match of keywords in the answer text."""
+    #     if answer == 'Unidentified':
+    #         return np.nan
+
+    #     raw = str(answer).lower().strip()
+    #     # Keep digits, dot, minus, and slash (so we can handle fractions like 1/4)
+    #     cleaned_answer = re.sub(r'[^0-9\.\-\/]', '', raw)
+
+    #     # Try numeric interpretation first
+    #     try:
+    #         if '/' in cleaned_answer and any(ch.isdigit() for ch in cleaned_answer):
+    #             # Interpret things like "1/4" as a true fraction
+    #             val = float(Fraction(cleaned_answer))
+    #         else:
+    #             val = float(cleaned_answer)
+
+    #         if float(val).is_integer():
+    #             return int(val)
+    #         return val
+    #     except Exception:
+    #         pass
+
+    #     # Fall back to keyword mapping
+    #     for key, keywords in self.keyword_mapping.items():
+    #         for keyword in keywords:
+    #             if keyword in raw.split():
+    #                 return key
+    #     return None
 
     def fuzzy_match(self, answer, threshold=60):
         """
@@ -664,7 +734,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                     if self.debug:
                         print(valid_answers)
                     if len(valid_answers) == 0:
-                        summary_dict[article][question] = np.nan
+                        summary_dict[article][question] = 0
                         
                     else:
                         if self.severity_mode:
@@ -682,13 +752,16 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                             if self.debug:
                                 print('evaluating binaruy answers with mapping for article:', article, 'question:', question)
                             # Binary aggregation = sum of positives > 0 ⇒ positive
-                            s = np.sum([1 if v == 1 else 0 for v in valid_answers])
-                            
-                            if s > 0:
+                            num_positive = 0
+                            for v in valid_answers:
+                                if isinstance(v, (int, float)) and v > 0:
+                                    num_positive += 1
+
+                            if num_positive > 0:
                                 summary_dict[article][question] = 1
                             else:
-                                # <<< NEW: when no positives, treat as NaN (false negative becomes NaN)
-                                summary_dict[article][question] = np.nan
+                                summary_dict[article][question] = 0
+
                         if self.chunks_dir is not None: 
                             pos_chunks=[chunks_dict[f'chunk_{i+1}'] for i, answer in enumerate(mapped_answers) if answer==1]
                             summary_dict[article]['CHUNKS: '+question] = '\n|\n'.join(pos_chunks)
