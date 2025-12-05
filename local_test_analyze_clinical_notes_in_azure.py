@@ -160,7 +160,7 @@ PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path,
 #Create excel file with masterListPath results
 import pandas as pd
 excelDf = pd.read_csv(master_list_path)
-df.to_excel(master_list_excel_path, index=False)
+excelDf.to_excel(master_list_excel_path, index=False)
 
 if evaluate_accuracy:
     from calvin_utils.evaluate_iterations import IterationEvaluator

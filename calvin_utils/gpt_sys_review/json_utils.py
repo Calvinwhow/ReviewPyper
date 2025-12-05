@@ -750,7 +750,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                                 summary_dict[article]['CHUNKS: '+question] = '\n|\n'.join(pos_chunks)
                         else:
                             if self.debug:
-                                print('evaluating binaruy answers with mapping for article:', article, 'question:', question)
+                                print('evaluating binary answers with mapping for article:', article, 'question:', question)
                             # Binary aggregation = sum of positives > 0 ⇒ positive
                             num_positive = 0
                             for v in valid_answers:
