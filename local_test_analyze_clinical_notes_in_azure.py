@@ -2,9 +2,9 @@
 # MODIFY THE VARIABLES BELOW TO FIT YOUR USE CASE! # 
 ################################################################################
 # Set the file(s) you want to analyze (usually from an RPDR request) and the output directory
-notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/msa_prg_and_dis_deidentified_bars_redacted.txt',]
+notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/bars_redaction/msa_prg_and_dis_deidentified_bars_redacted.txt',]
 # notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/00000016.txt',]
-output_dir='/Users/rm026/Documents/Code/reviewpyper_testing/tests/bars_redacted_yes-no_gpt4_test_1/'
+output_dir='/Users/rm026/Documents/Code/reviewpyper_testing/tests/bars_redacted_yes-no_gpt4_test_2/'
 
 # Provide the path to your OpenAI API key
 api_key_path = "/Users/rm026/Documents/code/openai-key.txt"
@@ -59,78 +59,78 @@ master_list_path = output_dir+"master_list.csv"
 master_list_excel_path = output_dir+"master_list.xlsx"
 json_file_path = output_dir+"json/_emr_labeled_sections.json"
 
-# from calvin_utils.gpt_sys_review.txt_utils import ClinicalNotesExtractor
-# extractor=ClinicalNotesExtractor(notes_file_list, output_dir)
-# note_df=extractor.run()
+from calvin_utils.gpt_sys_review.txt_utils import ClinicalNotesExtractor
+extractor=ClinicalNotesExtractor(notes_file_list, output_dir)
+note_df=extractor.run()
 
-# from calvin_utils.gpt_sys_review.txt_utils import TextPreprocessor
-# # Initialize the TextPreprocessor class and preprocess the files
-# preprocessor = TextPreprocessor(input_dir=output_dir)
-# preprocessed_path = preprocessor.process_files()
+from calvin_utils.gpt_sys_review.txt_utils import TextPreprocessor
+# Initialize the TextPreprocessor class and preprocess the files
+preprocessor = TextPreprocessor(input_dir=output_dir)
+preprocessed_path = preprocessor.process_files()
 
-# article_type = 'emr'  # 'case', 'research', 'emr', or 'other'
+article_type = 'emr'  # 'case', 'research', 'emr', or 'other'
 
-# from calvin_utils.gpt_sys_review.json_utils import SectionLabeler
-# ## Initialize the SectionLabeler class and process the files
-# ## TODO: update this to check that the labeled sections file has all the 
-# ## subjects in it, not just that it exists.
-# if os.path.exists(output_dir+"json/_emr_labeled_sections.json"):
-#     print(f"Found existing labeled sections at {output_dir+'json/_emr_labeled_sections.json'}. Skipping section labeling step.")
-# else:
-#     section_labeler = SectionLabeler(folder_path=preprocessed_path, 
-#                                     article_type="emr", 
-#                                     api_key_path=api_key_path,)
-#     section_labeler.process_files()
+from calvin_utils.gpt_sys_review.json_utils import SectionLabeler
+## Initialize the SectionLabeler class and process the files
+## TODO: update this to check that the labeled sections file has all the 
+## subjects in it, not just that it exists.
+if os.path.exists(output_dir+"json/_emr_labeled_sections.json"):
+    print(f"Found existing labeled sections at {output_dir+'json/_emr_labeled_sections.json'}. Skipping section labeling step.")
+else:
+    section_labeler = SectionLabeler(folder_path=preprocessed_path, 
+                                    article_type="emr", 
+                                    api_key_path=api_key_path,)
+    section_labeler.process_files()
 
-# # Ask inclusion/exclusion questions
-# from calvin_utils.gpt_sys_review.gpt_utils.openai_json_evaluator import OpenAIJsonEvaluator
-# evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
-#                                 json_file_path=json_file_path, 
-#                                 keys_to_consider=["emr"], 
-#                                 answer_type='binary',
-#                                 question_type='inclusion', 
-#                                 model_choice="gpt3_small",
-#                                 include_explanations=True, # TODO: currently always includes explanations for inclusion questions, and this has to be set to True here. 
-#                                 question=inclusion_questions, 
-#                                 test_mode=test_mode,
-#                                 debug=True)
-# exclusion_answers = evaluator.evaluate_all_files()
-# new_json_path = evaluator.save_to_json(exclusion_answers)
+# Ask inclusion/exclusion questions
+from calvin_utils.gpt_sys_review.gpt_utils.openai_json_evaluator import OpenAIJsonEvaluator
+evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
+                                json_file_path=json_file_path, 
+                                keys_to_consider=["emr"], 
+                                answer_type='binary',
+                                question_type='inclusion', 
+                                model_choice="gpt3_small",
+                                include_explanations=True, # TODO: currently always includes explanations for inclusion questions, and this has to be set to True here. 
+                                question=inclusion_questions, 
+                                test_mode=test_mode,
+                                debug=True)
+exclusion_answers = evaluator.evaluate_all_files()
+new_json_path = evaluator.save_to_json(exclusion_answers)
 
-# from calvin_utils.gpt_sys_review.json_utils import InclusionExclusionSummarizer
-# summarizer = InclusionExclusionSummarizer(new_json_path, questions=inclusion_questions)
-# result_df, exclusion_raw_path = summarizer.run()
-
-
-# from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
-# PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, 
-#                                               raw_results_path=exclusion_raw_path, 
-#                                               filename_col='MRN')
+from calvin_utils.gpt_sys_review.json_utils import InclusionExclusionSummarizer
+summarizer = InclusionExclusionSummarizer(new_json_path, questions=inclusion_questions)
+result_df, exclusion_raw_path = summarizer.run()
 
 
-# csv_path = output_dir+"json_evaluated/inclusion_exclusion_results.csv"
+from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
+PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, 
+                                              raw_results_path=exclusion_raw_path, 
+                                              filename_col='MRN')
 
-# extraction_debug=True
-# if extraction_debug and os.path.exists('/Users/rm026/Documents/code/ReviewPyper/debug_openai_chat.txt'):
-#     os.remove('/Users/rm026/Documents/code/ReviewPyper/debug_openai_chat.txt')
-# elif extraction_debug and os.path.exists('/Users/rm026/Documents/code/ReviewPyper/error_log.txt'):
-#     os.remove('/Users/rm026/Documents/code/ReviewPyper/error_log.txt')
+
+csv_path = output_dir+"json_evaluated/inclusion_exclusion_results.csv"
+
+extraction_debug=True
+if extraction_debug and os.path.exists('/Users/rm026/Documents/code/ReviewPyper/debug_openai_chat.txt'):
+    os.remove('/Users/rm026/Documents/code/ReviewPyper/debug_openai_chat.txt')
+elif extraction_debug and os.path.exists('/Users/rm026/Documents/code/ReviewPyper/error_log.txt'):
+    os.remove('/Users/rm026/Documents/code/ReviewPyper/error_log.txt')
     
-# from calvin_utils.gpt_sys_review.gpt_utils.openai_json_evaluator import OpenAIJsonEvaluator
-# evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
-#                                 json_file_path=json_file_path, 
-#                                 keys_to_consider=['emr'],
-#                                 question_type="emr_strict_extraction",
-#                                 question=extraction_questions,
-#                                 answer_type='binary' if extraction_answers_binary else 'integer',
-#                                 retain_chunks=True, 
-#                                 include_explanations=True,
-#                                 test_mode=test_mode,
-#                                 model_choice="gpt4",
-#                                 debug=extraction_debug)
-# answers = evaluator.evaluate_all_files()
-# extraction_chunks_dir=evaluator.chunk_dir
-# evaluated_json_path = evaluator.save_to_json(answers)
+from calvin_utils.gpt_sys_review.gpt_utils.openai_json_evaluator import OpenAIJsonEvaluator
+evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
+                                json_file_path=json_file_path, 
+                                keys_to_consider=['emr'],
+                                question_type="emr_strict_extraction",
+                                question=extraction_questions,
+                                answer_type='binary' if extraction_answers_binary else 'integer',
+                                retain_chunks=True, 
+                                include_explanations=True,
+                                test_mode=test_mode,
+                                model_choice="gpt4",
+                                debug=extraction_debug)
+answers = evaluator.evaluate_all_files()
+extraction_chunks_dir=evaluator.chunk_dir
+evaluated_json_path = evaluator.save_to_json(answers)
 
 
 severity_dict = {
