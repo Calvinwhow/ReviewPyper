@@ -1,5 +1,6 @@
 import time
 import openai
+# from openai import OpenAI
 import numpy as np
 from calvin_utils.gpt_sys_review.txt_utils import TextChunker
 from calvin_utils.gpt_sys_review.gpt_utils.openai_base import OpenAIBase
@@ -31,6 +32,7 @@ class OpenAIChatBase(OpenAIBase):
         """Sets values for the OpenAI model to use."""
         self.temperature = 1.0
         models = {
+            "gpt5.1": {"name": "gpt-5.1", "token_limit": 128000, "cost": 0.01 / 1000},
             "gpt4.1": {"name": "gpt-4.1", "token_limit": 32768, "cost": 0.03 / 1000},
             "gpt4": {"name": "gpt-4", "token_limit": 7000, "cost": 0.03 / 1000}, #actual limit is 8192
             "gpt4o-mini": {"name": "gpt-4o-mini", "token_limit": 10000, "cost": 0.00015 / 1000}, #actual limit is 128k, but that's impractical for testing.
@@ -128,11 +130,12 @@ class OpenAIChatBase(OpenAIBase):
                 max_tokens=int(self.response_tokens)
             )
         else:
+         
             response = openai.ChatCompletion.create(
                 model=self.model,
                 messages=conversation,
                 temperature=self.temperature,
-                max_tokens=int(self.response_tokens)
+                max_completion_tokens=int(self.response_tokens)
             )
         if self.debug:
             with open('debug_openai_chat.txt', 'a') as f:
@@ -144,6 +147,8 @@ class OpenAIChatBase(OpenAIBase):
     def verify_response_formatting(self, answer,questions):
         """Verifies that the response from ChatGPT has the correct formatting, i.e. there is an answer
         for each question and they are separated by a '|' character."""
+        
+        print("DEBUG ANSWER:", repr(answer))
 
         while answer[-1] in ["|",' ', '\n']:
             answer=answer[:-1]
