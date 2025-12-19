@@ -520,7 +520,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
           {0: ["none","absent"], 1: ["mild"], 2: ["moderate"], 3: ["severe"]}
     """
 
-    def __init__(self, json_path, answers_binary=False, api_key_path=None, summary_type='llm',
+    def __init__(self, json_path, answer_format, api_key_path=None, summary_type='llm',
                  chunks_dir=None, is_azure=False, deployment_id=None, api_base=None, api_version=None,
                  severity_mapping=None, debug=False):
         """
@@ -536,7 +536,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         self.json_path = json_path
         self.api_key_path = api_key_path
         self.summary_type = summary_type
-        self.answers_binary = answers_binary
+        self.answer_format = answer_format
         self.data = self.read_json()
         self.chunks_dir = chunks_dir
         self.is_azure = is_azure
@@ -546,25 +546,31 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         self.debug = debug
 
         # --- NEW: allow severity mapping; else fall back to binary mapping if answers_binary=True ---
-        self.severity_mode = False
-        if severity_mapping and isinstance(severity_mapping, dict) and len(severity_mapping) > 0:
+        # self.severity_mode = False
+        if self.answer_format in ["binary_with_unknown_and_explanations", "severity_with_explanations"]:
+
+            self.severity_mode=True
+
+            if severity_mapping is None:
+                raise ValueError(f"Answer type {self.answer_format} cannot be evaluated without a severity_mapping dict, but none was given")
+            if not isinstance(severity_mapping, dict) or len(severity_mapping) == 0:
+                raise ValueError("""Invalid severity mapping. "severity_mapping" must be a non-empty dictionary""")
+            
             # Normalize keys to ints and values to lowercase lists
-            if self.debug:
-                print('Found severity mapping, enabling severity mode')
             self.keyword_mapping = {
                 int(k): [str(v).lower() for v in vals] for k, vals in severity_mapping.items()
             }
-            # self.severity_mode = True
-        elif self.answers_binary:
-            if self.debug:
-                print('Using binary mapping')
+
+        elif self.answer_format in ["binary","binary_with_explanations","binary_without_explanations"]:
+            self.severity_mode=False
+            # if self.debug:
+            #     print('Using binary mapping')
             self.keyword_mapping = {
                 0: ["poor", "bad", "negative", "n", "no", "false", "absent", "No"],
                 1: ["good", "excellent", "positive", "y", "yes", "true", "present", "Yes"]
             }
         else:
-            self.keyword_mapping = None
-
+            raise ValueError('''"answer_format" is invalid. Allowed answer types are "binary_without_explanations", "binary_with_explanations", "binary_with_unknown_and_explanations","severity_with_explanations"''')
     # def exact_match(self, answer):
     #     """Checks for an exact match of keywords in the answer text."""
     #     if answer == 'Unidentified':
@@ -595,10 +601,10 @@ class CustomSummarizer(InclusionExclusionSummarizer):
 
         # --- NEW: explicit binary mapping first ---
         # This catches pure yes/no outputs for binary-style questions.
-        if raw in ("Yes", "yes", "y", "true", "1"):
-            return 1
-        if raw in ("No", "no", "n", "false", "0"):
-            return 0
+        # if raw in ("Yes", "yes", "y", "true", "1"):
+        #     return 1
+        # if raw in ("No", "no", "n", "false", "0"):
+        #     return 0
         # ------------------------------------------
 
         # Keep digits, dot, minus, and slash (so we can handle fractions like 1/4)
@@ -700,6 +706,8 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         - Severity mode: aggregate by MAX severity over chunks (common choice). If no valid mapped chunks ⇒ NaN.
         """
         summary_dict = {}
+
+
         for article, questions in self.data.items():
             summary_dict[article] = {}
 
@@ -713,12 +721,16 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                     # Note: mapped_answers is the answers for the previous question at this point, ie
                     # the numerical answers which this answer is explaining. We can't determine if the answer
                     # is positive from the explanations, so we use the numbers. Ugly but works for now.
-                    pos_explanations = [
-                        expl for expl, m in zip(responses.values(), mapped_answers)
-                        if (self.severity_mode and (m is not None and m is not np.nan and m > 0))
-                            or (not self.severity_mode and m == 1)
+                    # retained_explanations= [
+                        # f"{m}: {expl}" for expl, m in zip(responses.values(), mapped_answers)
+                        # if (self.severity_mode and (m is not None and m is not np.nan and m > 0))
+                        #     or (not self.severity_mode and m == 1)
+                    # ]
+                    retained_explanations= [
+                        f"{m}: {expl}" for expl, m in zip(responses.values(), mapped_answers)
+                        if (m is not None and m is not np.nan and m > 0)
                     ]
-                    summary_dict[article][question] = '|'.join(pos_explanations)
+                    summary_dict[article][question] = '|'.join(retained_explanations)
 
                 elif question[:11] == 'EXPLANATION':
                     summary_dict[article][question] = '|'.join(list(responses.values()))
@@ -734,37 +746,35 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                     if self.debug:
                         print(valid_answers)
                     if len(valid_answers) == 0:
+                        print(f'Warning: no valid responses for question "{question}". Setting final answer to 0')
                         summary_dict[article][question] = 0
                         
                     else:
-                        if self.severity_mode:
-                            if self.debug:
-                                print('evaluating severity with mapping for article:', article, 'question:', question)
+                        # if self.severity_mode:
+                            # if self.debug:
+                                # print('evaluating severity with mapping for article:', article, 'question:', question)
                             # Aggregate severity as MAX (can be changed to mean/sum if you prefer)
-                            agg_value = np.max(valid_answers)
-                            summary_dict[article][question] = agg_value
-                            if self.chunks_dir is not None:
-                                # store chunks that contributed > 0 severity
-                                pos_chunks = [chunks_dict[f'chunk_{i+1}'] for i, m in enumerate(mapped_answers)
-                                              if (m is not None and not (isinstance(m, float) and np.isnan(m)) and m > 0)]
-                                summary_dict[article]['CHUNKS: '+question] = '\n|\n'.join(pos_chunks)
-                        else:
-                            if self.debug:
-                                print('evaluating binary answers with mapping for article:', article, 'question:', question)
-                            # Binary aggregation = sum of positives > 0 ⇒ positive
-                            num_positive = 0
-                            for v in valid_answers:
-                                if isinstance(v, (int, float)) and v > 0:
-                                    num_positive += 1
+                        agg_value = np.max(valid_answers)
+                        
+                        summary_dict[article][question] = agg_value
+                        if self.chunks_dir is not None:
+                            # store chunks that contributed > 0 severity
+                            retained_chunks = [chunks_dict[f'chunk_{i+1}'] for i, m in enumerate(mapped_answers)
+                                            if (m is not None and not (isinstance(m, float) and np.isnan(m)) and m > 0)]
+                            summary_dict[article]['CHUNKS: '+question] = '\n|\n'.join(retained_chunks)
+                        # else:
+                        #     if self.debug:
+                        #         print('evaluating binary answers with mapping for article:', article, 'question:', question)
+                        #     # Binary aggregation = sum of positives > 0 ⇒ positive
+                        #     num_positive = 0
+                        #     for v in valid_answers:
+                        #         if isinstance(v, (int, float)) and v > 0:
+                        #             num_positive += 1
 
-                            if num_positive > 0:
-                                summary_dict[article][question] = 1
-                            else:
-                                summary_dict[article][question] = 0
-
-                        if self.chunks_dir is not None: 
-                            pos_chunks=[chunks_dict[f'chunk_{i+1}'] for i, answer in enumerate(mapped_answers) if answer==1]
-                            summary_dict[article]['CHUNKS: '+question] = '\n|\n'.join(pos_chunks)
+                        #     if num_positive > 0:
+                        #         summary_dict[article][question] = 1
+                        #     else:
+                        #         summary_dict[article][question] = 0
                             
 
                 elif self.keyword_mapping is None:

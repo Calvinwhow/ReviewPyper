@@ -6,7 +6,7 @@ from tqdm import tqdm
 from calvin_utils.gpt_sys_review.gpt_utils.openai_chat_base import OpenAIChatBase
 
 class OpenAIJsonEvaluator(OpenAIChatBase):
-    def __init__(self, api_key_path, json_file_path, keys_to_consider, question, answer_type, retain_chunks=False, question_token_estimate=500, question_type='research',  model_choice="gpt3_small", include_explanations=False,response_tokens=None, is_azure=False, deployment_id=None, api_base=None, api_version=None, debug=False, test_mode=True):
+    def __init__(self, api_key_path, json_file_path, keys_to_consider, question, answer_format, retain_chunks=False, question_token_estimate=500, question_type='research',  model_choice="gpt3_small", response_tokens=None, is_azure=False, deployment_id=None, api_base=None, api_version=None, debug=False, test_mode=True):
         """
         Initializes the OpenAIChatEvaluator class.
         
@@ -27,14 +27,14 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         self.keys_to_consider = keys_to_consider
         self.all_answers = {}
         self.questions = question
-        self.answer_type = answer_type
+        self.answer_format = answer_format
         self.retain_chunks = retain_chunks
         if self.retain_chunks:
             self.chunk_dir = os.path.dirname(self.json_path) + "_chunks"
             os.makedirs(self.chunk_dir, exist_ok=True)
         else: 
             self.chunk_dir = None
-        self.include_explanations = include_explanations
+        # self.include_explanations = include_explanations
         self.json_data = self.read_json(json_file_path)
         self.get_model_data(model_choice)
         self.get_question_settings(question_type)
@@ -134,23 +134,18 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
     
     def format_questions(self, questions_list):
         """Formats the questions for submission to the OpenAI API."""
-        if self.question_type=='inclusion':
-            prompt_choice='inclusion_questions'
-            questions_w_explanations=[prepend+q for q in questions_list for prepend in ['','EXPLANATION: ']]  
-        elif self.include_explanations and self.answer_type=='binary':
-            prompt_choice='binary_questions_with_explanations'
-            questions_w_explanations=[prepend+q for q in questions_list for prepend in ['','EXPLANATION: ']]   
-        elif self.include_explanations and self.answer_type=='integer':
-            prompt_choice='binary_questions_with_explanations'
+        if self.answer_format in ['inclusion', "binary_with_explanations",'binary_with_unknown_and_explanations',"severity_with_explanations",]:
             questions_w_explanations=[prepend+q for q in questions_list for prepend in ['','EXPLANATION: ']]     
-        else:
-            prompt_choice='binary_questions_without_explanations'
+        elif self.answer_format=="binary" or self.answer_format=="binary_without_explanations":
             questions_w_explanations=questions_list
+        else:            
+            myerror=f'answer_format {self.answer_format} is invalid. Allowed answer types are "inclusion", "binary_without_explanations", "binary_with_explanations", "binary_with_unknown_and_explanations", "severity_with_explanations"'
+            raise ValueError(myerror)
         
-        formatted_questions = json.load(open(os.path.join(os.path.dirname(__file__), 'prompts.json')))[prompt_choice]
+        formatted_questions = json.load(open(os.path.join(os.path.dirname(__file__), 'prompts.json')))[self.answer_format]
         formatted_questions = formatted_questions.replace("[CHUNK_FLAG]", self.chunk_flag)
         formatted_questions += " ".join(questions_w_explanations)
-
+        
         return formatted_questions, questions_w_explanations
     
 

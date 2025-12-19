@@ -3,7 +3,7 @@
     "Does this patient have difficulty performing the heel-shin maneuver such as lowering their heel jerkily, or with lateral movements?":"binary",
     "Does this patient's speech show dysarthria, or slurring to the point that some words are not intelligible? For instance, the text may mention having to ask the patient to repeat themselves multiple times. Do not consider hypophonia.":"binary",
     "Does this patient have oculomotor abnormalities? For example, the text may mention slowed pursuit, saccadic intrusions, hypo/hypermetric saccade, or nystagmus.":"binary",
-    "Does this patient show dysmetria, oscillating movement, or segmented movement of the arm or hand when performing the finger-nose maneuver? Ignore any slowness.":"binary"
+    "Does this patient show dysmetria, oscillating movement, termor, or segmented movement of the arm or hand when performing the finger-nose maneuver? Ignore any slowness.":"binary"
     },
 "bars_severity":{
     "For this patient, rate the severity of disturbed gait or walking difficulty (staggering, trouble turning, needs cane/wall, cannot walk unaided) on a 0–3 scale. 0=none/absent, 1=mild, 2=moderate, 3=severe. Return only a single integer between 0 and 3; if not mentioned, return 0.": "gait",

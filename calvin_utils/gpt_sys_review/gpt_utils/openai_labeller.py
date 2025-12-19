@@ -52,7 +52,7 @@ class CaseReportLabeler(OpenAIJsonEvaluator):
                          question_token_estimate=question_token_estimate,
                          question_type="labelling", 
                          question=questions, 
-                         answer_type='binary',
+                         answer_format='binary',
                          model_choice="gpt3_small_labeler",
                          is_azure=is_azure,
                          deployment_id=deployment_id,

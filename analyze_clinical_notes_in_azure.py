@@ -40,14 +40,16 @@ test_mode=False
 # See notebook 05, section 02 for examples.
 extraction_question_sets = ['bars','moca','ccas','cnrs']
 
-# - Set extraction_answers_binary to False if the extraction questions you asked do not have binary answers. 
-#    - We will extract the raw data, like specific result values, for you to review.
-# - Set extraction_answers_binary to True if the extraction questions you asked do have binary answers. 
-#    - By default, we will set positive answers to 1, and negative answers to 0.
-extraction_answers_binary=True
+
+# Types of answers you want for the extraction step. possible types are:
+# - "binary_without_explanations"
+# - "binary_with_explanations"
+# - "binary_with_unknown_and_explanations"
+# - "severity_with_explanations"
+extraction_answer_format="binary_with_unknown_and_explanations"
 
 evaluate_accuracy=False
-# Additional files for auc calculation
+#Additional files for auc calculation
 ground_truth_path = "/Users/rm026/Documents/code/ReviewPyper_testing/redacted_msa_ground_truth_no_maybes.csv"
 iteration_history_path = "/Users/rm026/Documents/code/ReviewPyper_testing/all_patients_gpt4_bars_redacted_iteration_history.csv"
 accuracy_image = output_dir+"iteration_accuracy.png"
@@ -57,6 +59,7 @@ accuracy_image = output_dir+"iteration_accuracy.png"
 # ################################################################################
 import os
 import json
+
 inclusion_questions_json = json.load(open('inclusion_questions.json'))
 inclusion_questions = {}
 for questionnaire in inclusion_question_sets:
@@ -103,10 +106,10 @@ from calvin_utils.gpt_sys_review.gpt_utils.openai_json_evaluator import OpenAIJs
 evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 json_file_path=json_file_path, 
                                 keys_to_consider=["emr"], 
-                                answer_type='binary',
+                                answer_format='inclusion',
                                 question_type='inclusion', 
                                 model_choice="gpt3_small",
-                                include_explanations=True, # TODO: currently always includes explanations for inclusion questions, and this has to be set to True here. 
+                                # include_explanations=True, # TODO: currently always includes explanations for inclusion questions, and this has to be set to True here. 
                                 question=inclusion_questions, 
                                 test_mode=test_mode,
                                 debug=True,
@@ -142,9 +145,9 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 keys_to_consider=['emr'],
                                 question_type="emr_strict_extraction",
                                 question=extraction_questions,
-                                answer_type='binary' if extraction_answers_binary else 'integer',
+                                answer_format=extraction_answer_format,
                                 retain_chunks=True, 
-                                include_explanations=True,
+                                # include_explanations=True,
                                 test_mode=test_mode,
                                 model_choice="gpt4",
                                 debug=extraction_debug,
@@ -158,16 +161,15 @@ evaluated_json_path = evaluator.save_to_json(answers)
 
 
 severity_dict = {
-    0: ["none", "absent", "no"],
-    1: ["mild", "slight"],
-    2: ["moderate"],
-    3: ["severe", "marked", "significant"]
+    0: ["unknown",'no info', 'no information'],
+    1: ["n", "no", "false"],
+    2: ["y", "yes", "true", "present"]
 }
 
 from calvin_utils.gpt_sys_review.json_utils import CustomSummarizer
 custom_summarizer = CustomSummarizer(json_path=output_dir+"json_evaluated/emr_strict_extraction_evaluations.json",
                                     #  json_path=evaluated_json_path, 
-                                     answers_binary=extraction_answers_binary, 
+                                     answer_format=extraction_answer_format,
                                      summary_type='mapping', 
                                      api_key_path=api_key_path,
                                     #  chunks_dir=extraction_chunks_dir, 
@@ -175,7 +177,9 @@ custom_summarizer = CustomSummarizer(json_path=output_dir+"json_evaluated/emr_st
                                      deployment_id=extraction_model_deployment_id, 
                                      api_base=api_base, api_version=api_version,
                                      debug=False,
-                                     severity_mapping=severity_dict if extraction_answers_binary else None)
+                                    #  severity_mapping=severity_dict if extraction_answers_binary else None
+                                     severity_mapping=severity_dict
+                                    )
 df, raw_path = custom_summarizer.run_custom(positive_explanations_only=True,)
 
 from calvin_utils.gpt_sys_review.txt_utils import PostProcessing

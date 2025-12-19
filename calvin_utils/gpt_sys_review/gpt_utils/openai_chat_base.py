@@ -148,7 +148,7 @@ class OpenAIChatBase(OpenAIBase):
         """Verifies that the response from ChatGPT has the correct formatting, i.e. there is an answer
         for each question and they are separated by a '|' character."""
         
-        print("DEBUG ANSWER:", repr(answer))
+        # print("DEBUG ANSWER:", repr(answer))
 
         while answer[-1] in ["|",' ', '\n']:
             answer=answer[:-1]
