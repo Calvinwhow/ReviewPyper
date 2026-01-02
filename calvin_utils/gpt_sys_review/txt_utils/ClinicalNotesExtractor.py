@@ -22,14 +22,15 @@ class ClinicalNotesExtractor:
         self.separator=separator
         self.input_file_list=input_file_list
         self.output_dir=output_dir
+        self.raw_files_dir = output_dir + '_separated'
         
         self._prep_out_dir()
     
     ### Internal API ###
 
     def _prep_out_dir(self):
-        if not os.path.exists(self.output_dir):
-            os.makedirs(self.output_dir, exist_ok=True)
+        if not os.path.exists(self.raw_files_dir):
+            os.makedirs(self.raw_files_dir, exist_ok=True)
 
     def _file_reader(self,file):
         """Generator to read the input file line by line."""
@@ -64,7 +65,7 @@ class ClinicalNotesExtractor:
                 
                 mrn=header.split(self.separator)[mrn_index]
 
-                with open(os.path.join(self.output_dir, f'{mrn}.txt'), 'a', encoding='utf-8') as subject_file:
+                with open(os.path.join(self.raw_files_dir, f'{mrn}.txt'), 'a', encoding='utf-8') as subject_file:
                     subject_file.write(note)
 
                 note=''
@@ -74,10 +75,10 @@ class ClinicalNotesExtractor:
         """Generates a master list of all subjects and their notes."""
         
         master_list = []
-        for filename in os.listdir(self.output_dir):
+        for filename in os.listdir(self.raw_files_dir):
             if filename.endswith('.txt'):
                 mrn = filename.split('.')[0]
-                filepath = os.path.join(self.output_dir, filename)
+                filepath = os.path.join(self.raw_files_dir, filename)
                 master_list.append({'MRN': mrn, 'filepath': filepath})
         
         self.master_list = pd.DataFrame(master_list)
