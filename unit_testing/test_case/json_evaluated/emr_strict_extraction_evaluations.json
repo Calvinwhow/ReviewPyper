@@ -1,0 +1,44 @@
+{
+"00000016": {
+"Gait": {
+"chunk_1": "Yes",
+"chunk_2": "Yes"
+},
+"EXPLANATION: Gait": {
+"chunk_1": "The patient is noted to have difficulty with balance and uses a cane for support, with mentions of decreased stride length and speed, decreased arm swing bilaterally, en bloc turning and limited tandem walk.",
+"chunk_2": "The report indicates that the patient has decreased stride length and speed, decreased arm swing bilaterally, and needs to use a cane to support herself. The report also notes that she sometimes uses a cane or a rollator or holds on to furniture at home."
+},
+"Heel-shin": {
+"chunk_1": "Unknown",
+"chunk_2": "Unknown"
+},
+"EXPLANATION: Heel-shin": {
+"chunk_1": "The text does not mention the patient performing the heel-shin maneuver.",
+"chunk_2": "The document does not provide information specific to the patient's ability to perform a heel-shin maneuver."
+},
+"Speech": {
+"chunk_1": "No",
+"chunk_2": "No"
+},
+"EXPLANATION: Speech": {
+"chunk_1": "The text does not mention anything about the patient's speech being dysarthric or slurred.",
+"chunk_2": "There is no mention of the patient having dysarthria or any difficulty with speech that requires repetition for clarity."
+},
+"Oculomotor": {
+"chunk_1": "Yes",
+"chunk_2": "Unknown"
+},
+"EXPLANATION: Oculomotor": {
+"chunk_1": "The report mentions horizontal left end gaze nystagmus in the oculomotor examination section.",
+"chunk_2": "The patient's oculomotor function was reported as revealing full eye movements in all directions, without diplopia. However, a horizontal left end gaze nystagmus was observed, indicating a form of oculomotor abnormality."
+},
+"Finger-nose": {
+"chunk_1": "Yes",
+"chunk_2": "No"
+},
+"EXPLANATION: Finger-nose": {
+"chunk_1": "The report mentions bilateral intention tremor during the finger-nose-finger test in the coordination section.",
+"chunk_2": "According to the report, during the finger-nose-finger test, bilateral intention tremor was revealed. This indicates abnormalities in the patient's hand and arm movement during the finger-nose maneuver."
+}
+}
+}
