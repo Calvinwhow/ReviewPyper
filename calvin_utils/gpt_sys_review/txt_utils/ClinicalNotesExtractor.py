@@ -16,11 +16,27 @@ class ClinicalNotesExtractor:
     - save_master_list: saves the master list to a csv file.
     - run: runs the entire process of splitting the files, generating the master list, and filtering it.
     """
-    def __init__(self, input_file_list, output_dir, separator="|", MRN_str='MRN', report_end_str='[report_end]'):
+    def __init__(self, input_file_list, mrn_file, output_dir, separator="|", MRN_str='MRN', report_end_str='[report_end]'):
         self.MRN_str = MRN_str
         self.report_end_str=report_end_str
         self.separator=separator
         self.input_file_list=input_file_list
+        
+        self.mrn_mappings = {}
+        with open(mrn_file, 'r', encoding='utf-8') as f:
+
+            for line in f:
+                
+                if line.startswith('IncomingId') or line.strip() == '':
+                    # print("Skipping header or empty line in MRN file.")
+                    continue
+                
+                parts = line.split('|') # This '|' is NOT related to self.separator; it is used in the MRN files from RPDR.
+                primary_mrn = parts[0]
+
+                self.mrn_mappings[primary_mrn] = primary_mrn
+                self.mrn_mappings.update({mrn: primary_mrn for mrn in parts[4:-1] if mrn.strip() != ''})
+
         self.output_dir=output_dir
         self.raw_files_dir = output_dir + '_separated'
         
@@ -63,9 +79,11 @@ class ClinicalNotesExtractor:
                 if header=='':
                     raise ValueError("Header is empty")
                 
-                mrn=header.split(self.separator)[mrn_index]
+                note_mrn=header.split(self.separator)[mrn_index]
 
-                with open(os.path.join(self.raw_files_dir, f'{mrn}.txt'), 'a', encoding='utf-8') as subject_file:
+                subject_mrn=self.mrn_mappings[note_mrn]
+
+                with open(os.path.join(self.raw_files_dir, f'{subject_mrn}.txt'), 'a', encoding='utf-8') as subject_file:
                     subject_file.write(note)
 
                 note=''
