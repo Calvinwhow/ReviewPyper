@@ -45,10 +45,21 @@
     "Does this patient seem disinterested, unconcerned, or indifferent to daily activities, future events, themselves or others? For example, they may appear distant or aloof with a lack of emotional reactivity to situations or others that would typically evoke an emotional response, or have trouble understanding another person's feelings or perspective.":"binary",
     "Does this patient act or appear to be unreasonably angry or aggressive? For instance, they may be easily upset or irritable; be intolerant of people entering their personal space or overly assertive or protective about communal space and objects; or be deliberately disobedient, defiant and argumentative.":"binary",
     "Does this patient seem to lack social skills? For example, they may act in a passive, immature, or childlike manner; seem unaware of social cues, or speak or behave in a way that is inappropriate to the situation; be unaware of others' personal space, have difficulty adapting to social situations, act or makes statements in an inappropriate manner; or be overly trusting of others, vulnerable to being tricked or manipulated, or prone to believe highly unlikely statements or claims.":"binary"
-},
+    },
 "test_questions":{
     "Does this medical record state that the patient has had a seizure?":"binary",
     "Is this patient afraid of having a seizure during the next month?":"binary",
     "Does this medical record state that the patient has had a stroke? Ignore any family histories of stroke or transient ischemic attacks.":"binary"
+    },
+"ccas_domains":{
+    "Does this patient have impaired language skills? For instance, they may have difficulty with word-finding, verbal fluency, semantic or phonemic fluency, or comprehension.": "language",
+    "Does this patient have impaired executive function or short-term memory? For instance, they may struggle with tasks requiring working memory, sustained attention, mental flexibility or abstract reasoning.": "executive",
+    "Does this patient have impaired memory? For instance, they may struggle with delayed recall. Do not consider short-term or working memory tasks.": "memory",
+    "Does this patient have impaired visuospatial skills? For instance, they may struggle with drawing or copying tasks.": "visuospatial",
+    "Does this patient seem to be emotionally labile, show incongrouous emotions, or appear hopeless or depressed?": "affect_emotion",
+    "Does this patient show easy sensory overload or avoidant behavior?": "affect_sensory",
+    "Does this patient express illogical thoughts or paranoia?": "affect_paranoia",
+    "Does this patient show blunted affect, apathy, or a lack of empathy": "affect_blunted",
+    "Does this patient show anger, aggression, irritability, or difficulty with social cues and social boundaries?": "affect_irritability"
     }
 }

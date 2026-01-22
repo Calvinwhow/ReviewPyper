@@ -4,7 +4,11 @@
 # Set the file(s) you want to analyze (usually from an RPDR request) and the output directory
 notes_file_list=['F:/Code/schmahmann_rpdr_results/rm026_110525111627789405_Dis.txt',
                  'F:/Code/schmahmann_rpdr_results/rm026_110525111627789405_Prg.txt',]
-# notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/00000016.txt',]
+
+# Set the MRN file given by the RPDR request, to ensure proper matching of notes to subjects
+# Some subjects may have multiple MRNs, and this ensure that all notes for a subject are included.
+mrn_file='/Users/rm026/Documents/Code/reviewpyper_testing/msa_fake_mrn_file.txt'
+
 output_dir='F:/Code/outputs/schmahmann_output/'
 
 # Provide the path to your OpenAI API key
@@ -75,7 +79,7 @@ master_list_excel_path = output_dir+"master_list.xlsx"
 json_file_path = output_dir+"json/_emr_labeled_sections.json"
 
 from calvin_utils.gpt_sys_review.txt_utils import ClinicalNotesExtractor
-extractor=ClinicalNotesExtractor(notes_file_list, output_dir)
+extractor=ClinicalNotesExtractor(notes_file_list, mrn_file, output_dir)
 note_df=extractor.run()
 
 from calvin_utils.gpt_sys_review.txt_utils import TextPreprocessor
