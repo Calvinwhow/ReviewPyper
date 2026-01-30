@@ -48,7 +48,6 @@ ross_testing_tools/real_bars_to_fake_correl.ipynb
 ross_testing_tools/redact_bars_from_notes.ipynb
 ross_testing_tools/testing.ipynb
 ross_testing_tools/extraction_questions_draft_1.json
-
 local_test_analyze_clinical_notes_in_azure.py
 unit_testing/temp/master_list.csv
 unit_testing/temp/json_evaluated/emr_strict_extraction_evaluations.json

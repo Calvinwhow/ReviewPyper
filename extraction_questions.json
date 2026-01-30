@@ -1,14 +1,14 @@
 {"bars":{
-    "Does this patient have difficulty walking or disturbed gait? For instance, they may mention the patient staggering, difficulties in half turn, requiring support from a wall or stick, or being entirely unable to walk on their own.":"binary",
-    "Does this patient have difficulty performing the heel-shin maneuver such as lowering their heel jerkily, or with lateral movements?":"binary",
-    "Does this patient's speech show dysarthria, or slurring to the point that some words are not intelligible? For instance, the text may mention having to ask the patient to repeat themselves multiple times. Do not consider hypophonia.":"binary",
-    "Does this patient have oculomotor abnormalities? For example, the text may mention slowed pursuit, saccadic intrusions, hypo/hypermetric saccade, or nystagmus.":"binary",
-    "Does this patient show dysmetria, oscillating movement, termor, or segmented movement of the arm or hand when performing the finger-nose maneuver? Ignore any slowness.":"binary"
+    "Does this patient have difficulty walking or disturbed gait? For instance, they may mention the patient staggering, difficulties in half turn, requiring support from a wall or stick, or being entirely unable to walk on their own.":"gait",
+    "Does this patient have difficulty performing the heel-shin maneuver such as lowering their heel jerkily, or with lateral movements?":"heel–shin",
+    "Does this patient's speech show dysarthria, or slurring to the point that some words are not intelligible? For instance, the text may mention having to ask the patient to repeat themselves multiple times. Do not consider hypophonia.":"speech",
+    "Does this patient have oculomotor abnormalities? For example, the text may mention slowed pursuit, saccadic intrusions, hypo/hypermetric saccade, or nystagmus.":"oculomotor",
+    "Does this patient show dysmetria, oscillating movement, termor, or segmented movement of the arm or hand when performing the finger-nose maneuver? Ignore any slowness.":"finger-nose"
     },
 "bars_severity":{
     "For this patient, rate the severity of disturbed gait or walking difficulty (staggering, trouble turning, needs cane/wall, cannot walk unaided) on a 0–3 scale. 0=none/absent, 1=mild, 2=moderate, 3=severe. Return only a single integer between 0 and 3; if not mentioned, return 0.": "gait",
-    "For this patient, rate the severity of difficulty performing the heel–shin maneuver (jerky lowering or lateral movements) on a 0–3 scale. 0=none/absent, 1=mild, 2=moderate, 3=severe. Return only a single integer 0–3; if not mentioned, return 0.": "knee-tibia",
-    "For this patient, rate the severity of dysarthria or slurred, partly unintelligible speech (not hypophonia) on a 0–3 scale. 0=none/absent, 1=mild, 2=moderate, 3=severe. Return only a single integer 0–3; if not mentioned, return 0.": "dysarthria",
+    "For this patient, rate the severity of difficulty performing the heel–shin maneuver (jerky lowering or lateral movements) on a 0–3 scale. 0=none/absent, 1=mild, 2=moderate, 3=severe. Return only a single integer 0–3; if not mentioned, return 0.": "heel-shin",
+    "For this patient, rate the severity of dysarthria or slurred, partly unintelligible speech (not hypophonia) on a 0–3 scale. 0=none/absent, 1=mild, 2=moderate, 3=severe. Return only a single integer 0–3; if not mentioned, return 0.": "speech",
     "For this patient, rate the severity of oculomotor abnormalities (slowed pursuit, saccadic intrusions, hypo/hypermetric saccades, nystagmus) on a 0–3 scale. 0=none/absent, 1=mild, 2=moderate, 3=severe. Return only a single integer 0–3; if not mentioned, return 0.": "oculomotor",
     "For this patient, rate the severity of finger–nose test abnormalities (dysmetria, oscillating/segmented movement; ignore slowness) on a 0–3 scale. 0=none/absent, 1=mild, 2=moderate, 3=severe. Return only a single integer 0–3; if not mentioned, return 0.": "finger-nose"
     },
@@ -23,18 +23,55 @@
     "Does this patient have difficulty orienting themselves? For instance, they may not know the date, month, year, day, city, or place they are in.":"binary"
     },
 "ccas":{
-    "Does this patient have difficulty with semantic fluency? For instance, they may not be able to name more than 15 animals in one minute.":"binary",
-    "Does this patient have difficulty with phonemic fluency? For instance, they may not be able to name more than 9 words starting with a given letter out of 19.":"binary",
-    "Does this patient have difficulty with category switching? For instance, they may not be able to alternate between naming vegetables and types of jobs for more than 9 words in one minute.":"binary",
-    "Does this patient have difficulty with verbal registration? For instance, they may not be able to repeat a list of 5 words given to them within 4 attempts.":"binary",
-    "Does this patient have difficulty repeating strings of digits, forwards or backwards?":"binary",
-    "Is this patient unable to correctly draw a cube, with the correct number of lines?":"binary",
-    "Is this patient unable to correctly copy a drawing of a cube?":"binary",
-    "Is this patient able to identify similarities between objects, such as nose/ear, sheep/elephant, lake/river, or airplane/motorcycle?":"binary",
-    "Does this patient have difficulty completing a go-no go task, where they raise their finger if the doctor taps the table once, but not if they tap twice?":"binary",
-    "Does this patient have unusual affect? For instance, they may have difficulty with focusing attention or mental flexibility; be emotionally labile or show incongruous emotions; show easy sensory overload or avoidant behaviors; express illogical thoughts; lack empathy, be apathetic, or have blunted affect; or be angry or aggressive, irritable, oppositional, with difficulty with social cues and social boundaries. Ignore depression or anxiety symptoms.":"binary"
+    "Does this patient have difficulty with semantic fluency? For instance, they may not be able to name more than 15 animals in one minute.":"semantic fluency",
+    "Does this patient have difficulty with phonemic fluency? For instance, they may not be able to name more than 9 words starting with a given letter out of 19.":"phonemic fluency",
+    "Does this patient have difficulty with category switching? For instance, they may not be able to alternate between naming vegetables and types of jobs for more than 9 words in one minute.":"category switching",
+    "Does this patient have difficulty with verbal registration? For instance, they may not be able to repeat a list of 5 words given to them within 4 attempts.":"verbal registration",
+    "Does this patient have difficulty repeating strings of digits, forwards or backwards?":"digit span",
+    "Is this patient unable to correctly draw a cube, with the correct number of lines?":"cube draw",
+    "Is this patient unable to correctly copy a drawing of a cube?":"cube copy",
+    "Is this patient unable to identify similarities between objects, such as nose/ear, sheep/elephant, lake/river, or airplane/motorcycle?":"similarities",
+    "Does this patient have difficulty completing a go-no go task, where they raise their finger if the doctor taps the table once, but not if they tap twice?":"go-no go",
+    "Does this patient have unusual affect? For instance, they may have difficulty with focusing attention or mental flexibility; be emotionally labile or show incongruous emotions; show easy sensory overload or avoidant behaviors; express illogical thoughts; lack empathy, be apathetic, or have blunted affect; or be angry or aggressive, irritable, oppositional, with difficulty with social cues and social boundaries. Ignore depression or anxiety symptoms.":"affect"
     },
 "cnrs":{
+    "Does this patient have difficulty maintaining focus or sustained attention, make careless mistakes, or not attend to details?":"attention a1",
+    "Is this patient easily distracted by non-essential or irrelevant stimuli?":"attention a2",
+    "Is this patient often \"on the go,\" acting as if \"driven by a motor\" (e.g., is unable to be or uncomfortable being still for extended time), restless, or difficult to keep up with?":"attention a3",
+    "Does this patient feel compelled to perform habits that are excessive and repetitive, and become distressed when prevented from doing so?":"attention a4",
+    "Does this patient feel driven to complete tasks or behave in a rigid, inflexible way according to specific, personal rules?":"attention a5",
+    "Does this patient worry repeatedly or too much about his/her own emotional/physical state, in a way that seems excessive or inappropriate?":"attention b6",
+    "Does this patient repeat the same response (e.g., word, phrase, gesture, behavior) despite being ineffective or inappropriate?":"attention b7",
+    "Does this patient get mentally “stuck” or have trouble shifting thoughts or mental focus from one activity or situation to another?":"attention b8",
+    "Is this patient unable to stop repetitive thoughts, urges or images that seem to cause distress?":"attention b9",
+    "Does this patient act hastily or carelessly in the moment without thinking (e.g., interrupting others, trouble waiting his/her turn)":"emotion a10",
+    "Does this patient show rapid changes in emotion that are more intense than usual or unrelated to the situation?":"emotion a11",
+    "Does this patient cry and/or laugh without an apparent trigger or inappropriately?":"emotion a12",
+    "Is this patient overly anxious, and/or experience sudden episodes of intense fear or discomfort (e.g., heart racing, shortness of breath, dizziness)?":"emotion a13",
+    "Does this patient show lack of pleasure from activities or interactions that used to be enjoyable?":"emotion b14",
+    "Does this patient show negative attitudes or pessimism about the future and a sense of hopelessness?":"emotion b15",
+    "Is this patient uneasy or generally dissatisfied with life?":"emotion b16",
+    "Does this patient seem very sad or depressed?":"emotion b17",
+    "Does this patient make repetitive movements, postures, or utterances that follow a particular pattern (e.g., hand flapping, finger flicking, body rocking, repeating noises or phrases)?":"autism a18",
+    "Is this patient drawn to sensory experiences, such as excessive smelling or touching of objects, or fascination with lights or spinning objects?":"autism a19",
+    "Does this patient avoid or show high sensitivity to light, touch or texture (including clothing and the mouth-feel of foods)?":"autism b20",
+    "Is this patient easily overwhelmed by, or has an extreme reaction to, sounds, textures, tastes, smells, temperature or lights?":"autism b21",
+    "Does this patient communicate in a way that is difficult to follow, illogical, rambling, or nonsensical?":"psychosis a22",
+    "Does this patient express irrational concerns or false beliefs that he/she is threatened in some way (e.g., others are out to hurt him/her)?":"psychosis a23",
+    "Does this patient see or hear things that they believe are real but are not present?":"psychosis a24",
+    "Does this patient have trouble understanding other people's feelings or perspective?":"psychosis b25",
+    "Does this patient appear distant or aloof, with a lack of emotional reactivity to situations or others that would typically evoke an emotional response?":"psychosis b26",
+    "Is this patient disinterested, unconcerned, or indifferent to daily activities, future events, self, or others?":"psychosis b27",
+    "Does this patient act or appear to be unreasonably angry or aggressive?":"social a28",
+    "Is this patient easily upset or irritable?":"social a29",
+    "Is this patient intolerant of people entering their personal space or overly assertive or protective about communal space and objects?":"social a30",
+    "Is this patient deliberately disobedient, defiant, or argumentative?":"social a31",
+    "Does this patient act in a passive, immature, or childlike manner?":"social b32",
+    "Does this patient seem unaware of social cues, or speak or behave in a way that is inappropriate to the situation?":"social b33",
+    "Does this patient seem unaware of others' personal space, have difficulty adapting to social situations, or act or make statements in an inappropriate manner?":"social b34",
+    "Is this patient overly trusting of others, vulnerable to being tricked or manipulated, or prone to believe highly unlikely statements or claims?":"social b35"
+    },
+"cnrs_combined_columns":{
     "Does this patient have difficulty maintaining focus or sustained attention? For example, they may make careless mistakes or not attend to details; be easily distracted by non-essential or irrelevant stimuli; often be “on the go,” acting as if “driven by a motor” (e.g., is unable to be or uncomfortable being still for extended time); feel compelled to perform habits that are excessive and repetitive, and become distressed when prevented from doing so; or feel driven to complete tasks or behave in a rigid, inflexible way according to specific, personal rules.":"binary",
     "Does this patient get mentally “stuck” or have trouble shifting thoughts or mental focus from one activity or situation to another? For example, they may repeat the same responses (e.g., word, phrase, gesture, behavior) despite being ineffective or inappropriate, worry repeatedly or too much about their own emotional/physical state, or be unable to stop repetitive thoughts, urges or images that seem to cause distress.":"binary",
     "Does this patient struggle to control their emotions? For instance, they may act hastily or carelessly in the moment without thinking (e.g., interrupting others, trouble waiting his/her turn); show rapid changes in emotion that are more intense than usual or unrelated to the situation; cry and/or laugh without an apparent trigger inappropriately; be overly anxious; or experiences sudden episodes of intense fear or discomfort (e.g., heart racing, shortness of breath, dizziness). Ignore depression or anxiety symptoms.":"binary",
@@ -46,20 +83,7 @@
     "Does this patient act or appear to be unreasonably angry or aggressive? For instance, they may be easily upset or irritable; be intolerant of people entering their personal space or overly assertive or protective about communal space and objects; or be deliberately disobedient, defiant and argumentative.":"binary",
     "Does this patient seem to lack social skills? For example, they may act in a passive, immature, or childlike manner; seem unaware of social cues, or speak or behave in a way that is inappropriate to the situation; be unaware of others' personal space, have difficulty adapting to social situations, act or makes statements in an inappropriate manner; or be overly trusting of others, vulnerable to being tricked or manipulated, or prone to believe highly unlikely statements or claims.":"binary"
     },
-"test_questions":{
-    "Does this medical record state that the patient has had a seizure?":"binary",
-    "Is this patient afraid of having a seizure during the next month?":"binary",
-    "Does this medical record state that the patient has had a stroke? Ignore any family histories of stroke or transient ischemic attacks.":"binary"
-    },
-"ccas_domains":{
-    "Does this patient have impaired language skills? For instance, they may have difficulty with word-finding, verbal fluency, semantic or phonemic fluency, or comprehension.": "language",
-    "Does this patient have impaired executive function or short-term memory? For instance, they may struggle with tasks requiring working memory, sustained attention, mental flexibility or abstract reasoning.": "executive",
-    "Does this patient have impaired memory? For instance, they may struggle with delayed recall. Do not consider short-term or working memory tasks.": "memory",
-    "Does this patient have impaired visuospatial skills? For instance, they may struggle with drawing or copying tasks.": "visuospatial",
-    "Does this patient seem to be emotionally labile, show incongrouous emotions, or appear hopeless or depressed?": "affect_emotion",
-    "Does this patient show easy sensory overload or avoidant behavior?": "affect_sensory",
-    "Does this patient express illogical thoughts or paranoia?": "affect_paranoia",
-    "Does this patient show blunted affect, apathy, or a lack of empathy": "affect_blunted",
-    "Does this patient show anger, aggression, irritability, or difficulty with social cues and social boundaries?": "affect_irritability"
+"fixed_similarities":{
+    "Is this patient unable to identify similarities between objects, such as nose/ear, sheep/elephant, lake/river, or airplane/motorcycle?":"similarities_fixed"
     }
 }

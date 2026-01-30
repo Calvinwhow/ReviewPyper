@@ -21,9 +21,9 @@ class ClinicalNotesExtractor:
         self.report_end_str=report_end_str
         self.separator=separator
         self.input_file_list=input_file_list
-        
+        self.mrn_file=mrn_file
         self.mrn_mappings = {}
-        with open(mrn_file, 'r', encoding='utf-8') as f:
+        with open(self.mrn_file, 'r', encoding='utf-8') as f:
 
             for line in f:
                 
@@ -80,6 +80,12 @@ class ClinicalNotesExtractor:
                     raise ValueError("Header is empty")
                 
                 note_mrn=header.split(self.separator)[mrn_index]
+                
+                if note_mrn not in self.mrn_mappings:
+                    print(f"Warning: MRN {note_mrn} from {file} not found in {self.mrn_file}. Skipping note.")
+                    note=''
+                    header=''
+                    continue
 
                 subject_mrn=self.mrn_mappings[note_mrn]
 
