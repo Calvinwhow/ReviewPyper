@@ -6,6 +6,7 @@ notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/00000016_no_sp
 # notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/00000016.txt',]
 output_dir='/Users/rm026/Documents/Code/reviewpyper_testing/tests/msa_sub_16_yes-no-unknown_speech_heel-shin_removed_4/'
 
+mrn_file="/Users/rm026/Documents/Code/reviewpyper_testing/msa_fake_mrn_file.txt"
 # Provide the path to your OpenAI API key
 api_key_path = "/Users/rm026/Documents/code/openai-key.txt"
 
@@ -21,6 +22,8 @@ inclusion_question_sets =['emr_inclusion']
 # Set test_mode=True during your first few runs, while you tune your questions to get the answers you need
 # - Always run this first, at least once. 
 test_mode=False
+
+segment_file=False
 
 # Set the questions for data extraction. This is where you extract what you want to know from the included notes.
 # These are more open-ended than inclusion/exclusion questions, and don't have to be yes/no.
@@ -61,7 +64,7 @@ master_list_excel_path = output_dir+"master_list.xlsx"
 json_file_path = output_dir+"json/_emr_labeled_sections.json"
 
 from calvin_utils.gpt_sys_review.txt_utils import ClinicalNotesExtractor
-extractor=ClinicalNotesExtractor(notes_file_list, output_dir)
+extractor=ClinicalNotesExtractor(notes_file_list, mrn_file, output_dir)
 note_df=extractor.run()
 
 from calvin_utils.gpt_sys_review.txt_utils import TextPreprocessor
@@ -77,11 +80,29 @@ from calvin_utils.gpt_sys_review.json_utils import SectionLabeler
 ## subjects in it, not just that it exists.
 if os.path.exists(output_dir+"json/_emr_labeled_sections.json"):
     print(f"Found existing labeled sections at {output_dir+'json/_emr_labeled_sections.json'}. Skipping section labeling step.")
-else:
+elif segment_file:
     section_labeler = SectionLabeler(folder_path=preprocessed_path, 
                                     article_type="emr", 
                                     api_key_path=api_key_path,)
     section_labeler.process_files()
+else:
+    # alternative: just create a json with the full text under 'emr' key
+    # almost nothing gets counted as "other" in SectionLabeler anyways. 
+    # Saves tons of time, cost is basically the same. 
+    # TODO: clean this up later
+    print("Skipping section labeling step.")
+    section_json={}
+    for filename in os.listdir(preprocessed_path):
+        if not filename.endswith('.txt'):
+            continue
+        with open(os.path.join(preprocessed_path, filename)) as file:
+            processed=file.read().replace('|', ',') 
+            section_json[filename.split('.')[0]]={'emr':" ".join(processed.split())}
+
+    os.mkdir(os.path.join(output_dir,'json'))
+    with open(json_file_path, 'w') as f:
+        json.dump(section_json, f, indent=0)
+
 
 # Ask inclusion/exclusion questions
 from calvin_utils.gpt_sys_review.gpt_utils.openai_json_evaluator import OpenAIJsonEvaluator
@@ -135,9 +156,9 @@ evaluated_json_path = evaluator.save_to_json(answers)
 
 
 severity_dict = {
-    0: ["unknown",'no info', 'no information'],
+    0: ["unknown",'no info', 'no information', 'not mentioned', 'not present'],
     1: ["n", "no", "false"],
-    2: ["y", "yes", "true", "present"]
+    2: ["y", "yes", "true", ]
 }
 
 from calvin_utils.gpt_sys_review.json_utils import CustomSummarizer

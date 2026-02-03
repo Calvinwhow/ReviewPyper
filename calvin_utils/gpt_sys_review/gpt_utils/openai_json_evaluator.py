@@ -6,7 +6,7 @@ from tqdm import tqdm
 from calvin_utils.gpt_sys_review.gpt_utils.openai_chat_base import OpenAIChatBase
 
 class OpenAIJsonEvaluator(OpenAIChatBase):
-    def __init__(self, api_key_path, json_file_path, keys_to_consider, question, answer_format, retain_chunks=False, question_token_estimate=500, question_type='research',  model_choice="gpt3_small", response_tokens=None, is_azure=False, deployment_id=None, api_base=None, api_version=None, debug=False, test_mode=True):
+    def __init__(self, api_key_path, json_file_path, keys_to_consider, question, answer_format, retain_chunks=False, question_token_estimate=500, question_type='research',  model_choice="gpt3_small", response_tokens=None, is_azure=False, deployment_id=None, api_base=None, api_version=None, debug=False, test_mode=True, test_count=5):
         """
         Initializes the OpenAIChatEvaluator class.
         
@@ -41,8 +41,7 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         
         self.test_mode = test_mode
         if self.test_mode and self.json_data:
-            first_key = next(iter(self.json_data.keys()))
-            self.json_data = {first_key: self.json_data[first_key]}
+            self.json_data = {key:val for key, val in list(self.json_data.items())[:test_count]}
             print(f'Will evaluate only {len(self.json_data)} articles for testing.')
         self.extract_relevant_text()
     
@@ -104,7 +103,7 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
     ### Evlaluation Methods ###
     def evaluate_single_file(self, file_name, file_text, formatted_questions, questions_w_explanations):
 
-        print('evaluating '+file_name)
+        print(' Evaluating '+file_name)
         chunks = self.call_chunker(file_text)  # Chunk text by token limits
 
         if self.retain_chunks:
