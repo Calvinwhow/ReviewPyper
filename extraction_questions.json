@@ -41,7 +41,7 @@
     "Does this patient feel compelled to perform habits that are excessive and repetitive, and become distressed when prevented from doing so? If the text does not mention repetitive habits, respond \"not present\"":"attention a4",
     "Does this patient feel driven to complete tasks or behave in a rigid, inflexible way according to specific, personal rules? If the text does not mention rigid thinking or behavior, respond \"not present\"":"attention a5",
     "Does this patient worry repeatedly or too much about his/her own emotional/physical state, in a way that seems excessive or inappropriate? If the text does not mention worry, respond \"not present\"":"attention b6",
-    "Does this patient repeat the same response (e.g., word, phrase, gesture, behavior) despite being ineffective or inappropriate? If the text does not mention repetitive behavior, respond \"not present\"":"attention b7",
+    "Does this patient repeat the same response (e.g., word, phrase, gesture, behavior) despite being ineffective or inappropriate? THhIf the text does not mention repetitive behavior, respond \"not present\"":"attention b7",
     "Does this patient get mentally “stuck” or have trouble shifting thoughts or mental focus from one activity or situation to another? If the text does not mention issues shifting focus, respond \"not present\"":"attention b8",
     "Is this patient unable to stop repetitive thoughts, urges or images that seem to cause distress? If the text does not mention repetitive thoughts or urges, respond \"not present\"":"attention b9",
     "Does this patient act hastily or carelessly in the moment without thinking (e.g., interrupting others, trouble waiting his/her turn)":"emotion a10",
@@ -54,7 +54,7 @@
     "Does this patient seem very sad or depressed? If the text does not mention overall mood, respond \"not present\"":"emotion b17",
     "Does this patient make repetitive movements, postures, or utterances that follow a particular pattern (e.g., hand flapping, finger flicking, body rocking, repeating noises or phrases)? If the text does not mention repetitive movements, respond \"not present\"":"autism a18",
     "Is this patient drawn to sensory experiences, such as excessive smelling or touching of objects, or fascination with lights or spinning objects? If the text does not mention sensory experiences, respond \"not present\"":"autism a19",
-    "Does this patient avoid or show high sensitivity to light, touch or texture (including clothing and the mouth-feel of foods)? If the text does not mention sensitivities, respond \"not present\"":"autism b20",
+    "Does this patient avoid or show high sensitivity to light, touch, or texture (including clothing and the mouth-feel of foods)? If the text does not mention sensitivities, respond \"not present\"":"autism b20",
     "Is this patient easily overwhelmed by, or has an extreme reaction to, sounds, textures, tastes, smells, temperature or lights? If the text does not mention sensitivity to stimulation, respond \"not present\"":"autism b21",
     "Does this patient communicate in a way that is difficult to follow, illogical, rambling, or nonsensical? If the text does not mention communication, respond \"not present\"":"psychosis a22",
     "Does this patient express irrational concerns or false beliefs that he/she is threatened in some way (e.g., others are out to hurt him/her)? If the text does not mention false beliefs or paranoia, respond \"not present\"":"psychosis a23",
@@ -62,9 +62,9 @@
     "Does this patient have trouble understanding other people's feelings or perspective? If the text does not mention the patient's social interactions, respond \"not present\"":"psychosis b25",
     "Does this patient appear distant or aloof, with a lack of emotional reactivity to situations or others that would typically evoke an emotional response? If the text does not mention the patient's emotional responses to situations, respond \"not present\"":"psychosis b26",
     "Is this patient disinterested, unconcerned, or indifferent to daily activities, future events, self, or others? If the text does not mention disinterest or indifference, respond \"not present\"":"psychosis b27",
-    "Does this patient act or appear to be unreasonably angry or aggressive? If the text does not mention anger or agression, respond \"not present\"":"social a28",
+    "Does this patient act or appear to be unreasonably angry or aggressive? If the text does not mention anger or aggression, respond \"not present\"":"social a28",
     "Is this patient easily upset or irritable? If the text does not mention irritability, respond \"not present\"":"social a29",
-    "Is this patient intolerant of people entering their personal space or overly assertive or protective about communal space and objects? If the text does not mention socail difficulties, respond \"not present\"":"social a30",
+    "Is this patient intolerant of people entering their personal space or overly assertive or protective about communal space and objects? If the text does not mention social difficulties, respond \"not present\"":"social a30",
     "Is this patient deliberately disobedient, defiant, or argumentative? If the text does not mention argumentativeness or defiance, respond \"not present\"":"social a31",
     "Does this patient act in a passive, immature, or childlike manner If the text does not mention the patient's behavior, respond \"not present\"?":"social b32",
     "Does this patient seem unaware of social cues, or speak or behave in a way that is inappropriate to the situation? If the text does not mention social cues or appropriateness, respond \"not present\"":"social b33",
@@ -89,7 +89,7 @@
 "hbs_seizure":{
     "Has this patient had a seizure? For example, the text may mention epilepsy, convulsions, or fits. If none of these are mentioned in the text, respond \"not present\" instead of \"no\".":"seizure",
     "Did this patient have a seizure before their first stroke? The text may mention a history of epilepsy, seizures, convulsions, or fits. If none of these are mentioned in the text, or if the timing of the seizure is not mentioned, respond \"not present\" instead of \"no\".":"pre-stroke seizure",
-    "Did this patient start having seizures after first stroke? The text may mention acute, late-onset, or post-stroke epilepsy or seizures. If none of these are mentioned in the text, or if the timing of the seizure is not mentioned, respond \"not present\" instead of \"no\".":"pre-stroke seizure",
-    "Did this patient have a seizure or convulsion within one week after their stroke? For example, the text may mention acute or eary-onset seizure or epilepsy. Do not consider delayed-onset seizure or epilepsy .If the timing of the seizure is not mentioned in the text, respond \"not present\" instead of \"no\".":"acute_seizure"
+    "Did this patient start having seizures after first stroke? The text may mention acute, late-onset, or post-stroke epilepsy or seizures. If none of these are mentioned in the text, or if the timing of the seizure is not mentioned, respond \"not present\" instead of \"no\".":"post-stroke seizure",
+    "Did this patient have a seizure or convulsion within one week after their stroke? For example, the text may mention acute or early-onset seizure or epilepsy. Do not consider delayed-onset seizure or epilepsy. If the timing of the seizure is not mentioned in the text, respond \"not present\" instead of \"no\".":"acute seizure"
 }
 }

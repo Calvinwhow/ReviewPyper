@@ -148,7 +148,7 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 retain_chunks=True, 
                                 # include_explanations=True,
                                 test_mode=test_mode,
-                                model_choice="gpt4",
+                                model_choice="gpt4.1",
                                 debug=extraction_debug)
 answers = evaluator.evaluate_all_files()
 extraction_chunks_dir=evaluator.chunk_dir

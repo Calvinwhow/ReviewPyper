@@ -33,7 +33,7 @@ class OpenAIChatBase(OpenAIBase):
         self.temperature = 1.0
         models = {
             "gpt5.1": {"name": "gpt-5.1", "token_limit": 128000, "cost": 0.01 / 1000},
-            "gpt4.1": {"name": "gpt-4.1", "token_limit": 32768, "cost": 0.03 / 1000},
+            "gpt4.1": {"name": "gpt-4.1", "token_limit": 7000, "cost": 0.03 / 1000}, # this cost is probably wrong, and the real token limit is much higher. this has been working so I didn't want to change it.
             "gpt4": {"name": "gpt-4", "token_limit": 7000, "cost": 0.03 / 1000}, #actual limit is 8192
             "gpt4o-mini": {"name": "gpt-4o-mini", "token_limit": 10000, "cost": 0.00015 / 1000}, #actual limit is 128k, but that's impractical for testing.
             "gpt3_large": {"name": "gpt-3.5-turbo-16k", "token_limit": 16385, "cost": 0.003 / 1000},
