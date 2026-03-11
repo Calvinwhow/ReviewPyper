@@ -6,7 +6,7 @@ from tqdm import tqdm
 from calvin_utils.gpt_sys_review.gpt_utils.openai_chat_base import OpenAIChatBase
 
 class OpenAIJsonEvaluator(OpenAIChatBase):
-    def __init__(self, api_key_path, json_file_path, keys_to_consider, question, retain_chunks=False, question_token_estimate=500, question_type='research',  model_choice="gpt3_small", include_explanations=False,response_tokens=None, is_azure=False, deployment_id=None, api_base=None, api_version=None, debug=False, test_mode=True):
+    def __init__(self, api_key_path, json_file_path, keys_to_consider, question, retain_chunks=False, question_token_estimate=500, question_type='research',  model_choice="gpt3_small", include_explanations=False,response_tokens=None, is_azure=False, deployment_id=None, api_base=None, api_version=None, debug=False, test_mode=True, max_workers=10):
         """
         Initializes the OpenAIChatEvaluator class.
         
@@ -38,7 +38,11 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         self.get_model_data(model_choice)
         self.get_question_settings(question_type)
         
+        if self.include_explanations:
+            self.directive = "You are a medical assistant. Your task is to carefully evaluate the following medical record. Use both explicit information and reasonable inferences to answer the questions. Be as concise as possible."
+        
         self.test_mode = test_mode
+        self.max_workers = max_workers
         if self.test_mode and self.json_data:
             first_key = next(iter(self.json_data.keys()))
             self.json_data = {first_key: self.json_data[first_key]}
@@ -135,29 +139,36 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
                 formatted_questions += " ".join(questions_w_explanations)
 
             answers={}
-            for file_name, file_text in tqdm(self.relevant_text_by_file.items()):
+            import concurrent.futures
 
-                print('evaluating '+file_name)
-                chunks = self.call_chunker(file_text)  # Chunk text by token limits
+            def process_chunk(chunk_tuple):
+                file_name, chunk_index, chunk = chunk_tuple
+                conversation = self.generate_submission(chunk, formatted_questions)
+                answer, tokens_used, retries = self.evaluate_with_openai(conversation, questions_w_explanations)
+                return file_name, chunk_index, answer, tokens_used, retries
 
+            chunk_tasks = []
+            for file_name, file_text in self.relevant_text_by_file.items():
+                chunks = self.call_chunker(file_text)
                 if self.retain_chunks:
-                    chunk_path=self.save_chunks(file_name, chunks)
+                    self.save_chunks(file_name, chunks)
+                answers[file_name] = {}
+                for chunk_index, chunk in enumerate(chunks):
+                    chunk_tasks.append((file_name, chunk_index, chunk))
+                    total_chunks += 1
 
-                answers[file_name] = {} # Initialize a dictionary to store chunk-level answers for each question
-
-                for chunk_index, chunk in enumerate(chunks):     # Send a query for each chunk
-                    total_chunks+=1 
-                    conversation = self.generate_submission(chunk, formatted_questions)   # Generate the conversation to submit
-                    answer, tokens_used, retries = self.evaluate_with_openai(conversation, questions_w_explanations) # Evaluate the chunk with OpenAI
+            with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                futures = {executor.submit(process_chunk, task): task for task in chunk_tasks}
+                for future in tqdm(concurrent.futures.as_completed(futures), total=len(chunk_tasks), desc="Processing chunks"):
+                    file_name, chunk_index, answer, tokens_used, retries = future.result()
                     total_tokens_used += tokens_used
-                    total_retries+=retries
-                    if answer=="Unidentified":
-                        total_failed_chunks+=1
-                        answer_dict={q:"Unidentified" for q in questions_w_explanations}
+                    total_retries += retries
+                    if answer == "Unidentified":
+                        total_failed_chunks += 1
+                        answer_dict = {q: "Unidentified" for q in questions_w_explanations}
                     else:
-                        answer_dict=dict(zip(questions_w_explanations,answer.split("|")))  # Convert the answer string to a dictionary
-
-                    answers[file_name][f"chunk_{chunk_index+1}"] = answer_dict       # Store the answer for this question and this chunk
+                        answer_dict = dict(zip(questions_w_explanations, answer.split("|")))
+                    answers[file_name][f"chunk_{chunk_index+1}"] = answer_dict
             
             print(f'Total tokens used: {total_tokens_used}. Estimated cost: {total_tokens_used*self.cost}')
             print(f'Total chunks: {total_chunks}. total number of retries: {total_retries}. Total failed chunks: {total_failed_chunks} ({total_failed_chunks/total_chunks*100:.1f}%)')

@@ -14,7 +14,6 @@ class OpenAIChatBase(OpenAIBase):
         self.question_type = question_type
         self.chunk_end = None
         self.debug= debug
-        self.q_index = 0
         self.question_token_estimate=question_token_estimate
         self.deployment_id=deployment_id
         self.is_azure = is_azure
@@ -32,7 +31,8 @@ class OpenAIChatBase(OpenAIBase):
         """Sets values for the OpenAI model to use."""
         self.temperature = 1.0
         models = {
-            "gpt4.1": {"name": "gpt-4.1", "token_limit": 32768, "cost": 0.03 / 1000},
+            "gpt5": {"name": "gpt-5", "token_limit": 128000, "cost": 0.01 / 1000},
+            "gpt4.1": {"name": "gpt-4.1", "token_limit": 14600, "cost": 0.03 / 1000},
             "gpt4": {"name": "gpt-4", "token_limit": 7000, "cost": 0.03 / 1000}, #actual limit is 8192
             "gpt4o-mini": {"name": "gpt-4o-mini", "token_limit": 10000, "cost": 0.00015 / 1000}, #actual limit is 128k, but that's impractical for testing.
             "gpt3_large": {"name": "gpt-3.5-turbo-16k", "token_limit": 16385, "cost": 0.003 / 1000},
@@ -73,6 +73,10 @@ class OpenAIChatBase(OpenAIBase):
         elif self.question_type=="labelling":
             self.directive = "You are a text labelling assistant. Your task is to carefully evaluate the following case report. Use both explicit information and reasonable inferences to answer the questions. Responses should be: 0 for No, 1 for Y."
             self.chunk_flag = "[SEGMENT]"
+            self.chunk_end = ""
+        elif self.question_type=="title_screening":
+            self.directive = "You are a helpful assistant."
+            self.chunk_flag = "[TITLE]"
             self.chunk_end = ""
         else:
             raise ValueError(f"Model choice {question_type} not supported, please choose gpt4, gpt3_large, or gpt3_small.")
@@ -119,7 +123,10 @@ class OpenAIChatBase(OpenAIBase):
                 answer, tokens_used = self.get_response_from_openai(conversation)
                 
                 # answer=answer.replace('\n', '')
-                while answer[-1] in ["|",' ', '\n']:
+                if not answer:
+                    raise IndexError("OpenAI returned an empty answer")
+                
+                while answer and answer[-1] in ["|",' ', '\n']:
                     answer=answer[:-1]
                 while '||' in answer:
                     answer=answer.replace('||','|')
@@ -132,7 +139,6 @@ class OpenAIChatBase(OpenAIBase):
                         f.write(f"{answer_count} {answer}\n\n")
                     raise IndexError("ChatGPT response does not have the correct number of answers")
                 
-                self.q_index += 1
                 return answer, tokens_used, retry_count
             
             except Exception as e:
@@ -144,26 +150,24 @@ class OpenAIChatBase(OpenAIBase):
     def get_response_from_openai(self, conversation):
         """Sends a conversation to OpenAI and retrieves the assistant's last answer."""
         if self.is_azure:
-            response = openai.ChatCompletion.create(
-                deployment_id=self.deployment_id,
-                model=self.model,
-                messages=conversation,
-                temperature=self.temperature,
-                max_tokens=int(self.response_tokens)
-            )
+            # For Azure, the model parameter often takes the deployment name
+            model_arg = self.deployment_id
         else:
-            response = openai.ChatCompletion.create(
-                model=self.model,
-                messages=conversation,
-                temperature=self.temperature,
-                max_tokens=int(self.response_tokens)
-            )
-        if self.debug:
-            with open('debug_openai_chat.txt', 'a') as f:
-                f.write('Conversation: '+str(conversation)+'\n\n')
-                f.write('Response: '+str(response['choices'][-1]['message']['content'])+'\n\n\n')
+            model_arg = self.model
 
-        return response['choices'][-1]['message']['content'], response["usage"]["total_tokens"]
+        response = self.client.chat.completions.create(
+            model=model_arg,
+            messages=conversation,
+            temperature=self.temperature,
+            max_completion_tokens=int(self.response_tokens)
+        )
+
+        if self.debug:
+            print(f"DEBUG RESPONSE: {response}")
+            with open('debug_openai_chat.txt', 'a') as f:
+                f.write(f"Conversation: {str(conversation)}\n\nResponse: {str(response.choices[-1].message.content)}\n\n\n")
+
+        return response.choices[-1].message.content, response.usage.total_tokens
 
     def verify_response_formatting(self, answer,questions):
 
@@ -177,6 +181,10 @@ class OpenAIChatBase(OpenAIBase):
         if len(new_answer.split("|"))==len(questions):
             return True, new_answer
     
+        # Debugging logging for verification failure
+        with open('error_log.txt', 'a') as f:
+             f.write(f"Verification Failed: Answer='{answer}' (Split Len: {len(answer.split('|'))}), Questions Len: {len(questions)}\n")
+
         return False, answer
 
     def handle_response_exception(self, e, retry_count, q_index=0):
