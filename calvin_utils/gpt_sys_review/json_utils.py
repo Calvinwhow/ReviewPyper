@@ -491,6 +491,7 @@ class InclusionExclusionSummarizer:
         out_dir = os.path.dirname(self.json_path)
         os.makedirs(out_dir, exist_ok=True)
         csv_path = os.path.join(out_dir, filename + '.csv')
+        self.df.index.name = 'MRN'
         self.df.to_csv(csv_path)
         return csv_path
             
@@ -647,6 +648,11 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                         summary_dict[article][question] = '|'.join(list(chunks.values()))
                     continue
 
+                if 'dates of the clinical notes' in question or 'dates' in question.lower() and ('Y/N' not in question and 'Yes/No' not in question):
+                    # Bypass binary keyword mapping for date extraction questions
+                    summary_dict[article][question] = '|'.join(list(chunks.values()))
+                    continue
+
                 if self.keyword_mapping:
                     mapped_answers = [self.keyword_or_fuzzy_match(ans) for ans in chunks.values()]
                     # if any mapped is np.nan while others are valid, warn
@@ -673,8 +679,8 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                             if s > 0:
                                 summary_dict[article][question] = 1
                             else:
-                                # <<< NEW: when no positives, treat as NaN (false negative becomes NaN)
-                                summary_dict[article][question] = np.nan
+                                # Return 0 for negative evidence instead of NaN to fill master list
+                                summary_dict[article][question] = 0
 
                 elif self.keyword_mapping is None:
                     # Raw text passthrough (research-style)
