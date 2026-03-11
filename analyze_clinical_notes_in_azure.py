@@ -150,6 +150,9 @@ from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
 PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, 
                                               raw_results_path=exclusion_raw_path, 
                                               filename_col='MRN')
+PostProcessing.rename_master_list_columns(master_list_path=master_list_path,
+                                          questions_dict={long_q:f'inclusion_{i+1}' for i, long_q in enumerate(inclusion_questions.keys())}
+                                          )
 
 
 csv_path = output_dir+"json_evaluated/inclusion_exclusion_results.csv"
@@ -207,6 +210,9 @@ from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
 PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, 
                                               raw_results_path=raw_path, 
                                               filename_col='MRN')
+PostProcessing.rename_master_list_columns(master_list_path=master_list_path,
+                                          questions_dict=extraction_questions
+                                          )
 
 #Create excel file with masterListPath results
 import pandas as pd

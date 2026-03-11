@@ -4,7 +4,7 @@
 # Set the file(s) you want to analyze (usually from an RPDR request) and the output directory
 notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/00000016_no_speech_or_heel-shin.txt',]
 # notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/00000016.txt',]
-output_dir='/Users/rm026/Documents/Code/reviewpyper_testing/tests/msa_sub_16_yes-no-unknown_speech_heel-shin_removed_4/'
+output_dir='/Users/rm026/Documents/Code/reviewpyper_testing/tests/msa_sub_16_master_list_renaming_test/'
 
 mrn_file="/Users/rm026/Documents/Code/reviewpyper_testing/msa_fake_mrn_file.txt"
 # Provide the path to your OpenAI API key
@@ -128,6 +128,9 @@ from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
 PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, 
                                               raw_results_path=exclusion_raw_path, 
                                               filename_col='MRN')
+PostProcessing.rename_master_list_columns(master_list_path=master_list_path,
+                                          questions_dict=inclusion_questions
+                                          )
 
 
 csv_path = output_dir+"json_evaluated/inclusion_exclusion_results.csv"
@@ -179,6 +182,9 @@ from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
 PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, 
                                               raw_results_path=raw_path, 
                                               filename_col='MRN')
+PostProcessing.rename_master_list_columns(master_list_path=master_list_path,
+                                          questions_dict=extraction_questions
+                                          )
 
 #Create excel file with masterListPath results
 import pandas as pd

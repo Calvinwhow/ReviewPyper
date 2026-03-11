@@ -81,6 +81,29 @@ class PostProcessing:
             master_df.to_csv(master_list_path, index=False)
         return master_df
     
+    @staticmethod
+    def rename_master_list_columns(master_list_path, questions_dict):
+
+        master_df = pd.read_csv(master_list_path)
+        explanations_dict={f'EXPLANATION: {long_q}':f'Explanation: {short_q}' for long_q, short_q in questions_dict.items()}
+        explanations_dict.update(questions_dict)
+        
+        master_df.rename(columns=explanations_dict,inplace=True)
+        master_df.to_csv(master_list_path, index=False)
+        
+        q_key=pd.DataFrame()
+        q_key['question_name']=questions_dict.values()
+        q_key['question_text']=questions_dict.keys()
+
+        questions_key_path='/'.join(master_list_path.split('/')[:-1]+['question_key.csv'])
+        if os.path.isfile(questions_key_path):
+            old_q_key=pd.read_csv(questions_key_path)
+            q_key=pd.concat([old_q_key, q_key])
+
+        q_key.to_csv(questions_key_path, index=False)
+
+        return master_df
+
     def clean_up(self):
         """Method to remove just the specific preprocessing CSVs"""
         removal_list = ['_cleaned', '_filtered']
