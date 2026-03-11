@@ -126,6 +126,7 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 test_mode=test_mode,
                                 response_tokens=8000,
                                 model_choice="gpt4.1",
+                                max_workers=50,
                                 debug=extraction_debug)
 answers = evaluator.evaluate_all_files()
 extraction_chunks_dir=evaluator.chunk_dir
@@ -146,6 +147,7 @@ custom_summarizer = CustomSummarizer(json_path=evaluated_json_path,
                                      api_key_path=api_key_path,
                                      chunks_dir=extraction_chunks_dir, 
                                      is_azure=False,
+                                     max_workers=50,
                                      severity_mapping=severity_dict if not extraction_answers_binary else None)
 df, raw_path = custom_summarizer.run_custom(positive_explanations_only=False,)
 
