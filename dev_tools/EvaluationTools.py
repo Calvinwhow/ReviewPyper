@@ -2,12 +2,16 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
-def confusion_matrix(truth_vector, pred_vector):
+def confusion_matrix(truth_vector, pred_vector, dimension=3):
 
-    matrix=[[0,0,0],
-            [0,0,0],
-            [0,0,0]]
-    
+    if dimension==3:
+        matrix=[[0,0,0],
+                [0,0,0],
+                [0,0,0]]
+    elif dimension==2:
+        matrix=[[0,0],
+                [0,0]]
+
     for truth, pred in zip(truth_vector,pred_vector):
         if type(truth)==str and truth.lower()=='o':
             truth=0
@@ -116,8 +120,8 @@ def plot_conf_matrix(array, cmap='Blues', filename=None, figsz=(3,3)):
 # )
 
 
-def plot_scores(df, score_names,yrange=(0.1,1.03), title='Schmahmann CCAS evaluation by question',
-                filename=f'/Users/rm026/Documents/schmahmann/plots/stats_by_question.png'):
+def plot_scores(df, score_names,yrange=(0.1,1.03), title=None,
+                filename=None):
     
     colors=['Tomato', 'blue', 'green','purple','orange']
 
@@ -133,3 +137,72 @@ def plot_scores(df, score_names,yrange=(0.1,1.03), title='Schmahmann CCAS evalua
     plt.legend([score.capitalize() for score in score_names])
     plt.savefig(filename, bbox_inches='tight')
     plt.show()
+
+import ptitprince as pt
+
+def raincloud_plot(stats_df, color=None, filename=None,ylims=None, debug=False):
+    
+    if color is None:
+        color='#1F77B4'
+
+    setstuff=[]
+    cols=[]
+    acc=[]
+    for col in stats_df.columns[1:]:
+        setstuff+=['ccas']*len(stats_df)
+        cols+=[col]*len(stats_df)
+        acc+=stats_df[col].values.tolist()
+    accdf=pd.DataFrame()
+    accdf['set']=setstuff
+    accdf['scores']=acc
+    accdf['scoretype']=cols
+    if debug: 
+        print(accdf[accdf['scoretype']=='specificity'])
+
+
+    plt.figure(figsize=(6,4))
+    rc=pt.RainCloud(data=accdf, y='scores',x='scoretype',hue='scoretype',
+                bw=0.5, cut=0, orient='v', palette=[color]*5, width_viol=.5, width_box=.3,)
+    rc.set_xticklabels(["Accuracy","Sensitivity","Specificity","NPV",'PPV'])
+
+    rc.set_xlabel('')
+    # auto_y_min, auto_y_max=rc.get_ylim()
+    # rc.set_ylim((auto_y_min, 1))
+    rc.set_ylim(ylims)
+    rc.set_ylabel('Score')
+    rc.grid(False)
+    sns.despine()
+    plt.tight_layout()
+    if filename is not None:
+        plt.savefig(filename)
+
+
+def barplot(data, xlabels,ylabel=None,colors=None, figsz=(4,4), filename=None, ylims=(0,1),ytick_spacing=0.05):
+    
+    new_df=pd.DataFrame()
+    new_df['name']=xlabels
+    new_df['value']=data
+    if colors==None:
+        colors = plt.cm.tab10.colors 
+    new_df['color']=colors[:len(new_df)]
+    
+    plt.figure(figsize=figsz)
+    bar1=sns.barplot(data=new_df, y='value',x='name',  hue='color', legend=False)
+    # bar2=sns.barplot(x=labels, hue=labels,y=[0,1,0], palette=['#FFFFFF','#FFFFFF', '#FFFFFF',])
+    # bar3=sns.barplot(x=labels, hue=labels,y=[accuracy(bars_conf),accuracy(ccas_conf),0], palette=['#FFFFFF',])
+    bar1.set_ylabel(ylabel)
+
+    plt.ylim(.8,1)
+    # import matplotlib.patches as patches
+    # present_patch = patches.Patch(color='#1F77B4', label="Present")
+    # absent_patch = patches.Patch(color="#ABCBE0", label="Absent")
+    # pending_patch = patches.Patch(color="#9F9F9F", label="Pending")
+    bar1.set_xticklabels(xlabels)
+    bar1.set_xlabel('')
+    bar1.set_yticks(np.arange(ylims[0],ylims[1]+ytick_spacing,ytick_spacing))
+    bar1.set_ylim(ylims)
+    # bar1.legend(handles=[pending_patch], labels=['Pending'], loc='lower left',bbox_to_anchor=(1, .76), frameon=False)
+    sns.despine()
+    plt.tight_layout()
+    if filename is not None:
+        plt.savefig(filename)
