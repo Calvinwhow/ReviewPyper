@@ -26,6 +26,7 @@ class TextChunker:
         """
         Splits the text into smaller segments based on the token limit.
         """
+        import re
         words = self.text.split()
         
         if self.debug:
@@ -35,8 +36,14 @@ class TextChunker:
         
         current_chunk = []
         current_chunk_tokens = 0
+        current_date = "Unknown Date"
 
         for word in words:
+            # Track the date context from the pipe-separated (now comma-separated) RPDR header
+            date_match = re.search(r'(\d{1,2}/\d{1,2}/\d{4})', word)
+            if date_match and ',' in word:
+                current_date = date_match.group(1)
+
             tokens_in_word = len(word.split()) + 1
             if self.debug:
                 print(f"Found {tokens_in_word} tokens in word: '{word}'")
@@ -49,8 +56,10 @@ class TextChunker:
                 self.chunks.append(' '.join(current_chunk))
                 if self.debug:
                     print(f"Chunk completed, appended to chunks list.")
-                current_chunk = [word]
-                current_chunk_tokens = tokens_in_word
+                
+                context_str = f"[CONTINUED FROM REPORT DATE: {current_date}]"
+                current_chunk = [context_str, word]
+                current_chunk_tokens = len(context_str.split()) + 1 + tokens_in_word
                 if self.debug:
                     print(f"Started new chunk with word: '{word}', total tokens now: {current_chunk_tokens}")
 

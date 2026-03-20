@@ -64,7 +64,7 @@ class PostProcessing:
 
         new_columns = [col for col in raw_results_df.columns if col != raw_results_df.columns[0]]
         for column in new_columns:
-            if column[:11].upper()=='EXPLANATION' or column[:5].upper()=='CHUNK':
+            if column[:11].upper() == 'EXPLANATION' or column[:5].upper() == 'CHUNK' or 'dates' in column.lower():
                 default_value = ''
             else: 
                 default_value = np.nan

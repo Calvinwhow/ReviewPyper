@@ -34,12 +34,9 @@ extraction_model_deployment_id='gpt-4'
 # - The value determines if you are answering a positive question or a negative question.
 # - If the question is positive (a yes is good), set the value to 1.
 # - If the question is negative (a yes is bad), set the value to 0.
-# - A good paper will be denoted by 1, with a bad paper denoted by 0.
-inclusion_questions = {
-"Does this medical record include any information about a neurological exam? For example, it might mention a movement, cognition, or memory task": 1,
-# "Prioritizing implicit and explicit information, does the patient have a documented seizure in their medical record? (Yes/No)": 1,
-# "Does this manuscript report memory outcomes? (Yes/No)": 0
-}
+# - A good note will be denoted by 1, with a bad note denoted by 0.
+inclusion_question_sets = ['emr_inclusion']
+
 # Set test_mode=True during your first few runs, while you tune your questions to get the answers you need
 # - Always run this first, at least once. 
 test_mode=False
@@ -47,21 +44,29 @@ test_mode=False
 # Set the questions for data extraction. This is where you extract what you want to know from the included notes.
 # These are more open-ended than inclusion/exclusion questions, and don't have to be yes/no.
 # See notebook 05, section 02 for examples.
-extraction_questions = {
-                        "Does this patient have difficulty walking or disturbed gait? For instance, they may mention the patient staggering, difficulties in half turn, requiring support from a wall or stick, or being entirely unable to walk on their own.":'gait',
-                        "Does this patient have difficulty performing the heel-shin maneuver such as lowering their heel jerkily, or with lateral movements?":'knee-tibia',
-                        "Does this patient’s speech show dysarthria or slurring to the point that some words are not intelligible? For instance, the text may mention having to ask the patient to repeat themselves multiple times. Do not consider hypophonia.":'dysarthria',
-                        "Does this patient have oculomotor abnormalities? For example, the text may mention slowed pursuit, saccadic intrusions, hypo/hypermetric saccade, or nystagmus.":'oculomotor',
-                        "Does this patient show dysmetria, oscillating movement, or segmented movement of the arm or hand when performing the finger-nose maneuver? Ignore any slowness.":'finger-nose',
-                        "Does this medical record state that the patient has had a seizure?":'seizure',
-                        "Is this patient afraid of having a seizure during the next month?":'seizure_fear',
-                        "Does this medical record state that the patient has had a stroke? Ignore any family histories of stroke or transient ischemic attacks. ":'stroke',
-}
+extraction_question_sets = ['bars', 'test_questions', 'dates']
+
 # - Set extraction_answers_binary to False if the extraction questions you asked do not have binary answers. 
 #    - We will extract the raw data, like specific result values, for you to review.
 # - Set extraction_answers_binary to True if the extraction questions you asked do have binary answers. 
 #    - By default, we will set positive answers to 1, and negative answers to 0.
 extraction_answers_binary=True
+
+################################################################################
+# DO NOT CHANGE ANYTHING BELOW THIS LINE UNLESS YOU KNOW WHAT YOU ARE DOING! #
+################################################################################
+import os 
+import json
+
+inclusion_questions_json = json.load(open('inclusion_questions.json'))
+inclusion_questions = {}
+for questionnaire in inclusion_question_sets:
+    inclusion_questions.update(inclusion_questions_json[questionnaire])
+    
+extraction_questions_json = json.load(open('extraction_questions.json'))
+extraction_questions={}
+for questionnaire in extraction_question_sets:
+    extraction_questions.update(extraction_questions_json[questionnaire])
 
 ################################################################################
 # DO NOT CHANGE ANYTHING BELOW THIS LINE UNLESS YOU KNOW WHAT YOU ARE DOING! #
@@ -136,10 +141,10 @@ csv_path = output_dir+"json_evaluated/inclusion_exclusion_results.csv"
 # filtered_json_path = filter_papers.run()
 
 extraction_debug=True
-if extraction_debug and os.path.exists('/Users/rm026/Documents/code/ReviewPyper/debug_openai_chat.txt'):
-    os.remove('/Users/rm026/Documents/code/ReviewPyper/debug_openai_chat.txt')
-elif extraction_debug and os.path.exists('/Users/rm026/Documents/code/ReviewPyper/error_log.txt'):
-    os.remove('/Users/rm026/Documents/code/ReviewPyper/error_log.txt')
+if extraction_debug and os.path.exists('debug_openai_chat.txt'):
+    os.remove('debug_openai_chat.txt')
+elif extraction_debug and os.path.exists('error_log.txt'):
+    os.remove('error_log.txt')
 
 from calvin_utils.gpt_sys_review.gpt_utils.openai_json_evaluator import OpenAIJsonEvaluator
 evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
@@ -169,7 +174,8 @@ custom_summarizer = CustomSummarizer(json_path=evaluated_json_path,
                                      chunks_dir=extraction_chunks_dir, 
                                      is_azure=True, 
                                      deployment_id=extraction_model_deployment_id, 
-                                     api_base=api_base, api_version=api_version,)
+                                     api_base=api_base, api_version=api_version,
+                                     severity_mapping=severity_dict if not extraction_answers_binary else None)
 df, raw_path = custom_summarizer.run_custom()
 
 PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, raw_results_path=raw_path, filename_col='MRN')
