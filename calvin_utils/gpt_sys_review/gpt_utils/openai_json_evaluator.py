@@ -6,7 +6,7 @@ from tqdm import tqdm
 from calvin_utils.gpt_sys_review.gpt_utils.openai_chat_base import OpenAIChatBase
 
 class OpenAIJsonEvaluator(OpenAIChatBase):
-    def __init__(self, api_key_path, json_file_path, keys_to_consider, question, answer_format, retain_chunks=False, question_token_estimate=500, question_type='research',  model_choice="gpt3_small", response_tokens=None, is_azure=False, deployment_id=None, api_base=None, api_version=None, debug=False, test_mode=True, test_count=5):
+    def __init__(self, api_key_path, json_file_path, keys_to_consider, question, answer_format, retain_chunks=False, question_token_estimate=500, question_type='research',  model_choice="gpt3_small", response_tokens=None, is_azure=False, deployment_id=None, api_base=None, api_version=None, debug=False, test_mode=True, test_count=5, max_workers=10):
         """
         Initializes the OpenAIChatEvaluator class.
         
@@ -40,6 +40,7 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         self.get_question_settings(question_type)
         
         self.test_mode = test_mode
+        self.max_workers = max_workers
         if self.test_mode and self.json_data:
             self.json_data = {key:val for key, val in list(self.json_data.items())[:test_count]}
             print(f'Will evaluate only {len(self.json_data)} articles for testing.')

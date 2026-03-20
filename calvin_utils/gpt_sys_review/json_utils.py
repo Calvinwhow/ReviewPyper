@@ -492,6 +492,7 @@ class InclusionExclusionSummarizer:
         out_dir = os.path.dirname(self.json_path)
         os.makedirs(out_dir, exist_ok=True)
         csv_path = os.path.join(out_dir, filename + '.csv')
+        self.df.index.name = 'MRN'
         self.df.to_csv(csv_path)
         return csv_path
             
@@ -522,7 +523,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
 
     def __init__(self, json_path, answer_format, api_key_path=None, summary_type='llm',
                  chunks_dir=None, is_azure=False, deployment_id=None, api_base=None, api_version=None,
-                 severity_mapping=None, debug=False):
+                 severity_mapping=None, debug=False,max_workers=10):
         """
         Initializes the CustomSummarizer class.
 
@@ -544,6 +545,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         self.api_base = api_base
         self.api_version = api_version
         self.debug = debug
+        self.max_workers = max_workers
 
         # --- NEW: allow severity mapping; else fall back to binary mapping if answers_binary=True ---
         # self.severity_mode = False
@@ -732,8 +734,14 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                     ]
                     summary_dict[article][question] = '|'.join(retained_explanations)
 
+
                 elif question[:11] == 'EXPLANATION':
                     summary_dict[article][question] = '|'.join(list(responses.values()))
+
+                elif 'dates of the clinical notes' in question or 'dates' in question.lower() and ('Y/N' not in question and 'Yes/No' not in question):
+                    # Bypass binary keyword mapping for date extraction questions
+                    summary_dict[article][question] = '|'.join(list(responses.values()))
+                    continue
 
                 elif self.keyword_mapping:
                     mapped_answers = [self.keyword_or_fuzzy_match(ans) for ans in responses.values()]
@@ -796,33 +804,41 @@ class CustomSummarizer(InclusionExclusionSummarizer):
 
     def summarize_with_llm(self):
         summary_dict = {}
-        for article, questions in tqdm(self.data.items(), desc='Summarizing final responses with LLM'):
-            summary_dict[article] = {}
-            for question, responses in questions.items():
-                combined_answers = " ".join(str(answer) for answer in responses.values())
+        import concurrent.futures
 
-                if question[:11] == 'EXPLANATION':
-                    summary_dict[article][question] = combined_answers
-                else:
-                    # Keep original binary LLM summarization path for compatibility;
-                    # downstream can still treat 0 as NaN if desired.
-                    question_formatted = (
-                        f'Please summarize the following answers to the question: "{question}" '
-                        f'Respond with 1 for yes or 0 for no, and do not include any explanations. '
-                        f'If the answers are mixed or unclear, please respond with 0.'
-                    )
-                    summarizer = OpenAISummarizer(
-                        api_key_path=self.api_key_path, text=combined_answers, question=question_formatted,
-                        is_azure=self.is_azure, deployment_id=self.deployment_id,
-                        api_base=self.api_base, api_version=self.api_version
-                    )
-                    val = summarizer.evaluate_text()
-                    try:
-                        val = int(val)
-                    except Exception:
-                        val = np.nan
-                    # Convert 0 to NaN to represent "no positive evidence" as requested
-                    summary_dict[article][question] = (1 if val == 1 else np.nan)
+        def process_llm_summary(article, question, combined_answers):
+            if question[:11] == 'EXPLANATION':
+                return article, question, combined_answers
+            else:
+                question_formatted = (
+                    f'Please summarize the following answers to the question: "{question}" '
+                    f'Respond with 1 for yes or 0 for no, and do not include any explanations. '
+                    f'If the answers are mixed or unclear, please respond with 0.'
+                )
+                summarizer = OpenAISummarizer(
+                    api_key_path=self.api_key_path, text=combined_answers, question=question_formatted,
+                    is_azure=self.is_azure, deployment_id=self.deployment_id,
+                    api_base=self.api_base, api_version=self.api_version
+                )
+                val = summarizer.evaluate_text()
+                try:
+                    val = int(val)
+                except Exception:
+                    val = np.nan
+                return article, question, (1 if val == 1 else np.nan)
+
+        tasks = []
+        for article, questions in self.data.items():
+            summary_dict[article] = {}
+            for question, chunks in questions.items():
+                combined_answers = " ".join(str(answer) for answer in chunks.values())
+                tasks.append((article, question, combined_answers))
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = {executor.submit(process_llm_summary, *task): task for task in tasks}
+            for future in tqdm(concurrent.futures.as_completed(futures), total=len(tasks), desc='Summarizing final responses with LLM'):
+                article, question, result = future.result()
+                summary_dict[article][question] = result
 
         return pd.DataFrame.from_dict(summary_dict, orient='index').fillna(np.nan)
 
