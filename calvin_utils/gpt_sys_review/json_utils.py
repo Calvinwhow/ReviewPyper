@@ -451,12 +451,12 @@ class InclusionExclusionSummarizer:
                 if question[:11] == 'EXPLANATION': # just skipping these for now. At some point we should probably add the explanations to the output csv.
                     summary_dict[article][question] = list(chunks.values())
                     continue
-                polarity = self.questions.get(question)
-                if polarity is None:
-                    raise ValueError(f"The question from the JSON: \n\n'{question}' \n\n was not found in the questions dictionary.")
+                # polarity = self.questions.get(question)
+                # if polarity is None:
+                #     raise ValueError(f"The question from the JSON: \n\n'{question}' \n\n was not found in the questions dictionary.")
 
                 # Convert all chunk answers to lowercase and check for "yes" keywords
-                binary_answers = [polarity if any(s in answer.lower() for s in self.acceptable_strings) else abs(1 - polarity) for answer in chunks.values()]
+                binary_answers = [1 if any(s in answer.lower() for s in self.acceptable_strings) else 0 for answer in chunks.values()]
                 
                 # Sum up the binary answers for each question
                 summary_dict[article][question] = sum(binary_answers)
