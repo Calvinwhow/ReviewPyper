@@ -33,7 +33,7 @@ extraction_model_deployment_id='gpt-4.1'
 # - If the question is positive (a yes is good), set the value to 1.
 # - If the question is negative (a yes is bad), set the value to 0.
 # - A good note will be denoted by 1, with a bad note denoted by 0.
-inclusion_question_sets =['emr_inclusion']
+inclusion_question_sets = ['emr_inclusion']
 
 # Set test_mode=True during your first few runs, while you tune your questions to get the answers you need
 # - Always run this first, at least once. 

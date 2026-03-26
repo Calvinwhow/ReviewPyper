@@ -1,4 +1,5 @@
 import openai
+from openai import OpenAI, AzureOpenAI
 
 class OpenAIBase:
     """
@@ -24,11 +25,18 @@ class OpenAIBase:
         """
         self.api_key = self.read_api_key(api_key_path)
         self.is_azure = is_azure
-        openai.api_key = self.api_key
+        
         if self.is_azure:
-            openai.api_type = "azure"
-            openai.api_base = api_base
-            openai.api_version = api_version
+            self.client = AzureOpenAI(
+                api_key=self.api_key,
+                api_version=api_version,
+                azure_endpoint=api_base
+            )
+        else:
+            self.client = OpenAI(
+                api_key=self.api_key,
+                base_url=api_base
+            )
 
     def read_api_key(self, file_path):
         """
@@ -59,12 +67,14 @@ class OpenAIBase:
         prompt = f"Text Chunk: {chunk}\n{question_prompt}"
 
         try:
-            response = openai.Completion.create(
-                engine="gpt-3.5-turbo-16k-0613",
-                prompt=prompt,
+            response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo-16k-0613",
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
                 max_tokens=10  # Adjust as needed
             )
-            decision_text = response.choices[0].text.strip()
+            decision_text = response.choices[0].message.content.strip()
             decisions = decision_text.split("\n")
             
             if len(decisions) != len(questions):

@@ -87,55 +87,37 @@ def statistical_df(confusion_matrix_dict,include_accuracy=True):
 from matplotlib.colors import LinearSegmentedColormap
 import seaborn as sns
 
-
-def plot_conf_matrix(array, cmap='Blues', filename=None, figsz=(3,3),show_pct=True):
+def plot_conf_matrix(array, cmap='Blues', filename=None, figsz=(3,3)):
 
     plt.figure(figsize=figsz)
     df_cm = pd.DataFrame(array, range(len(array)), range(len(array)))
-    
-    if show_pct:
-        total=df_cm.to_numpy().sum()
-        
-        notes=[]
-        for row in array:
-            newrow=[]
-            for count in row:
-                if count==0:
-                    newrow.append('0')   
-                    continue
-                pct=f"{(100*count/total):.2g}"
-                new_string=f"{count}\n{pct}%"
-                newrow.append(new_string)
-            notes.append(newrow)
-
-        annotation=pd.DataFrame(notes, range(len(array)), range(len(array)) )
-        formatting=''
-
-    else:
-        annotation=True
-        formatting=".0f"
-
-    map=sns.heatmap(df_cm, annot=annotation,
-                    # annot_kws={"ha": 'left'},
-                    fmt=formatting,
-                    cbar=False, cmap=cmap,
-                    linewidths=1, square=True, linecolor='black') 
-
+    # plt.figure(figsize=(10,7))
+    # sns.set(font_scale=1.4) # for label size
+    map=sns.heatmap(df_cm, annot=True,
+                fmt=".0f",
+                #  annot_kws={"size": 16},
+                cbar=False, cmap=cmap,
+                linewidths=1, square=True, linecolor='black') 
     map.set_xlabel('Predicted',)
-    map.set_ylabel('Truth')
 
     labels=['Yes','No','Unknown',][:len(array)]
     map.set_xticklabels(labels)
     map.set_yticklabels(labels)
-
     map.xaxis.set_label_position('top')
     map.xaxis.tick_top()
+
     map.tick_params(left=False, top=False)
+    map.set_ylabel('Truth')
 
     plt.tight_layout()
     if filename:
         plt.savefig(filename, bbox_inches='tight')
     plt.show()
+
+# bars_cmap = LinearSegmentedColormap.from_list(
+#     "white_to_blue",
+#     ["#ffffff", '#1F77B4']
+# )
 
 
 def plot_scores(df, score_names,yrange=(0.1,1.03), title=None,
@@ -224,129 +206,3 @@ def barplot(data, xlabels,ylabel=None,colors=None, figsz=(4,4), filename=None, y
     plt.tight_layout()
     if filename is not None:
         plt.savefig(filename)
-
-class PairSuperiorityPlot:
-    def __init__(self, stat_array_1, stat_array_2, model1_name="X", model2_name="Y",title=None, out_dir=None,colormap=None,ylim=None):
-        """
-        Adapted/stolen from Calvin's CircuitPyper plotting functions. 
-        Initializes the resampling plot object for visualizing paired delta statistics.
-        This class is used to plot the paired delta between a statistic observed for 
-        each resampling, and can visualize either bootstraps or permutations.
-        Args:
-            stat_array_1 (float): The statistical values 
-            stat_array_2 (float): The R-squared value for the second region of interest (ROI).
-            model1_name (str, optional): Name of the first model. Defaults to "X".
-            model2_name (str, optional): Name of the second model. Defaults to "Y".
-            stat (str, optional): The statistic name to be plotted. Defaults to "R²".
-            out_dir (str, optional): Where to save. 
-            observed_stat_array (float): The observed statistical values, where index 0 is the first observation and index 1 is the other.
-            method (str): bootstrap | permtuation. If permutation, draws the distribution vertical line at the Delta's value. IF bootstrap, plot at 0.
-        """
-        self.stat_array_1 = stat_array_1
-        self.stat_array_2 = stat_array_2 
-        self.delta_array = self._stat_array_1 - self._stat_array_2
-        self.model1_name = model1_name
-        self.model2_name = model2_name
-        self.out_dir = out_dir
-        self.title=title
-        # self.BLACK = '#211D1E'
-        # self.GREY = '#8E8E8E'
-        # self.WHITE = "#FFFFFF"
-        self.labels=["Accuracy","Sensitivity","Specificity","NPV",'PPV']
-        self.markers=['s','o','d','^','*']
-        if colormap is None:
-            self.colormap=LinearSegmentedColormap.from_list("white_to_blue",["#ffffff", '#1F77B4'])
-        else:
-            self.colormap=colormap
-        # self.colors={'before':colormap(.999),'slope':colormap(0.5),'after':colormap(.999)}
-        # self.colors = self.compute_line_colors_abrupt()
-        # self.colors=[self.BLACK,self.WHITE]
-        self.ylim=ylim
-        # self.prepare_out_dir()
-
-    @property
-    def stat_array_1(self):
-        return self._stat_array_1
-
-    @stat_array_1.setter
-    def stat_array_1(self, value):
-        value = np.array(value)  # Convert to numpy array
-        if hasattr(self, '_stat_array_2') and len(value) != len(self._stat_array_2):
-            raise ValueError("stat_array_1 and stat_array_2 must have the same length.")
-        self._stat_array_1 = value
-
-    @property
-    def stat_array_2(self):
-        return self._stat_array_2
-
-    @stat_array_2.setter
-    def stat_array_2(self, value):
-        value = np.array(value)
-        if hasattr(self, '_stat_array_1') and len(value) != len(self._stat_array_1):
-            raise ValueError("stat_array_1 and stat_array_2 must have the same length.")
-        self._stat_array_2 = value
-
-    # def prepare_out_dir(self):
-    #     if self.out_dir is not None:
-    #         os.makedirs(self.out_dir, exist_ok=True)
-
-    def plot_paired_slopes(self, ax):
-
-        cm = sns.color_palette("tab10")
-        self.plot_resample_dots(ax, self.stat_array_1, 1, cm)
-        self.plot_resample_dots(ax, self.stat_array_2, 0, cm, legend=True)
-
-        for i in range(len(self.stat_array_1)):
-            ax.plot([0, 1], [self.stat_array_2[i], self.stat_array_1[i]], 
-                    color=cm[i],linewidth=2, alpha=0.5)
-            
-        self.setup_slope_subplot(ax)
-
-    def plot_resample_dots(self, ax, y_vals, x_coord, colormap, legend=False,size=150, edgecolor='white', alpha=0.9, linewidth=.5, zorder=3):
-        
-        for i, y in enumerate(y_vals):
-            artist=ax.scatter([x_coord], [y], color=colormap[i],
-                   edgecolors=edgecolor, linewidth=linewidth, 
-                   alpha=alpha, s=size, marker=self.markers[i], 
-                   zorder=zorder, label=self.labels[i])
-        if legend:
-            ax.legend(self.labels,loc='lower right',fontsize='medium',frameon=False)
-
-    def setup_slope_subplot(self, ax):
-        ax.set_xticks([0, 1])
-        ax.set_xticklabels([self.model2_name, self.model1_name])
-        ax.set_title(self.title, fontsize=20)
-        # ax.set_ylabel(f"", fontsize=20)
-        ax.set_xlim(-0.5, 1.5)
-        # y_max = max(np.max(self.stat_array_1), np.max(self.stat_array_2))
-        # y_min = min(np.max(self.stat_array_1), np.max(self.stat_array_2))
-        ax.set_ylim(self.ylim)
-        ax.tick_params(labelsize=16)
-        sns.despine(ax=ax)
-
-    # def annotate_paired_slopes(self, ax):
-    #     t,p = ttest_rel(np.array(self.stat_array_1), np.array(self.stat_array_2))
-    #     x_text = 0.05
-    #     ha_text = 'left' 
-    #     stat_text = f"t = {t:.4f}\np = {p:.4f}"
-    #     ax.text(x_text, 0.95, stat_text, ha=ha_text, va='top', fontsize=14, color=self.BLACK, transform=ax.transAxes)
-
-    def draw(self, verbose=True, ax_pair=None, save=True):
-        
-        abs_limit = np.max(np.abs(self.delta_array))
-
-        fig, axes = plt.subplots(figsize=(4,4))
-
-        self.plot_paired_slopes(axes)
-        # Increase the width of the axis lines
-        for spine in axes.spines.values():
-            spine.set_linewidth(2)
-
-        # Save the figure
-        if save and self.out_dir is not None and ax_pair is None:
-            # name = f'superiority_plot-{self.model1_name}-vs-{self.model2_name}.svg'
-            plt.savefig(self.out_dir, format='svg', bbox_inches='tight')
-        if ax_pair is None:
-            plt.tight_layout()
-            if verbose:
-                plt.show()
