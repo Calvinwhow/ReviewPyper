@@ -17,7 +17,7 @@ api_key_path = "/Users/rm026/Documents/code/openai-key.txt"
 # - If the question is positive (a yes is good), set the value to 1.
 # - If the question is negative (a yes is bad), set the value to 0.
 # - A good note will be denoted by 1, with a bad note denoted by 0.
-inclusion_question_sets = ['emr_inclusion']
+inclusion_question_sets =['emr_inclusion']
 
 # Set test_mode=True during your first few runs, while you tune your questions to get the answers you need
 # - Always run this first, at least once. 
@@ -115,7 +115,6 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 # include_explanations=True, # TODO: currently always includes explanations for inclusion questions, and this has to be set to True here. 
                                 question=inclusion_questions, 
                                 test_mode=test_mode,
-                                response_tokens=2000,
                                 debug=True)
 exclusion_answers = evaluator.evaluate_all_files()
 new_json_path = evaluator.save_to_json(exclusion_answers)
@@ -137,10 +136,10 @@ PostProcessing.rename_master_list_columns(master_list_path=master_list_path,
 csv_path = output_dir+"json_evaluated/inclusion_exclusion_results.csv"
 
 extraction_debug=True
-if extraction_debug and os.path.exists('debug_openai_chat.txt'):
-    os.remove('debug_openai_chat.txt')
-elif extraction_debug and os.path.exists('error_log.txt'):
-    os.remove('error_log.txt')
+if extraction_debug and os.path.exists('/Users/rm026/Documents/code/ReviewPyper/debug_openai_chat.txt'):
+    os.remove('/Users/rm026/Documents/code/ReviewPyper/debug_openai_chat.txt')
+elif extraction_debug and os.path.exists('/Users/rm026/Documents/code/ReviewPyper/error_log.txt'):
+    os.remove('/Users/rm026/Documents/code/ReviewPyper/error_log.txt')
     
 from calvin_utils.gpt_sys_review.gpt_utils.openai_json_evaluator import OpenAIJsonEvaluator
 evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
@@ -152,9 +151,7 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 retain_chunks=True, 
                                 # include_explanations=True,
                                 test_mode=test_mode,
-                                response_tokens=8000,
                                 model_choice="gpt4.1",
-                                max_workers=50,
                                 debug=extraction_debug)
 answers = evaluator.evaluate_all_files()
 extraction_chunks_dir=evaluator.chunk_dir
@@ -175,15 +172,11 @@ custom_summarizer = CustomSummarizer(json_path=output_dir+"json_evaluated/emr_st
                                      api_key_path=api_key_path,
                                     #  chunks_dir=extraction_chunks_dir, 
                                      is_azure=False,
-                                     max_workers=50,
-                                     severity_mapping=severity_dict)
+                                    #  debug=True,
+                                    #  severity_mapping=severity_dict if extraction_answers_binary else None
+                                     severity_mapping=severity_dict
+                                    )
 df, raw_path = custom_summarizer.run_custom(positive_explanations_only=True,)
-
-# Ensure master list has 'MRN' column name (fixes potential header issues)
-master_df_temp = pd.read_csv(master_list_path)
-if 'MRN' not in master_df_temp.columns:
-    master_df_temp.rename(columns={master_df_temp.columns[0]: 'MRN'}, inplace=True)
-    master_df_temp.to_csv(master_list_path, index=False)
 
 from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
 PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, 
