@@ -2,9 +2,9 @@
 # MODIFY THE VARIABLES BELOW TO FIT YOUR USE CASE! # 
 ################################################################################
 # Set the file(s) you want to analyze (usually from an RPDR request) and the output directory
-notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/00000016_no_speech_or_heel-shin.txt',]
+notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/00000016.txt',]
 # notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/00000016.txt',]
-output_dir='/Users/rm026/Documents/Code/reviewpyper_testing/tests/msa_sub_16_master_list_renaming_test/'
+output_dir='/Users/rm026/Documents/Code/reviewpyper_testing/tests/msa_sub_16_merge_redo_test/'
 
 mrn_file="/Users/rm026/Documents/Code/reviewpyper_testing/msa_fake_mrn_file.txt"
 # Provide the path to your OpenAI API key
@@ -47,6 +47,18 @@ accuracy_image = output_dir+"iteration_accuracy.png"
 # # DO NOT CHANGE ANYTHING BELOW THIS LINE UNLESS YOU KNOW WHAT YOU ARE DOING! #
 # ################################################################################
 import os
+import json
+
+inclusion_questions_json = json.load(open('inclusion_questions.json'))
+inclusion_questions = {}
+for questionnaire in inclusion_question_sets:
+    inclusion_questions.update(inclusion_questions_json[questionnaire])
+    
+extraction_questions_json = json.load(open('extraction_questions.json'))
+extraction_questions={}
+for questionnaire in extraction_question_sets:
+    extraction_questions.update(extraction_questions_json[questionnaire])
+
 import json
 
 inclusion_questions_json = json.load(open('inclusion_questions.json'))
@@ -111,11 +123,12 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 keys_to_consider=["emr"], 
                                 answer_format='inclusion',
                                 question_type='inclusion', 
-                                model_choice="gpt3_small",
+                                model_choice="gpt4.1", # TODO: Need to find a new cheap model for this that's not in 
                                 # include_explanations=True, # TODO: currently always includes explanations for inclusion questions, and this has to be set to True here. 
                                 question=inclusion_questions, 
                                 test_mode=test_mode,
-                                debug=True)
+                                response_tokens=2000,
+                                debug=False)
 exclusion_answers = evaluator.evaluate_all_files()
 new_json_path = evaluator.save_to_json(exclusion_answers)
 
@@ -135,11 +148,11 @@ PostProcessing.rename_master_list_columns(master_list_path=master_list_path,
 
 csv_path = output_dir+"json_evaluated/inclusion_exclusion_results.csv"
 
-extraction_debug=True
-if extraction_debug and os.path.exists('/Users/rm026/Documents/code/ReviewPyper/debug_openai_chat.txt'):
-    os.remove('/Users/rm026/Documents/code/ReviewPyper/debug_openai_chat.txt')
-elif extraction_debug and os.path.exists('/Users/rm026/Documents/code/ReviewPyper/error_log.txt'):
-    os.remove('/Users/rm026/Documents/code/ReviewPyper/error_log.txt')
+extraction_debug=False
+if extraction_debug and os.path.exists('debug_openai_chat.txt'):
+    os.remove('debug_openai_chat.txt')
+elif extraction_debug and os.path.exists('error_log.txt'):
+    os.remove('error_log.txt')
     
 from calvin_utils.gpt_sys_review.gpt_utils.openai_json_evaluator import OpenAIJsonEvaluator
 evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
@@ -151,7 +164,9 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 retain_chunks=True, 
                                 # include_explanations=True,
                                 test_mode=test_mode,
-                                model_choice="gpt4.1",
+                                response_tokens=8000,
+                                model_choice="gpt5",
+                                max_workers=50,
                                 debug=extraction_debug)
 answers = evaluator.evaluate_all_files()
 extraction_chunks_dir=evaluator.chunk_dir

@@ -6,7 +6,7 @@ from tqdm import tqdm
 from calvin_utils.gpt_sys_review.gpt_utils.openai_chat_base import OpenAIChatBase
 
 class OpenAIJsonEvaluator(OpenAIChatBase):
-    def __init__(self, api_key_path, json_file_path, keys_to_consider, question, answer_format, retain_chunks=False, question_token_estimate=500, question_type='research',  model_choice="gpt3_small", response_tokens=None, is_azure=False, deployment_id=None, api_base=None, api_version=None, debug=False, test_mode=True, test_count=5):
+    def __init__(self, api_key_path, json_file_path, keys_to_consider, question, answer_format, retain_chunks=False, question_token_estimate=500, question_type='research',  model_choice="gpt3_small", response_tokens=None, is_azure=False, deployment_id=None, api_base=None, api_version=None, debug=False, test_mode=True, test_count=5, max_workers=10):
         """
         Initializes the OpenAIChatEvaluator class.
         
@@ -39,7 +39,11 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         self.get_model_data(model_choice)
         self.get_question_settings(question_type)
         
+        # if self.include_explanations:
+        #     self.directive = "You are a medical assistant. Your task is to carefully evaluate the following medical record. Use both explicit information and reasonable inferences to answer the questions. Be as concise as possible."
+        
         self.test_mode = test_mode
+        self.max_workers = max_workers
         if self.test_mode and self.json_data:
             self.json_data = {key:val for key, val in list(self.json_data.items())[:test_count]}
             print(f'Will evaluate only {len(self.json_data)} articles for testing.')
@@ -164,37 +168,60 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         """Estimated cost: {tokens_used*self.cost*len(self.questions.items())*len(chunks)}')"""
 
         try:
-            total_tokens_used = 0
-
             formatted_questions, questions_w_explanations = self.format_questions(list(self.questions.keys()))
 
-            answers_dict={}
+            total_tokens_used = 0
+            total_chunks = 0
+            total_retries = 0
             total_failed_chunks=0
-            total_retries=0
-            total_chunks=0
-            for file_name, file_text in tqdm(self.relevant_text_by_file.items()):
 
-                answers_dict[file_name], file_tokens_used, file_retries, file_failed_chunks=self.evaluate_single_file(file_name, file_text, formatted_questions, questions_w_explanations)
 
-                total_tokens_used += file_tokens_used
-                total_retries+=file_retries
-                total_failed_chunks+=file_failed_chunks
-                total_chunks+=len(answers_dict[file_name])
+            answers={}
+            import concurrent.futures
 
-            # print(f'Total tokens used: {total_tokens_used}. Estimated cost: {total_tokens_used*self.cost}')
+            def process_chunk(chunk_tuple):
+                file_name, chunk_index, chunk = chunk_tuple
+                conversation = self.generate_submission(chunk, formatted_questions)
+                answer, tokens_used, retries = self.evaluate_with_openai(conversation, questions_w_explanations)
+                return file_name, chunk_index, answer, tokens_used, retries
+
+            chunk_tasks = []
+            for file_name, file_text in self.relevant_text_by_file.items():
+                chunks = self.call_chunker(file_text)
+                if self.retain_chunks:
+                    self.save_chunks(file_name, chunks)
+                answers[file_name] = {}
+                for chunk_index, chunk in enumerate(chunks):
+                    chunk_tasks.append((file_name, chunk_index, chunk))
+                    total_chunks += 1
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                futures = {executor.submit(process_chunk, task): task for task in chunk_tasks}
+                for future in tqdm(concurrent.futures.as_completed(futures), total=len(chunk_tasks), desc="Processing chunks"):
+                    file_name, chunk_index, answer, tokens_used, retries = future.result()
+                    total_tokens_used += tokens_used
+                    total_retries += retries
+                    if answer == "Unidentified":
+                        total_failed_chunks += 1
+                        answer_dict = {q: "Unidentified" for q in questions_w_explanations}
+                    else:
+                        answer_dict = dict(zip(questions_w_explanations, answer.split("|")))
+                    answers[file_name][f"chunk_{chunk_index+1}"] = answer_dict
+            
+            print(f'Total tokens used: {total_tokens_used}. Estimated cost: {total_tokens_used*self.cost}')
             print(f'Total chunks: {total_chunks}. total number of retries: {total_retries}. Total failed chunks: {total_failed_chunks} ({total_failed_chunks/total_chunks*100:.1f}%)')
 
-            self.all_answers=self.swap_heirarchy(answers_dict)
+            self.all_answers=self.swap_heirarchy(answers)
 
             return self.all_answers
 
         except KeyboardInterrupt:
             print("KeyboardInterrupt detected. Saving preliminary results to JSON and closing.")
             with open('debug_answer.json', 'w') as f:
-                json.dump(answers_dict, f, indent=0)
+                json.dump(answers, f, indent=0)
             sys.exit(0)
         except Exception as e:
             with open('debug_answer.json', 'w') as f:
-                json.dump(answers_dict, f, indent=0)
+                json.dump(answers, f, indent=0)
             raise RuntimeError(f"Critical error occured: \n\t{e}. Saving preliminary results and aborting.")
         
