@@ -573,26 +573,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
             }
         else:
             raise ValueError('''"answer_format" is invalid. Allowed answer types are "binary_without_explanations", "binary_with_explanations", "binary_with_unknown_and_explanations","severity_with_explanations"''')
-    # def exact_match(self, answer):
-    #     """Checks for an exact match of keywords in the answer text."""
-    #     if answer == 'Unidentified':
-    #         return np.nan
-    #     cleaned_answer = re.sub(r'[^\w\s\.\-]', '', str(answer).lower()).strip()
-    #     # If model already returns a pure number, respect it
-    #     try:
-    #         val = float(cleaned_answer)
-    #         # accept integer-like numeric outputs directly
-    #         if val.is_integer():
-    #             return int(val)
-    #         return val
-    #     except Exception:
-    #         pass
 
-    #     for key, keywords in self.keyword_mapping.items():
-    #         for keyword in keywords:
-    #             if keyword in cleaned_answer.split():
-    #                 return key
-    #     return None
 
     def exact_match(self, answer):
         """Checks for an exact match of keywords in the answer text."""
@@ -631,37 +612,6 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                 if keyword in raw.split():
                     return key
         return None
-
-
-    # def exact_match(self, answer):
-    #     """Checks for an exact match of keywords in the answer text."""
-    #     if answer == 'Unidentified':
-    #         return np.nan
-
-    #     raw = str(answer).lower().strip()
-    #     # Keep digits, dot, minus, and slash (so we can handle fractions like 1/4)
-    #     cleaned_answer = re.sub(r'[^0-9\.\-\/]', '', raw)
-
-    #     # Try numeric interpretation first
-    #     try:
-    #         if '/' in cleaned_answer and any(ch.isdigit() for ch in cleaned_answer):
-    #             # Interpret things like "1/4" as a true fraction
-    #             val = float(Fraction(cleaned_answer))
-    #         else:
-    #             val = float(cleaned_answer)
-
-    #         if float(val).is_integer():
-    #             return int(val)
-    #         return val
-    #     except Exception:
-    #         pass
-
-    #     # Fall back to keyword mapping
-    #     for key, keywords in self.keyword_mapping.items():
-    #         for keyword in keywords:
-    #             if keyword in raw.split():
-    #                 return key
-    #     return None
 
     def fuzzy_match(self, answer, threshold=60):
         """
@@ -712,11 +662,13 @@ class CustomSummarizer(InclusionExclusionSummarizer):
 
         for article, questions in self.data.items():
             summary_dict[article] = {}
+            has_failed_chunk=False
 
             if self.chunks_dir is not None:
                 chunks_dict = self.read_json(self.chunks_dir + '/' + article + '_chunks.json')
 
             for question, responses in questions.items():
+                
                 # Keep explanations untouched
                 if question[:11] == 'EXPLANATION' and positive_explanations_only:
                     # Only keep explanations for “positive” responses
@@ -746,6 +698,9 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                     mapped_answers = [self.keyword_or_fuzzy_match(ans) for ans in responses.values()]
                     # if any mapped is np.nan while others are valid, warn
                     if (np.nan in mapped_answers) and not all(x is np.nan for x in mapped_answers):
+                        if has_failed_chunk:
+                            continue
+                        has_failed_chunk=True # only complains about failed chunks once for any subject
                         print(f"Warning: Failed to interpret a chunk from '{article}'. The answers for that subject may be partially incorrect.")
 
                     valid_answers = [x for x in mapped_answers if (x is not None and not (isinstance(x, float) and np.isnan(x)))]
