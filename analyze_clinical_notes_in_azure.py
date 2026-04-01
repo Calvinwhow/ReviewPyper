@@ -9,7 +9,7 @@ notes_file_list=['F:/Code/schmahmann_rpdr_results/rm026_110525111627789405_Dis.t
 # Some subjects may have multiple MRNs, and this ensure that all notes for a subject are included.
 mrn_file='F:/Code/schmahmann_rpdr_results/rm026_110525111627789405_Mrn.txt'
 
-output_dir='F:/Code/outputs/schmahmann_cnrs_and_similarities_redo/'
+output_dir='F:/Code/outputs/schmahmann_gpt5_fixed/'
 
 # Provide the path to your OpenAI API key
 api_key_path = "F:/Code/openai-key.txt"
@@ -21,10 +21,12 @@ api_version = "2025-01-01-preview"
 # Provide the deployment names for the models used. 
 # These are the names of your deployments on the azure enclave, NOT the name of the underlying model they use.
 # The preprocessing model should be a very cheap model, since its jobs are simple. gpt-3.5-turbo is a good choice.
-preprocessing_model_deployment_id='gpt-3.5-turbo'
+inclusion_model_name='gpt-4.1-mini'
+
 # The extraction model, meanwhile, is for extracting the info you want from the files, 
 # and needs to be more sophisticated. gpt-4 is a good choice.
-extraction_model_deployment_id='gpt-4.1'
+
+extraction_model_name='gpt-5.1'
 
 # Define inclusion/exclusion questions. See notebook 04, section 01 for examples.
 # **Critical Note**
@@ -34,7 +36,6 @@ extraction_model_deployment_id='gpt-4.1'
 # - If the question is negative (a yes is bad), set the value to 0.
 # - A good note will be denoted by 1, with a bad note denoted by 0.
 inclusion_question_sets =['emr_inclusion']
-
 # Set test_mode=True during your first few runs, while you tune your questions to get the answers you need
 # - Always run this first, at least once. 
 test_mode=False
@@ -44,8 +45,7 @@ segment_file=False
 # Set the questions for data extraction. This is where you extract what you want to know from the included notes.
 # These are more open-ended than inclusion/exclusion questions, and don't have to be yes/no.
 # See notebook 05, section 02 for examples.
-extraction_question_sets = ['cnrs', 'fixed_similarities']
-
+extraction_question_sets = ['bars','ccas','cnrs']
 
 # Types of answers you want for the extraction step. possible types are:
 # - "binary_without_explanations"
@@ -83,8 +83,8 @@ json_file_path = output_dir+"json/_emr_labeled_sections.json"
 from calvin_utils.gpt_sys_review.txt_utils import ClinicalNotesExtractor
 extractor=ClinicalNotesExtractor(notes_file_list, mrn_file, output_dir)
 note_df=extractor.run()
-# extractor.generate_master_list()
-# extractor.save_master_list()
+extractor.generate_master_list()
+extractor.save_master_list()
 
 from calvin_utils.gpt_sys_review.txt_utils import TextPreprocessor
 # Initialize the TextPreprocessor class and preprocess the files
@@ -99,7 +99,6 @@ from calvin_utils.gpt_sys_review.json_utils import SectionLabeler
 ## subjects in it, not just that it exists.
 if os.path.exists(output_dir+"json/_emr_labeled_sections.json"):
     print(f"Found existing labeled sections at {output_dir+'json/_emr_labeled_sections.json'}. Skipping section labeling step.")
-
 elif segment_file:
     section_labeler = SectionLabeler(folder_path=preprocessed_path, 
                                     article_type="emr", 
@@ -122,20 +121,22 @@ else:
     os.mkdir(os.path.join(output_dir,'json'))
     with open(json_file_path, 'w') as f:
         json.dump(section_json, f, indent=0)
-# Ask inclusion/exclusion questions
+
+
+## Ask inclusion/exclusion questions
 from calvin_utils.gpt_sys_review.gpt_utils.openai_json_evaluator import OpenAIJsonEvaluator
 evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 json_file_path=json_file_path, 
                                 keys_to_consider=["emr"], 
                                 answer_format='inclusion',
                                 question_type='inclusion', 
-                                model_choice="gpt3_small",
+                                model_choice=inclusion_model_name,
                                 # include_explanations=True, # TODO: currently always includes explanations for inclusion questions, and this has to be set to True here. 
                                 question=inclusion_questions, 
                                 test_mode=test_mode,
                                 debug=True,
                                 is_azure=True, 
-                                deployment_id=preprocessing_model_deployment_id, 
+                                deployment_id=inclusion_model_name, 
                                 api_version=api_version, 
                                 api_base=api_base)
 exclusion_answers = evaluator.evaluate_all_files()
@@ -151,7 +152,7 @@ PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path,
                                               raw_results_path=exclusion_raw_path, 
                                               filename_col='MRN')
 PostProcessing.rename_master_list_columns(master_list_path=master_list_path,
-                                          questions_dict={long_q:f'inclusion_{i+1}' for i, long_q in enumerate(inclusion_questions.keys())}
+                                          questions_dict=inclusion_questions
                                           )
 
 
@@ -173,10 +174,11 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 retain_chunks=True, 
                                 # include_explanations=True,
                                 test_mode=test_mode,
-                                model_choice="gpt4",
+                                model_choice=extraction_model_name,
                                 debug=extraction_debug,
+                                max_workers=50,
                                 is_azure=True,
-                                deployment_id=extraction_model_deployment_id,
+                                deployment_id=extraction_model_name,
                                 api_base=api_base,
                                 api_version=api_version)
 answers = evaluator.evaluate_all_files()
@@ -198,7 +200,7 @@ custom_summarizer = CustomSummarizer(json_path=output_dir+"json_evaluated/emr_st
                                      api_key_path=api_key_path,
                                     #  chunks_dir=extraction_chunks_dir, 
                                      is_azure=True, 
-                                     deployment_id=extraction_model_deployment_id, 
+                                     deployment_id=extraction_model_name, 
                                      api_base=api_base, api_version=api_version,
                                      debug=False,
                                     #  severity_mapping=severity_dict if extraction_answers_binary else None

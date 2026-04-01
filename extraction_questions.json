@@ -1,4 +1,40 @@
-{"bars":{
+{"hemiparesis":{
+    "Does this patient have weakness on one side of their body? For instance, the note may mention hemiparesis, unilateral paresis, unilateral weakness, or asymmetric weakness. If the text mentions weakness but does not specify that it is unilateral, respond \"not present\".":"hemiparesis"
+},
+"nih_stroke":{
+    "Is this patient showing a decreased level of consciousness? For instance, they may not be alert, may only arousable by repeated stimulation to attend, or be obtunded and require strong or painful stimulation to make movements. They may also respond only with reflex motor or autonomic effects, or be totally unresponsive, flaccid, or areflexic.":"1a level of consciousness",
+    "Is the patient unable to correctly state their age and the current month if asked? For instance, they may answer one or both questions incorrectly, not respond, or be unable to respond.":"1b level of consciousness",
+    "Is the patient unable to blink their eyes and squeeze their hand if asked? ":"1c level of consciousness",
+    "Does this patient show abnormal eye movement? For instance, they may show partial or forced gaze palsy, a peripheral nerve paresis, or forced deviation":"2 best gaze",
+    "Does this patient have hemianopia, quadrantanopia, or other vision loss due to stroke? Ignore vision loss due to age, macular degeneration, or eye damage.":"3 visual",
+    "Is the patient unable to make facial movements such as showing their teeth, raising their eyebrows, or closing their eyes? For instance, the text may mention flattened nasolabial fold, asymmetry on smiling, absence of facial movement, or partial or complete facial paralysis or palsy.":"4 facial palsy",
+    "Is the patient unable to keep their left arm raised for at least 10 seconds? For instance, their arm may drift down slowly or fall completely.":"5a left motor arm",
+    "Is the patient unable to keep their right arm raised for at least 10 seconds? For instance, their arm may drift down slowly or fall completely.":"5a right motor arm",
+    "Is the patient unable to keep their left leg raised for at least 5 seconds? For instance, their leg may drift down slowly or fall completely.":"6a left motor leg",
+    "Is the patient unable to keep their right leg raised for at least 5 seconds? For instance, their leg may drift down slowly or fall completely.":"6a right motor leg",
+    "Does this patient show dysmetria, oscillating movement, termor, or segmented movement of the arm or hand when performing the finger-nose maneuver on the left side? Ignore any slowness.":"7a right finger-nose",
+    "Does this patient show dysmetria, oscillating movement, termor, or segmented movement of the arm or hand when performing the finger-nose maneuver on the right side? Ignore any slowness.":"7b left finger-nose",
+    "Does this patient have difficulty performing the heel-shin maneuver on their left side, such as lowering their heel jerkily, or with lateral movements?":"7c left heel–shin",
+    "Does this patient have difficulty performing the heel-shin maneuver on their right side, such as lowering their heel jerkily, or with lateral movements?":"7d right heel–shin",
+    "Does this patient have difficulty with sensory perception? For instance, the patient may report that a pinprick is not sharp or not painful, or not be aware of being touched.":"8 sensation",
+    "Does this patient have difficulty with understanding or making language or speech? For instance, they may struggle to describe a a picture, to name items, or read from a list of sentences, or they may show a loss of fluency, lack of comprehension, or limitation on ideas expressed. Ignore speech issues which are exclusively motor, such as dysarthria.":"9 language/aphasia",
+    "Does this patient's speech show dysarthria, or slurring to the point that some words are not intelligible? For instance, the text may mention having to ask the patient to repeat themselves multiple times. Do not consider hypophonia.":"10 dysarthria",
+    "Does this patient have difficulty with extinction and inattention? For instance, they may show visual, tactile, auditory, spatial, or personal inattention, extinction to bilateral simultaneous stimulation, hemi-inattention or extinction, or orient to only one side of space.":"11 extinction and inattention"
+},
+"depression":{
+    "Does this patient show lack of pleasure from activities or interactions that used to be enjoyable? If the text does not mention enjoyment of activities, respond \"not present\"":"anhedonia",
+    "Does this patient show negative attitudes or pessimism about the future and a sense of hopelessness? If the text does not mention pessimism or hopelessness, respond \"not present\"":"pessimism",
+    "Is this patient uneasy or generally dissatisfied with life? If the text does not mention depressive symptoms, respond \"not present\"":"dissatisfaction",
+    "Does this patient seem very sad or depressed? If the text does not mention overall mood, respond \"not present\"":"depressed"
+},
+"memory":{
+    "Does this patient show signs of acute, post-lesional, episodic anterograde amnesia? For instance, they may start have difficulty remembering events that happened after a stroke, or be unable to form new memories after the stroke. If the text mentions short-term memory problems only, or memory problems not associated with a stroke, respond \"not present\".":"anterograde_amnesia",
+    "Does this patient show signs of acute, post-lesional, episodic retrograde amnesia? For instance, they may have difficulty remembering events that occured before their stroke. If the text mentions short-term memory problems only, or memory problems not associated with a stroke, respond \"not present\".":"retrograde_amnesia"
+},
+"billing code":{
+
+},
+"bars":{
     "Does this patient have difficulty walking or disturbed gait? For instance, they may mention the patient staggering, difficulties in half turn, requiring support from a wall or stick, or being entirely unable to walk on their own.":"gait",
     "Does this patient have difficulty performing the heel-shin maneuver such as lowering their heel jerkily, or with lateral movements?":"heel–shin",
     "Does this patient's speech show dysarthria, or slurring to the point that some words are not intelligible? For instance, the text may mention having to ask the patient to repeat themselves multiple times. Do not consider hypophonia.":"speech",
