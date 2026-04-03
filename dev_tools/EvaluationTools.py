@@ -23,34 +23,47 @@ def confusion_matrix(truth_vector, pred_vector, dimension=3):
 
     return np.array(matrix)
 
+def div_check_zeros(num, denom):
+    if denom==0 and num==0:
+        return 1
+    elif denom==0 and num!=0:
+        raise ValueError("Denominator is zero, but numerator is not zero.")
+    else:
+        return num/denom
+
 def accuracy(conf_matrix):
     
     total_questions=sum([sum(row) for row in conf_matrix])
     good_answers=0
     for i in range(len(conf_matrix)):
         good_answers += conf_matrix[i][i]
-    accuracy=good_answers/total_questions
+    accuracy=div_check_zeros(good_answers, total_questions)
+    # accuracy=good_answers/total_questions
     return accuracy
 
 def sensitivity(conf_matrix,):
     ground_truth_pos=sum(conf_matrix[0])
     true_positives=conf_matrix[0][0]
-    return true_positives/ground_truth_pos
+    sensitivity=div_check_zeros(true_positives, ground_truth_pos)
+    return sensitivity
 
 def specificity(conf_matrix,):
     ground_truth_neg=sum(conf_matrix[1])
     true_negatives=conf_matrix[1][1]
-    return true_negatives/ground_truth_neg
+    specificity=div_check_zeros(true_negatives, ground_truth_neg)
+    return specificity
 
 def pos_pred_power(conf_matrix, ):
     true_positives=conf_matrix[0][0]
     predicted_positives=sum([row[0] for row in conf_matrix])
-    return true_positives/predicted_positives
+    pos_pred_power=div_check_zeros(true_positives, predicted_positives)
+    return pos_pred_power
 
 def neg_pred_power(conf_matrix,):
     true_negatives=conf_matrix[1][1]
     predicted_negatives=sum([row[1] for row in conf_matrix])
-    return true_negatives/predicted_negatives
+    neg_pred_power=div_check_zeros(true_negatives, predicted_negatives)
+    return neg_pred_power
 
 def combine_no_and_unknown(conf):
     output=np.asarray([conf[0],conf[1]+conf[2]])
@@ -63,7 +76,6 @@ def ignore_ground_truth_unknown(conf):
 
 def ignore_unknown(conf):
     return conf[:-1,:-1]
-
 
 
 def statistical_df(confusion_matrix_dict,include_accuracy=True):
@@ -158,7 +170,7 @@ def plot_scores(df, score_names,yrange=(0.1,1.03), title=None,
 
 import ptitprince as pt
 
-def raincloud_plot(stats_df, color=None, filename=None,ylims=None, debug=False):
+def raincloud_plot(stats_df, color=None, figsz=(6,4), filename=None,ylims=None, include_accuracy=True, debug=False,):
     
     if color is None:
         color='#1F77B4'
@@ -166,7 +178,13 @@ def raincloud_plot(stats_df, color=None, filename=None,ylims=None, debug=False):
     setstuff=[]
     cols=[]
     acc=[]
-    for col in stats_df.columns[1:]:
+    if include_accuracy:
+        columns_to_use=stats_df.columns[1:]
+        labels=["Accuracy","Sensitivity","Specificity","NPV",'PPV']
+    else:
+        columns_to_use=stats_df.columns[2:]
+        labels
+    for col in columns_to_use:
         setstuff+=['ccas']*len(stats_df)
         cols+=[col]*len(stats_df)
         acc+=stats_df[col].values.tolist()
@@ -178,10 +196,10 @@ def raincloud_plot(stats_df, color=None, filename=None,ylims=None, debug=False):
         print(accdf[accdf['scoretype']=='specificity'])
 
 
-    plt.figure(figsize=(6,4))
+    plt.figure(figsize=figsz)
     rc=pt.RainCloud(data=accdf, y='scores',x='scoretype',hue='scoretype',
                 bw=0.5, cut=0, orient='v', palette=[color]*5, width_viol=.5, width_box=.3,)
-    rc.set_xticklabels(["Accuracy","Sensitivity","Specificity","NPV",'PPV'])
+    rc.set_xticklabels(labels)
 
     rc.set_xlabel('')
     # auto_y_min, auto_y_max=rc.get_ylim()
