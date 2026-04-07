@@ -16,6 +16,7 @@ class TextChunker:
         self.text = text.replace('|', ',')  # Replace "|", since we use it as a separator for the answers
         self.token_limit = token_limit
         self.chunks = []
+        self.chunk_metadata = []
         self.debug = debug
         self.chunk_tokens_dict = {}
 
@@ -27,47 +28,48 @@ class TextChunker:
         Splits the text into smaller segments based on the token limit.
         """
         import re
-        words = self.text.split()
+        
+        # Use a more sophisticated approach to track dates line-by-line to avoid DOB
+        lines = self.text.split('\n')
         
         if self.debug:
-            print(f"Total words to process: {len(words)}")
-            if all(word == '' for word in words):
-                print("Warning: All words are empty spaces.")
+            print(f"Total lines to process: {len(lines)}")
         
         current_chunk = []
         current_chunk_tokens = 0
         current_date = "Unknown Date"
 
-        for word in words:
-            # Track the date context from the pipe-separated (now comma-separated) RPDR header
-            date_match = re.search(r'(\d{1,2}/\d{1,2}/\d{4})', word)
-            if date_match and ',' in word:
+        for line in lines:
+            # RPDR files often have the report date in the header row or near 'Encounter Date:'
+            # We specifically look for these to avoid picking up DOB (Date of Birth)
+            date_match = re.search(r'(?:Encounter Date:|Report_Date_Time,)\s*(\d{1,2}/\d{1,2}/\d{4})', line, re.IGNORECASE)
+            if date_match:
                 current_date = date_match.group(1)
-
-            tokens_in_word = len(word.split()) + 1
-            if self.debug:
-                print(f"Found {tokens_in_word} tokens in word: '{word}'")
-            if current_chunk_tokens + tokens_in_word <= self.token_limit:
-                current_chunk.append(word)
-                current_chunk_tokens += tokens_in_word
-                if self.debug:
-                    print(f"Added word to current chunk, total tokens now: {current_chunk_tokens}")
-            else:
-                self.chunks.append(' '.join(current_chunk))
-                if self.debug:
-                    print(f"Chunk completed, appended to chunks list.")
+            
+            # Split line into words for token counting
+            words = line.split()
+            for word in words:
+                tokens_in_word = 1 # Simple word count for token approximation + overhead
                 
-                context_str = f"[CONTINUED FROM REPORT DATE: {current_date}]"
-                current_chunk = [context_str, word]
-                current_chunk_tokens = len(context_str.split()) + 1 + tokens_in_word
-                if self.debug:
-                    print(f"Started new chunk with word: '{word}', total tokens now: {current_chunk_tokens}")
+                if current_chunk_tokens + tokens_in_word <= self.token_limit:
+                    current_chunk.append(word)
+                    current_chunk_tokens += tokens_in_word
+                else:
+                    self.chunks.append(' '.join(current_chunk))
+                    self.chunk_metadata.append({'date': current_date})
+                    
+                    context_str = f"[CONTINUED FROM REPORT DATE: {current_date}]"
+                    current_chunk = [context_str, word]
+                    current_chunk_tokens = len(context_str.split()) + 1 + tokens_in_word
+            
+            # Add a small token cost for the newline
+            current_chunk.append('\n')
+            current_chunk_tokens += 1
 
         if current_chunk:
             self.chunks.append(' '.join(current_chunk))
+            self.chunk_metadata.append({'date': current_date})
             self.chunk_tokens_dict[len(self.chunks) - 1] = current_chunk_tokens
-            if self.debug:
-                print(f"Final chunk added to chunks list.")
                 
     def chunk_tokens(self):
         for key, value in self.chunk_tokens_dict.items():
@@ -81,5 +83,14 @@ class TextChunker:
         - list: List containing the generated text chunks.
         """
         return self.chunks
+
+    def get_chunk_metadata(self):
+        """
+        Returns the list of metadata for each chunk.
+        
+        Returns:
+        - list: List containing dictionaries of metadata for each chunk.
+        """
+        return self.chunk_metadata
     
     

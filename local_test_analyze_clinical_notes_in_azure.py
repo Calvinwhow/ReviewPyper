@@ -31,7 +31,7 @@ test_mode=False
 # Set the questions for data extraction. This is where you extract what you want to know from the included notes.
 # These are more open-ended than inclusion/exclusion questions, and don't have to be yes/no.
 # See notebook 05, section 02 for examples.
-extraction_question_sets = ['bars', 'test_questions']
+extraction_question_sets = ['bars']
 
 # - Set extraction_answers_binary to False if the extraction questions you asked do not have binary answers. 
 #    - We will extract the raw data, like specific result values, for you to review.
@@ -132,6 +132,16 @@ answers = evaluator.evaluate_all_files()
 extraction_chunks_dir=evaluator.chunk_dir
 evaluated_json_path = evaluator.save_to_json(answers)
 
+# Perform Temporal Analysis
+from calvin_utils.gpt_sys_review.gpt_utils.temporal_analysis import TemporalPlotter
+plotter = TemporalPlotter(json_path=evaluated_json_path, output_dir=output_dir+"plots/")
+onset_summary_path = plotter.run()
+
+if onset_summary_path:
+    from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
+    PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, 
+                                                  raw_results_path=onset_summary_path, 
+                                                  filename_col='MRN')
 
 severity_dict = {
     0: ["none", "absent", "no"],

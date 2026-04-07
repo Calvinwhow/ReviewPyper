@@ -165,6 +165,17 @@ answers = evaluator.evaluate_all_files()
 extraction_chunks_dir=evaluator.chunk_dir
 evaluated_json_path = evaluator.save_to_json(answers)
 
+# Perform Temporal Analysis
+from calvin_utils.gpt_sys_review.gpt_utils.temporal_analysis import TemporalPlotter
+plotter = TemporalPlotter(json_path=evaluated_json_path, output_dir=output_dir+"plots/")
+onset_summary_path = plotter.run()
+
+if onset_summary_path:
+    from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
+    PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, 
+                                                  raw_results_path=onset_summary_path, 
+                                                  filename_col='MRN')
+
 # I'm getting yeses and nos already pretty reliably, so I don't think we need this?
 from calvin_utils.gpt_sys_review.json_utils import CustomSummarizer
 custom_summarizer = CustomSummarizer(json_path=evaluated_json_path, 

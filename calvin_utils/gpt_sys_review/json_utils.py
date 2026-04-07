@@ -447,9 +447,11 @@ class InclusionExclusionSummarizer:
         for article, questions in self.data.items():
             summary_dict[article] = {}
             for question, chunks in questions.items():
+                if question == 'metadata' or question.startswith('CHUNKS'):
+                    continue
                 # Get the polarity value for the question from the questions dictionary
-                if question[:11] == 'EXPLANATION': # just skipping these for now. At some point we should probably add the explanations to the output csv.
-                    summary_dict[article][question] = list(chunks.values())
+                if question[:11] == 'EXPLANATION': 
+                    summary_dict[article][question] = '|'.join([str(v) for v in chunks.values()])
                     continue
                 # polarity = self.questions.get(question)
                 # if polarity is None:
@@ -634,6 +636,8 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                 chunks_dict = self.read_json(self.chunks_dir + '/' + article + '_chunks.json')
 
             for question, chunks in questions.items():
+                if question == 'metadata' or question.startswith('CHUNKS'):
+                    continue
                 # Keep explanations untouched
                 if question[:11] == 'EXPLANATION':
                     if positive_explanations_only and self.keyword_mapping:
@@ -646,12 +650,12 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                         ]
                         summary_dict[article][question] = '|'.join(pos_explanations)
                     else:
-                        summary_dict[article][question] = '|'.join(list(chunks.values()))
+                        summary_dict[article][question] = '|'.join([str(v) for v in chunks.values()])
                     continue
 
                 if 'dates of the clinical notes' in question or 'dates' in question.lower() and ('Y/N' not in question and 'Yes/No' not in question):
                     # Bypass binary keyword mapping for date extraction questions
-                    summary_dict[article][question] = '|'.join(list(chunks.values()))
+                    summary_dict[article][question] = '|'.join([str(v) for v in chunks.values()])
                     continue
 
                 if self.keyword_mapping:
