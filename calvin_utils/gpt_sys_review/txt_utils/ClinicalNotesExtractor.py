@@ -39,36 +39,79 @@ class ClinicalNotesExtractor:
     ### Public API ###
 
     def split_by_subject(self, file):
-        """Splits the file so that each subject is in their own file."""
-        reader=self._file_reader(file)
-        reader=self._file_reader(file)
+        """
+        Splits the file so that each subject is in their own file, 
+        ensuring all reports within that file are sorted chronologically.
+        """
+        import re
+        from datetime import datetime
+        from collections import defaultdict
+
+        reader = self._file_reader(file)
         
+        # Identify the MRN column index from the header row
         for row in reader:
-            file_header=row
-            mrn_index=file_header.split(self.separator).index(self.MRN_str)
+            file_header = row
+            try:
+                mrn_split = file_header.split(self.separator)
+                mrn_index = mrn_split.index(self.MRN_str)
+            except ValueError:
+                continue # Skip if not a header or MRN column not found
             break
         
-        note=''
+        # Dictionary to store reports per MRN: {mrn: [(date, full_note_text), ...]}
+        subject_reports = defaultdict(list)
+        
+        note = ''
+        header = ''
 
         for row in reader:
-            
-            note+=row
+            note += row
 
             if self.separator in row:
-                header=row
+                header = row
 
-            if (self.report_end_str in row) or (row == ''):
-
-                if header=='':
-                    raise ValueError("Header is empty")
+            if (self.report_end_str in row) or (row.strip() == ''):
+                if header == '':
+                    continue 
                 
-                mrn=header.split(self.separator)[mrn_index]
+                parts = header.split(self.separator)
+                if len(parts) > mrn_index:
+                    mrn = parts[mrn_index]
+                    
+                    # Extract date for sorting (Look for common RPDR date locations)
+                    # 1. Look for Encounter Date: 2. Look for Report_Date_Time in the header
+                    date_str = "01/01/1900"
+                    date_match = re.search(r'(?:Encounter Date:|Report_Date_Time[|])\s*(\d{1,2}/\d{1,2}/\d{4})', note, re.IGNORECASE)
+                    
+                    if date_match and "DOB" not in date_match.group(0):
+                        date_str = date_match.group(1)
+                    elif len(parts) > 5:
+                        # Fallback: Many RPDR notes have the date in the 6th | column (index 5)
+                        header_date_match = re.search(r'(\d{1,2}/\d{1,2}/\d{4})', parts[5])
+                        if header_date_match:
+                            date_str = header_date_match.group(1)
+                    
+                    try: date_obj = datetime.strptime(date_str, "%m/%d/%Y")
+                    except: date_obj = datetime(1900, 1, 1)
 
-                with open(os.path.join(self.output_dir, f'{mrn}.txt'), 'a', encoding='utf-8') as subject_file:
-                    subject_file.write(note)
+                    subject_reports[mrn].append((date_obj, note))
 
-                note=''
-                header=''
+                note = ''
+                header = ''
+
+        # Now sort and write each subject's file
+        print(f"Sorting and writing reports for {len(subject_reports)} subjects...")
+        for mrn, reports in subject_reports.items():
+            # Sort chronologically by the extracted date_obj
+            reports.sort(key=lambda x: x[0])
+            
+            output_path = os.path.join(self.output_dir, f'{mrn}.txt')
+            with open(output_path, 'w', encoding='utf-8') as subject_file:
+                for _, report_text in reports:
+                    subject_file.write(report_text)
+                    subject_file.write("\n") # Ensure separation
+
     
     def generate_master_list(self):
         """Generates a master list of all subjects and their notes."""
