@@ -41,12 +41,14 @@ class TemporalPlotter:
                     continue
                 
                 for chunk_id, answer in chunks.items():
-                    status = 0
                     ans = str(answer).lower()
+                    if ans == '0' or ans == '0.0':
+                        continue # Skip completely unmentioned symptom evaluations
                     
-                    # More robust status check
-                    if any(s == ans for s in acceptable_strings) or ans == '1' or ans == '1.0':
-                        status = 1
+                    status = 1 # 1 = No
+                    # More robust status check for Yes (2)
+                    if any(s == ans for s in acceptable_strings) or ans == '2' or ans == '2.0':
+                        status = 2
                     
                     # Extract date directly from the LLM's new inline output
                     # Fallback to chunk metadata if the LLM didn't return one or if running older files
@@ -106,33 +108,56 @@ class TemporalPlotter:
             
             for i, question in enumerate(patient_df['Question'].unique()):
                 plt.figure(figsize=(10, 5))
-                q_df = patient_df[patient_df['Question'] == question]
+                q_df = patient_df[patient_df['Question'] == question].sort_values('Date')
                 
-                plt.step(q_df['Date'], q_df['AccumulatedStatus'], where='post', label="Accumulated Onset", color='blue', linewidth=2)
-                plt.scatter(q_df['Date'], q_df['Status'], alpha=0.6, s=30, color='red', label='Raw Extraction') 
+                # Continuous step-plot for raw extraction
+                plt.step(q_df['Date'], q_df['Status'], where='post', label="Raw Trajectory", color='black', linewidth=1.5, zorder=3)
+                plt.scatter(q_df['Date'], q_df['Status'], alpha=0.8, s=40, color='red', label='Raw Extraction Point', zorder=4) 
+                # Apply Option 2: Vertical Background Banding per Chunk (Contiguous Spans)
+                # Apply Option 2: Vertical Background Banding per Chunk (Contiguous Spans) 
+                unique_start_dates = sorted(q_df.groupby('Chunk')['Date'].min().unique())
+                from datetime import timedelta
+                
+                # Use simple alternating distinct colors to denote different chunks cleanly
+                # Light grey and light blue
+                distinct_colors = ['#f5f5f5', '#e1f5fe'] * (len(unique_start_dates) + 1)
+                
+                if unique_start_dates:
+                    # Determine borders for the bands
+                    borders = unique_start_dates + [q_df['Date'].max() + timedelta(days=30)]
+                    
+                    for idx in range(len(borders) - 1):
+                        span_start = borders[idx]
+                        span_end = borders[idx+1]
+                        
+                        # Only plot if there's actual width
+                        if span_start < span_end:
+                            plt.axvspan(span_start, span_end, color=distinct_colors[idx], alpha=0.3, lw=0, zorder=1)
                 
                 title_text = textwrap.fill(question, width=80)
                 plt.title(f"Patient {patient_id}\n{title_text}", fontsize=10)
                 plt.xlabel("Date")
-                plt.ylabel("Status (0=No, 1=Yes)")
-                plt.ylim(-0.1, 1.1)
-                plt.yticks([0, 1], ['No (0)', 'Yes (1)'])
-                plt.legend(loc='upper left')
-                plt.grid(True, alpha=0.3)
+                plt.ylabel("Status (1=No, 2=Yes)")
+                plt.ylim(0.8, 2.2)
+                plt.yticks([1, 2], ['No (1)', 'Yes (2)'])
+                
+                # Move legend outside to prevent overlapping the plot content
+                plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+                plt.grid(True, alpha=0.3, zorder=2)
                 plt.tight_layout()
                 
                 safe_q = "".join([c if c.isalnum() else "_" for c in question[:30]]).strip("_")
                 save_path = os.path.join(self.output_dir, f"temporal_{patient_id}_{safe_q}_{i}.png")
-                plt.savefig(save_path)
+                plt.savefig(save_path, bbox_inches='tight')
                 plt.close()
                 # print(f"Saved plot for {patient_id} - Q{i} to {save_path}")
 
     def summarize_onsets(self, df):
         """
-        Extracts the first date where a symptom flipped to 'Yes' (Status 1).
+        Extracts the first date where a symptom flipped to 'Yes' (Status 2).
         """
         # Filter for only 'Yes' statuses
-        yes_df = df[df['Status'] == 1]
+        yes_df = df[df['Status'] == 2]
         
         # Get the first date for each MRN and Question
         onsets = yes_df.groupby(['MRN', 'Question'])['Date'].min().reset_index()
@@ -160,10 +185,13 @@ class TemporalPlotter:
                 if not isinstance(chunks, dict): continue
                 
                 for chunk_id, answer in chunks.items():
-                    status = 0
                     ans = str(answer).lower()
-                    if any(s == ans for s in ["1", "yes", "true", "present", "y"]) or ans == '1' or ans == '1.0':
-                        status = 1
+                    if ans == '0' or ans == '0.0':
+                        continue # Exclude unmentioned data from the longitudinal tracking matrix
+                        
+                    status = 1 # 1 = No
+                    if any(s == ans for s in ["2", "yes", "true", "present", "y"]) or ans == '2' or ans == '2.0':
+                        status = 2 # 2 = Yes
                     
                     metadata = metadata_by_chunk.get(str(chunk_id), {})
                     all_dates = metadata.get('all_dates', [])
@@ -183,9 +211,11 @@ class TemporalPlotter:
                             
         if records:
             df = pd.DataFrame(records)
+            df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+            df = df.dropna(subset=['Date'])
             df.to_csv(output_path, index=False)
-            return output_path
-        return None
+            return df
+        return pd.DataFrame()
 
     def run(self):
         print("Extracting temporal data...")
@@ -193,14 +223,14 @@ class TemporalPlotter:
         
         long_path = os.path.join(self.output_dir, "longitudinal_per_date.csv")
         print(f"Exporting full per-date longitudinal tracking to {long_path}...")
-        self.export_per_date_longitudinal_data(long_path)
+        long_df = self.export_per_date_longitudinal_data(long_path)
         
-        if df.empty:
+        if long_df is None or long_df.empty:
             print("No valid temporal data (dates) found. Skipping plot/summary generation.")
             return None
             
-        print(f"Applying permanent flip logic to {len(df)} observations...")
-        df_acc = self.apply_permanent_flip(df)
+        print(f"Applying permanent flip logic to {len(long_df)} exploded observations...")
+        df_acc = self.apply_permanent_flip(long_df)
         
         print("Generating plots...")
         self.plot_patient_trajectories(df_acc)

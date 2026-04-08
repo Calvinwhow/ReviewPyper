@@ -119,10 +119,10 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
             if self.include_explanations:
                 formatted_questions = (f'''For each of the following questions about the {self.chunk_flag} provided, '''
                 f'''output an integer, followed by an explanation for your answer, followed by the exact DATE when the symptom first appeared (based on [REPORT DATE: YYYY-MM-DD] markers or other dates in the text). '''
-                f'''If the answer is not clearly stated in the text, respond 0 for the integer and "Unknown" for the date, and do not try to make inferences. '''
+                f'''If the symptom is completely unmentioned or not evaluated, respond 0 for the integer ("Unknown"). If the text explicitly states the patient DOES NOT have the symptom (e.g., normal gait), respond 1 for the integer ("No"). If the text explicitly confirms the patient DOES have the symptom, respond 2 for the integer ("Yes"). If the answer is 0 or 1, respond "Unknown" for the date. Do not try to make inferences. '''
                 f'''All answers, explanations, and dates should be on one line, separated by the "|" character. '''
                 f'''Suppose there are n questions. The format of your output should look like "integer_1|explanation_1|date_1|integer_2|explanation_2|date_2...integer_n|explanation_n|date_n". '''
-                f'''For example: "2|The text mentions that the patient needs a cane to walk|2018-05-12|0|The text does not mention the heel-shin test|Unknown" etc. '''
+                f'''For example: "2|The text mentions that the patient needs a cane to walk|2018-05-12|0|The text does not mention the heel-shin test|Unknown|1|The text explicitly notes normal ocular pursuit|Unknown" etc. '''
                 f'''Be sure to answer every question separately and do not combine multiple questions into one answer. ''' 
                 f'''Ignore any text which is part of a standardized questionnaire. The questions are:''')
                 questions_w_explanations=[]                
@@ -133,11 +133,10 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
 
             else:
                 questions_w_explanations=list(self.questions.keys())
-                # formatted_questions = f'''For each of the following questions about the {self.chunk_flag} provided, output a yes or no. Each answer should be followed by the "|" character as a separator. For example : 'Yes'|'No'|'No' etc. The questions are: '''
                 formatted_questions = (f'''For each of the following questions about the {self.chunk_flag} provided, '''
-                f'''output a separate yes or no, followed by the exact DATE when the symptom first appeared (based on [REPORT DATE: YYYY-MM-DD] markers or other dates in the text). '''
-                f'''If the answer is not clearly stated in the text, respond no and "Unknown" for the date. All answers and dates '''
-                f'''should be on one line, separated by the "|" character. For example: "Yes|2018-05-12|No|Unknown|Yes|2019-01-01" etc. Be sure to  '''
+                f'''output a separate integer (0 for Unmentioned/Unknown, 1 for Explicit No, 2 for Yes), followed by the exact DATE when the symptom first appeared (based on [REPORT DATE: YYYY-MM-DD] markers or other dates in the text). '''
+                f'''If the answer is 0 or 1, respond "Unknown" for the date. All answers and dates '''
+                f'''should be on one line, separated by the "|" character. For example: "2|2018-05-12|1|Unknown|2|2019-01-01|0|Unknown" etc. Be sure to  '''
                 f'''answer every question separately and do not combine multiple questions into one answer. ''' 
                 f'''Ignore any text which is part of a standardized questionnaire. The questions are:''')
                 formatted_questions += " ".join(questions_w_explanations)
