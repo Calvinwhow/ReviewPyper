@@ -24,25 +24,46 @@ class TemporalPlotter:
         Returns a dictionary or DataFrame with the results.
         """
         records = []
+        
+        # If the JSON is a multi-patient dictionary of dictionaries
         for mrn, content in self.data.items():
-            metadata_by_chunk = content.get('metadata', {})
+            if not isinstance(content, dict): continue
+            
+            # The metadata might be in the patient block OR at the top level (global)
+            metadata_by_chunk = content.get('metadata', self.data.get('metadata', {}))
+            
             for question, chunks in content.items():
-                if question == 'metadata' or question.startswith('EXPLANATION') or question.startswith('CHUNKS'):
+                # Skip system keys, explanations, and now Onset Dates
+                if question in ['metadata', 'CHUNKS', 'MRN', 'filepath'] or question.startswith('EXPLANATION') or question.startswith('Onset Date:'):
+                    continue
+                
+                if not isinstance(chunks, dict):
                     continue
                 
                 for chunk_id, answer in chunks.items():
                     status = 0
                     ans = str(answer).lower()
-                    metadata = metadata_by_chunk.get(chunk_id, {})
                     
-                    if any(s in ans for s in acceptable_strings):
+                    # More robust status check
+                    if any(s == ans for s in acceptable_strings) or ans == '1' or ans == '1.0':
                         status = 1
                     
-                    date_str = metadata.get('date', 'Unknown')
-                    try:
-                        date_val = datetime.strptime(date_str, '%m/%d/%Y')
-                    except:
-                        date_val = None
+                    # Extract date directly from the LLM's new inline output
+                    # Fallback to chunk metadata if the LLM didn't return one or if running older files
+                    date_str = str(content.get(f'Onset Date: {question}', {}).get(chunk_id, 'Unknown')).strip()
+                    if date_str == 'Unknown' or date_str == '':
+                        metadata = metadata_by_chunk.get(str(chunk_id), {})
+                        date_str = metadata.get('date', 'Unknown')
+                    
+                    date_val = None
+                    if date_str != 'Unknown' and date_str != 'None':
+                        for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%Y/%m/%d'):
+                            try:
+                                date_val = datetime.strptime(date_str, fmt)
+                                break
+
+                            except ValueError:
+                                continue
                         
                     records.append({
                         'MRN': mrn,
@@ -54,8 +75,9 @@ class TemporalPlotter:
                     })
         
         df = pd.DataFrame(records)
-        # Drop unknown dates for plotting
-        df = df.dropna(subset=['Date'])
+        # Drop unknown dates for plotting - ensure it's not empty before returning
+        if not df.empty:
+            df = df.dropna(subset=['Date'])
         return df
 
     def apply_permanent_flip(self, df):
@@ -69,6 +91,7 @@ class TemporalPlotter:
     def plot_patient_trajectories(self, df, mrn=None, questions=None):
         """
         Plots the trajectories for a specific patient or all patients.
+        Generates a separate plot for EACH question for EACH participant.
         """
         if mrn:
             df = df[df['MRN'] == mrn]
@@ -76,28 +99,33 @@ class TemporalPlotter:
             df = df[df['Question'].isin(questions)]
             
         unique_mrns = df['MRN'].unique()
+        import textwrap
         
         for patient_id in unique_mrns:
             patient_df = df[df['MRN'] == patient_id]
-            plt.figure(figsize=(12, 6))
             
-            for question in patient_df['Question'].unique():
+            for i, question in enumerate(patient_df['Question'].unique()):
+                plt.figure(figsize=(10, 5))
                 q_df = patient_df[patient_df['Question'] == question]
-                plt.step(q_df['Date'], q_df['AccumulatedStatus'], where='post', label=question[:50] + "...")
-                plt.scatter(q_df['Date'], q_df['Status'], alpha=0.3, s=10) # Show raw points faintly
-            
-            plt.title(f"Symptom Progression for Patient {patient_id} (Permanent Flip Logic)")
-            plt.xlabel("Date")
-            plt.ylabel("Status (0=No, 1=Yes)")
-            plt.ylim(-0.1, 1.1)
-            plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-            plt.grid(True, alpha=0.3)
-            plt.tight_layout()
-            
-            save_path = os.path.join(self.output_dir, f"temporal_{patient_id}.png")
-            plt.savefig(save_path)
-            plt.close()
-            print(f"Saved plot for {patient_id} to {save_path}")
+                
+                plt.step(q_df['Date'], q_df['AccumulatedStatus'], where='post', label="Accumulated Onset", color='blue', linewidth=2)
+                plt.scatter(q_df['Date'], q_df['Status'], alpha=0.6, s=30, color='red', label='Raw Extraction') 
+                
+                title_text = textwrap.fill(question, width=80)
+                plt.title(f"Patient {patient_id}\n{title_text}", fontsize=10)
+                plt.xlabel("Date")
+                plt.ylabel("Status (0=No, 1=Yes)")
+                plt.ylim(-0.1, 1.1)
+                plt.yticks([0, 1], ['No (0)', 'Yes (1)'])
+                plt.legend(loc='upper left')
+                plt.grid(True, alpha=0.3)
+                plt.tight_layout()
+                
+                safe_q = "".join([c if c.isalnum() else "_" for c in question[:30]]).strip("_")
+                save_path = os.path.join(self.output_dir, f"temporal_{patient_id}_{safe_q}_{i}.png")
+                plt.savefig(save_path)
+                plt.close()
+                # print(f"Saved plot for {patient_id} - Q{i} to {save_path}")
 
     def summarize_onsets(self, df):
         """
@@ -117,9 +145,56 @@ class TemporalPlotter:
         onsets_pivot.columns = [f"Onset Date: {col[:50]}..." for col in onsets_pivot.columns]
         return onsets_pivot
 
+    def export_per_date_longitudinal_data(self, output_path):
+        """
+        Explodes the answer for each chunk across all valid dates found within that chunk.
+        """
+        records = []
+        for mrn, content in self.data.items():
+            if not isinstance(content, dict): continue
+            metadata_by_chunk = content.get('metadata', self.data.get('metadata', {}))
+            
+            for question, chunks in content.items():
+                if question in ['metadata', 'CHUNKS', 'MRN', 'filepath'] or question.startswith('EXPLANATION') or question.startswith('Onset Date:'):
+                    continue
+                if not isinstance(chunks, dict): continue
+                
+                for chunk_id, answer in chunks.items():
+                    status = 0
+                    ans = str(answer).lower()
+                    if any(s == ans for s in ["1", "yes", "true", "present", "y"]) or ans == '1' or ans == '1.0':
+                        status = 1
+                    
+                    metadata = metadata_by_chunk.get(str(chunk_id), {})
+                    all_dates = metadata.get('all_dates', [])
+                    if not all_dates:
+                        if metadata.get('date') and metadata.get('date') != "Unknown Date" and metadata.get('date') != "Unknown" and metadata.get('date') != "":
+                            all_dates = [metadata.get('date')]
+                        
+                    for date_str in all_dates:
+                        if isinstance(date_str, str) and date_str != 'Unknown Date' and date_str != 'Unknown':
+                            records.append({
+                                'MRN': mrn,
+                                'Date': date_str,
+                                'Question': question,
+                                'Chunk': chunk_id,
+                                'Status': status
+                            })
+                            
+        if records:
+            df = pd.DataFrame(records)
+            df.to_csv(output_path, index=False)
+            return output_path
+        return None
+
     def run(self):
         print("Extracting temporal data...")
         df = self.extract_temporal_data()
+        
+        long_path = os.path.join(self.output_dir, "longitudinal_per_date.csv")
+        print(f"Exporting full per-date longitudinal tracking to {long_path}...")
+        self.export_per_date_longitudinal_data(long_path)
+        
         if df.empty:
             print("No valid temporal data (dates) found. Skipping plot/summary generation.")
             return None

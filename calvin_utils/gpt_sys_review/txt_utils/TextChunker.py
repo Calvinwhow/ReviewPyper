@@ -25,82 +25,70 @@ class TextChunker:
     
     def chunk_text(self):
         """
-        Splits the text into smaller segments based on the token limit, 
-        after sorting all individual reports chronologically.
+        Splits the text into smaller segments based on the token limit.
+        Uses clinical date extraction to power temporal tracking.
         """
         import re
-        from datetime import datetime
         
-        # 1. Identify individual reports and their dates
-        # RPDR files use | delimiters (now ,) and headers like "Report_Date_Time"
-        # We split by the pattern of the start of a report header
+        # Line-by-line approach to track dates and void birthdays
         lines = self.text.split('\n')
-        reports = []
-        current_report_lines = []
-        current_report_date = datetime(1900, 1, 1) # Default very old date
-        
-        # Trigger pattern for a new report header in RPDR (columns often separated by , after our earlier replacement)
-        # We look for the common MRN_Type or EMPI column start or the Encounter Date line
-        for line in lines:
-            date_match = re.search(r'(?:Encounter Date:|Report_Date_Time,)\s*(\d{1,2}/\d{1,2}/\d{4})', line, re.IGNORECASE)
-            
-            # If we find a new date-defining line, we treat it as a potential start of a new report if it's not DOB
-            if date_match and "DOB" not in line:
-                if current_report_lines:
-                    reports.append((current_report_date, "\n".join(current_report_lines)))
-                
-                try: current_report_date = datetime.strptime(date_match.group(1), "%m/%d/%Y")
-                except: current_report_date = datetime(1900, 1, 1)
-                
-                current_report_lines = [line]
-            else:
-                current_report_lines.append(line)
-        
-        if current_report_lines:
-            reports.append((current_report_date, "\n".join(current_report_lines)))
-        
-        # 2. Sort reports chronologically
-        reports.sort(key=lambda x: x[0])
-        
-        # 3. Chunk the sorted reports
         if self.debug:
-            print(f"Sorted {len(reports)} reports for process.")
+            print(f"Total characters to process: {len(self.text)}")
             
         self.chunks = []
         self.chunk_metadata = []
         current_chunk = []
         current_chunk_tokens = 0
-        
-        for date, report_text in reports:
-            date_str = date.strftime("%m/%d/%Y") if date != datetime(1900, 1, 1) else "Unknown Date"
+        current_date = "Unknown Date"
+        dates_in_chunk = []
+
+        words = self.text.split()
+        for i, word in enumerate(words):
+            # Look for a date pattern in the word
+            date_match = re.search(r'(\d{1,2}/\d{1,2}/\d{4})', word)
+            if date_match:
+                potential_date = date_match.group(1)
+                # Check a window of surrounding words to exclude DOB
+                window = " ".join(words[max(0, i-5):i+6]).upper()
+                if not any(x in window for x in ["DOB", "BIRTH", "BORN", "B.DAY"]):
+                    if potential_date != current_date:
+                        current_date = potential_date
+                        marker_str = f"[REPORT DATE: {current_date}] "
+                        current_chunk.append(marker_str)
+                        current_chunk_tokens += len(marker_str.split())
+                        if current_date not in dates_in_chunk:
+                            dates_in_chunk.append(current_date)
+
             
-            # Split reports into words for token counting
-            words = report_text.split()
-            for word in words:
-                tokens_in_word = 1
+            tokens_in_word = 1
+            
+            if current_chunk_tokens + tokens_in_word <= self.token_limit:
+                current_chunk.append(word)
+                current_chunk_tokens += tokens_in_word
+            else:
+                self.chunks.append(' '.join(current_chunk))
                 
-                if current_chunk_tokens + tokens_in_word <= self.token_limit:
-                    current_chunk.append(word)
-                    current_chunk_tokens += tokens_in_word
-                else:
-                    self.chunks.append(' '.join(current_chunk))
-                    self.chunk_metadata.append({'date': date_str})
-                    
-                    context_str = f"[CONTINUED FROM REPORT DATE: {date_str}]"
-                    current_chunk = [context_str, word]
-                    current_chunk_tokens = len(context_str.split()) + 1 + tokens_in_word
-            
-            # Ensure the metadata at the end of a report belongs to its date
-            if current_chunk:
-                # Add a marker for end of a report to prevent bleeding across reports without a date update
-                current_chunk.append('\n')
-                current_chunk_tokens += 1
+                # Store extensive date metadata for transparency
+                date_range = f"{dates_in_chunk[0]} to {dates_in_chunk[-1]}" if dates_in_chunk else "Unknown Date"
+                self.chunk_metadata.append({
+                    'date': current_date, # Legacy single-date fallback
+                    'all_dates': list(dates_in_chunk),
+                    'date_range': date_range
+                })
+                
+                context_str = f"[CONTINUED FROM REPORT DATE: {current_date}]"
+                current_chunk = [context_str, word]
+                current_chunk_tokens = len(context_str.split()) + 1 + tokens_in_word
+                dates_in_chunk = [current_date] if current_date != "Unknown Date" else []
 
         if current_chunk:
-            # The final chunk date should reflect the date of the last report processed in it
             self.chunks.append(' '.join(current_chunk))
-            last_date = reports[-1][0].strftime("%m/%d/%Y") if reports else "Unknown Date"
-            self.chunk_metadata.append({'date': last_date})
+            date_range = f"{dates_in_chunk[0]} to {dates_in_chunk[-1]}" if dates_in_chunk else "Unknown Date"
+            self.chunk_metadata.append({
+                'date': current_date,
+                'all_dates': list(dates_in_chunk),
+                'date_range': date_range
+            })
             self.chunk_tokens_dict[len(self.chunks) - 1] = current_chunk_tokens
                 
     def chunk_tokens(self):

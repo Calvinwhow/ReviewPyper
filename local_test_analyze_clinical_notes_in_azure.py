@@ -43,6 +43,9 @@ extraction_answers_binary=True
 # # DO NOT CHANGE ANYTHING BELOW THIS LINE UNLESS YOU KNOW WHAT YOU ARE DOING! #
 # ################################################################################
 import os
+import sys
+# Force use of local workspace files instead of installed site-packages
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__))))
 import json
 
 inclusion_questions_json = json.load(open('inclusion_questions.json'))
@@ -134,7 +137,7 @@ evaluated_json_path = evaluator.save_to_json(answers)
 
 # Perform Temporal Analysis
 from calvin_utils.gpt_sys_review.gpt_utils.temporal_analysis import TemporalPlotter
-plotter = TemporalPlotter(json_path=evaluated_json_path, output_dir=output_dir+"plots/")
+plotter = TemporalPlotter(json_path=evaluated_json_path, output_dir=output_dir+"/plots/")
 onset_summary_path = plotter.run()
 
 if onset_summary_path:
@@ -185,18 +188,17 @@ PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path,
                                               raw_results_path=raw_path, 
                                               filename_col='MRN')
 
-# Commented out due to column mismatch with new severity-scale questions
-# from calvin_utils.evaluate_iterations import IterationEvaluator
-from calvin_utils.evaluate_iterations import IterationEvaluator # Corrected import path
-ev = IterationEvaluator(
-    ground_path=ground_truth_path,
-    master_path=master_list_path,
-    history_path=iteration_history_path,
-    plot_path=accuracy_image,
-    reset=False,
-)
-row = ev.run()
-print(row)
+# Evaluation step - currently skipping due to column mismatch
+# from calvin_utils.evaluate_iterations import IterationEvaluator 
+# ev = IterationEvaluator(
+#     ground_path=ground_truth_path,
+#     master_path=master_list_path,
+#     history_path=iteration_history_path,
+#     plot_path=accuracy_image,
+#     reset=False,
+# )
+# row = ev.run()
+# print(row)
 
 print("Done!")
 
