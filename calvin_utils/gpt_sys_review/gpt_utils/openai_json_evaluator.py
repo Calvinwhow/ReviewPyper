@@ -177,9 +177,7 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
             total_chunks = 0
             total_retries = 0
             total_failed_chunks=0
-
-
-
+            
             answers={}
             import concurrent.futures
 

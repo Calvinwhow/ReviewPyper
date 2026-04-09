@@ -149,7 +149,7 @@ class ClinicalNotesExtractor:
         for mrn, reports in subject_reports.items():
             reports.sort(key=lambda x: x[0])
             
-            output_path = os.path.join(self.output_dir, f'{mrn}.txt')
+            output_path = os.path.join(self.raw_files_dir, f'{mrn}.txt')
             with open(output_path, 'w', encoding='utf-8') as subject_file:
                 for _, report_text in reports:
                     subject_file.write(report_text)

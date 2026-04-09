@@ -4,7 +4,7 @@
 # Set the file(s) you want to analyze (usually from an RPDR request) and the output directory
 notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/00000016.txt',]
 # notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/00000016.txt',]
-output_dir='/Users/rm026/Documents/Code/reviewpyper_testing/tests/msa_sub_16_merge_redo_test/'
+output_dir='/Users/rm026/Documents/Code/reviewpyper_testing/tests/msa_sub_16_date_test/'
 
 mrn_file="/Users/rm026/Documents/Code/reviewpyper_testing/msa_fake_mrn_file.txt"
 # Provide the path to your OpenAI API key
@@ -28,7 +28,7 @@ segment_file=False
 # Set the questions for data extraction. This is where you extract what you want to know from the included notes.
 # These are more open-ended than inclusion/exclusion questions, and don't have to be yes/no.
 # See notebook 05, section 02 for examples.
-extraction_question_sets = ['bars']
+extraction_question_sets = ['hemiparesis','memory']
 
 # Types of answers you want for the extraction step. possible types are:
 # - "binary_without_explanations"
@@ -53,14 +53,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__))))
 import json
 
 inclusion_questions_json = json.load(open('inclusion_questions.json'))
-inclusion_questions = {}
-for questionnaire in inclusion_question_sets:
-    inclusion_questions.update(inclusion_questions_json[questionnaire])
+inclusion_questions={q:name for set_name in inclusion_question_sets for q, name in inclusion_questions_json[set_name].items()}
     
 extraction_questions_json = json.load(open('extraction_questions.json'))
-extraction_questions={}
-for questionnaire in extraction_question_sets:
-    extraction_questions.update(extraction_questions_json[questionnaire])
+extraction_questions={q:name for set_name in extraction_question_sets for q, name in extraction_questions_json[set_name].items()}
 
 master_list_path = output_dir+"master_list.csv"
 master_list_excel_path = output_dir+"master_list.xlsx"
@@ -74,7 +70,7 @@ from calvin_utils.gpt_sys_review.txt_utils import TextPreprocessor
 # Initialize the TextPreprocessor class and preprocess the files
 preprocessor = TextPreprocessor(input_dir=output_dir)
 preprocessed_path = preprocessor.process_files()
-
+print(f"Preprocessed files saved to {preprocessed_path}")
 article_type = 'emr'  # 'case', 'research', 'emr', or 'other'
 
 from calvin_utils.gpt_sys_review.json_utils import SectionLabeler
@@ -114,7 +110,7 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 keys_to_consider=["emr"], 
                                 answer_format='inclusion',
                                 question_type='inclusion', 
-                                model_choice="gpt4.1", # TODO: Need to find a new cheap model for this that's not in 
+                                model_choice="gpt-4.1-mini", # TODO: Need to find a new cheap model for this that's not in 
                                 # include_explanations=True, # TODO: currently always includes explanations for inclusion questions, and this has to be set to True here. 
                                 question=inclusion_questions, 
                                 test_mode=test_mode,
@@ -156,7 +152,7 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 # include_explanations=True,
                                 test_mode=test_mode,
                                 response_tokens=8000,
-                                model_choice="gpt5",
+                                model_choice="gpt-5.1",
                                 max_workers=50,
                                 debug=extraction_debug)
 answers = evaluator.evaluate_all_files()

@@ -82,6 +82,7 @@ class OpenAIChatBase(OpenAIBase):
             raise ValueError(f"Model choice {question_type} not supported, please choose gpt4, gpt3_large, or gpt3_small.")
     
     ### Chunking methods ###
+
     def call_chunker(self, selected_text):
         """
         Uses TextChunker defined in text_utils.py to extract text in chunks
@@ -90,7 +91,7 @@ class OpenAIChatBase(OpenAIBase):
         self.text_chunker.chunk_text()
         chunks = self.text_chunker.get_chunks()
         metadata = self.text_chunker.get_chunk_metadata()
-        chunks = self.add_context_to_chunks(chunks)
+        # chunks = self.add_context_to_chunks(chunks)
         return chunks, metadata
     
     def generate_submission(self, chunk, question):

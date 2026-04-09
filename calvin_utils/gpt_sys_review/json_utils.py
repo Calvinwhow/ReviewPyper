@@ -669,7 +669,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
             if self.chunks_dir is not None:
                 chunks_dict = self.read_json(self.chunks_dir + '/' + article + '_chunks.json')
 
-            for question, chunks in questions.items():
+            for question, responses in questions.items():
                 if question == 'metadata' or question.startswith('CHUNKS'):
                     continue
                 # Keep explanations untouched
