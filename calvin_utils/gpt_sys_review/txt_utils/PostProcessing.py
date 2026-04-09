@@ -72,8 +72,9 @@ class PostProcessing:
                 master_df[column] = default_value
 
         for _, row in tqdm(raw_results_df.iterrows(), desc='Updating master list'):
-            filename = str(row.iloc[0]).removesuffix('_OCR')
-            matching_index = master_df[master_df[filename_col].astype(str) == filename].index
+            filename = str(row.iloc[0]).removesuffix('_OCR').lstrip('0')
+            # Match by stripping leading zeros from both the master list MRNs and the results file MRNs
+            matching_index = master_df[master_df[filename_col].astype(str).str.lstrip('0') == filename].index
             if len(matching_index) > 0:
                 for column in new_columns:
                     master_df.loc[matching_index, column] = row[column]

@@ -16,6 +16,7 @@ class TextChunker:
         self.text = text.replace('|', ',')  # Replace "|", since we use it as a separator for the answers
         self.token_limit = token_limit
         self.chunks = []
+        self.chunk_metadata = []
         self.debug = debug
         self.chunk_tokens_dict = {}
 
@@ -25,49 +26,70 @@ class TextChunker:
     def chunk_text(self):
         """
         Splits the text into smaller segments based on the token limit.
+        Uses clinical date extraction to power temporal tracking.
         """
         import re
-        words = self.text.split()
         
+        # Line-by-line approach to track dates and void birthdays
+        lines = self.text.split('\n')
         if self.debug:
-            print(f"Total words to process: {len(words)}")
-            if all(word == '' for word in words):
-                print("Warning: All words are empty spaces.")
-        
+            print(f"Total characters to process: {len(self.text)}")
+            
+        self.chunks = []
+        self.chunk_metadata = []
         current_chunk = []
         current_chunk_tokens = 0
         current_date = "Unknown Date"
+        dates_in_chunk = []
 
-        for word in words:
-            # Track the date context from the pipe-separated (now comma-separated) RPDR header
+        words = self.text.split()
+        for i, word in enumerate(words):
+            # Look for a date pattern in the word
             date_match = re.search(r'(\d{1,2}/\d{1,2}/\d{4})', word)
-            if date_match and ',' in word:
-                current_date = date_match.group(1)
+            if date_match:
+                potential_date = date_match.group(1)
+                # Check a window of surrounding words to exclude DOB
+                window = " ".join(words[max(0, i-5):i+6]).upper()
+                if not any(x in window for x in ["DOB", "BIRTH", "BORN", "B.DAY"]):
+                    if potential_date != current_date:
+                        current_date = potential_date
+                        marker_str = f"[REPORT DATE: {current_date}] "
+                        current_chunk.append(marker_str)
+                        current_chunk_tokens += len(marker_str.split())
+                        if current_date not in dates_in_chunk:
+                            dates_in_chunk.append(current_date)
 
-            tokens_in_word = len(word.split()) + 1
-            if self.debug:
-                print(f"Found {tokens_in_word} tokens in word: '{word}'")
+            
+            tokens_in_word = 1
+            
             if current_chunk_tokens + tokens_in_word <= self.token_limit:
                 current_chunk.append(word)
                 current_chunk_tokens += tokens_in_word
-                if self.debug:
-                    print(f"Added word to current chunk, total tokens now: {current_chunk_tokens}")
             else:
                 self.chunks.append(' '.join(current_chunk))
-                if self.debug:
-                    print(f"Chunk completed, appended to chunks list.")
+                
+                # Store extensive date metadata for transparency
+                date_range = f"{dates_in_chunk[0]} to {dates_in_chunk[-1]}" if dates_in_chunk else "Unknown Date"
+                self.chunk_metadata.append({
+                    'date': current_date, # Legacy single-date fallback
+                    'all_dates': list(dates_in_chunk),
+                    'date_range': date_range
+                })
                 
                 context_str = f"[CONTINUED FROM REPORT DATE: {current_date}]"
                 current_chunk = [context_str, word]
                 current_chunk_tokens = len(context_str.split()) + 1 + tokens_in_word
-                if self.debug:
-                    print(f"Started new chunk with word: '{word}', total tokens now: {current_chunk_tokens}")
+                dates_in_chunk = [current_date] if current_date != "Unknown Date" else []
 
         if current_chunk:
             self.chunks.append(' '.join(current_chunk))
+            date_range = f"{dates_in_chunk[0]} to {dates_in_chunk[-1]}" if dates_in_chunk else "Unknown Date"
+            self.chunk_metadata.append({
+                'date': current_date,
+                'all_dates': list(dates_in_chunk),
+                'date_range': date_range
+            })
             self.chunk_tokens_dict[len(self.chunks) - 1] = current_chunk_tokens
-            if self.debug:
-                print(f"Final chunk added to chunks list.")
                 
     def chunk_tokens(self):
         for key, value in self.chunk_tokens_dict.items():
@@ -81,5 +103,14 @@ class TextChunker:
         - list: List containing the generated text chunks.
         """
         return self.chunks
+
+    def get_chunk_metadata(self):
+        """
+        Returns the list of metadata for each chunk.
+        
+        Returns:
+        - list: List containing dictionaries of metadata for each chunk.
+        """
+        return self.chunk_metadata
     
     

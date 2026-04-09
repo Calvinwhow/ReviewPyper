@@ -78,42 +78,83 @@ class ClinicalNotesExtractor:
     ### Public API ###
 
     def split_by_subject(self, file):
-        """Splits the file so that each subject is in their own file."""
-        reader=self._file_reader(file)
-        reader=self._file_reader(file)
+        """
+        Splits the file so that each subject is in their own file, 
+        explicitly sorting all reports chronologically.
+        """
+        import re
+        from datetime import datetime
+        from collections import defaultdict
+
+        reader = self._file_reader(file)
         
+        # Identify the MRN column index from the header row
         for row in reader:
-            file_header=row
-            mrn_index=file_header.split(self.separator).index(self.MRN_str)
+            file_header = row
+            try:
+                mrn_index = file_header.split(self.separator).index(self.MRN_str)
+            except ValueError:
+                continue 
             break
         
-        note=''
+        # Dictionary to store reports per MRN: {mrn: [(date, full_note_text), ...]}
+        subject_reports = defaultdict(list)
+        
+        note = ''
+        header = ''
 
         for row in reader:
-            
-            note+=row
+            note += row
 
             if self.separator in row:
-                header=row
+                header = row
 
             if (self.report_end_str in row) or (row == ''):
-
-                if header=='':
-                    raise ValueError("Header is empty")
+                if header == '':
+                    continue 
                 
-                note_mrn=header.split(self.separator)[mrn_index]
-                
-                subject_mrn=self._map_mrn(note_mrn)
+                parts = header.split(self.separator)
+                if len(parts) > mrn_index:
+                    mrn = parts[mrn_index]
+                    
+                    # Extract date for sorting
+                    # Look for Encounter Date, Visit Date, or the |date time| pattern in RPDR headers
+                    date_str = "01/01/1900"
+                    # Pattern 1: Labels in the note body
+                    date_match = re.search(r'(?:Encounter Date:|Visit Date:|Dated:|Signed:)\s*(\d{1,2}/\d{1,2}/\d{4})', note, re.IGNORECASE)
+                    
+                    # Pattern 2: RPDR pipe-separated header date (e.g., |11/11/2016 3:30:00 PM|)
+                    if not date_match:
+                        date_match = re.search(r'\|\s*(\d{1,2}/\d{1,2}/\d{4})\s+\d{1,2}:\d{2}:\d{2}', note)
 
-                if subject_mrn is False:
-                    print(f'Warning: MRN {note_mrn} from {file} not found in {self.mrn_file}. Skipping note.')
+                    if date_match and "DOB" not in date_match.group(0):
+                        # Use the last captured group as the date
+                        date_str = date_match.groups()[-1]
+                    elif len(parts) > 5:
+                        # Fallback: Many RPDR notes have the date in the 6th | column (index 5)
+                        header_date_match = re.search(r'(\d{1,2}/\d{1,2}/\d{4})', parts[5])
+                        if header_date_match:
+                            date_str = header_date_match.group(1)
+                    
+                    try: date_obj = datetime.strptime(date_str, "%m/%d/%Y")
+                    except: date_obj = datetime(1900, 1, 1)
 
-                elif (self.filter_mrns is False) or (subject_mrn in self.selected_mrns):
-                    with open(os.path.join(self.raw_files_dir, f'{subject_mrn}.txt'), 'a', encoding='utf-8') as subject_file:
-                        subject_file.write(note)
+                    subject_reports[mrn].append((date_obj, note))
 
-                note=''
-                header=''
+                note = ''
+                header = ''
+
+        # Sort and write each subject's file to guarantee chronological order
+        print(f"Guaranteeing chronological order for {len(subject_reports)} subjects...")
+        for mrn, reports in subject_reports.items():
+            reports.sort(key=lambda x: x[0])
+            
+            output_path = os.path.join(self.output_dir, f'{mrn}.txt')
+            with open(output_path, 'w', encoding='utf-8') as subject_file:
+                for _, report_text in reports:
+                    subject_file.write(report_text)
+                    subject_file.write("\n")
+
     
     def generate_master_list(self):
         """Generates a master list of all subjects and their notes."""

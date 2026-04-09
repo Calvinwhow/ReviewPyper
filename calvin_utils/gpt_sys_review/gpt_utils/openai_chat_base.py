@@ -89,12 +89,9 @@ class OpenAIChatBase(OpenAIBase):
         self.text_chunker = TextChunker(selected_text, self.token_limit)
         self.text_chunker.chunk_text()
         chunks = self.text_chunker.get_chunks()
-        # if self.debug:
-        #         print('Text associated with file:', selected_text)
-        #         print(f'Allowing {self.token_limit} tokens per submission')
-        #         print('Number of chunks:', len(chunks))
-        # chunks = self.add_context_to_chunks(chunks)
-        return chunks
+        metadata = self.text_chunker.get_chunk_metadata()
+        chunks = self.add_context_to_chunks(chunks)
+        return chunks, metadata
     
     def generate_submission(self, chunk, question):
         """

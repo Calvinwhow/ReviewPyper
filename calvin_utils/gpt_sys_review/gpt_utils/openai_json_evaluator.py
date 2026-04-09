@@ -89,12 +89,15 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         print(f"Saved to: {save_file}")
         return save_file
     
-    def save_chunks(self, file_name, chunks):
+    def save_chunks(self, file_name, chunks, metadata=None):
 
         base_save_file = os.path.join(self.chunk_dir, f'{file_name}_chunks.json')
         save_file = base_save_file
         count = 1
-        chunk_dict = {f'chunk_{i+1}': chunk for i, chunk in enumerate(chunks)}
+        if metadata:
+            chunk_dict = {f'chunk_{i+1}': {'text': chunk, 'metadata': metadata[i]} for i, chunk in enumerate(chunks)}
+        else:
+            chunk_dict = {f'chunk_{i+1}': chunk for i, chunk in enumerate(chunks)}
         while os.path.exists(save_file):
             save_file = os.path.join(self.chunk_dir, f'{file_name}_chunks_{count}.json')
             count += 1
@@ -176,29 +179,30 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
             total_failed_chunks=0
 
 
+
             answers={}
             import concurrent.futures
 
             def process_chunk(chunk_tuple):
-                file_name, chunk_index, chunk = chunk_tuple
+                file_name, chunk_index, chunk, chunk_metadata = chunk_tuple
                 conversation = self.generate_submission(chunk, formatted_questions)
                 answer, tokens_used, retries = self.evaluate_with_openai(conversation, questions_w_explanations)
-                return file_name, chunk_index, answer, tokens_used, retries
+                return file_name, chunk_index, answer, tokens_used, retries, chunk_metadata
 
             chunk_tasks = []
             for file_name, file_text in self.relevant_text_by_file.items():
-                chunks = self.call_chunker(file_text)
+                chunks, metadata = self.call_chunker(file_text)
                 if self.retain_chunks:
-                    self.save_chunks(file_name, chunks)
+                    self.save_chunks(file_name, chunks, metadata)
                 answers[file_name] = {}
                 for chunk_index, chunk in enumerate(chunks):
-                    chunk_tasks.append((file_name, chunk_index, chunk))
+                    chunk_tasks.append((file_name, chunk_index, chunk, metadata[chunk_index]))
                     total_chunks += 1
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 futures = {executor.submit(process_chunk, task): task for task in chunk_tasks}
                 for future in tqdm(concurrent.futures.as_completed(futures), total=len(chunk_tasks), desc="Processing chunks"):
-                    file_name, chunk_index, answer, tokens_used, retries = future.result()
+                    file_name, chunk_index, answer, tokens_used, retries, chunk_metadata = future.result()
                     total_tokens_used += tokens_used
                     total_retries += retries
                     if answer == "Unidentified":
@@ -206,6 +210,7 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
                         answer_dict = {q: "Unidentified" for q in questions_w_explanations}
                     else:
                         answer_dict = dict(zip(questions_w_explanations, answer.split("|")))
+                    answer_dict['metadata'] = chunk_metadata
                     answers[file_name][f"chunk_{chunk_index+1}"] = answer_dict
             
             print(f'Total tokens used: {total_tokens_used}. Estimated cost: {total_tokens_used*self.cost}')
