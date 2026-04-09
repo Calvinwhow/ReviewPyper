@@ -59,18 +59,6 @@ extraction_questions={}
 for questionnaire in extraction_question_sets:
     extraction_questions.update(extraction_questions_json[questionnaire])
 
-import json
-
-inclusion_questions_json = json.load(open('inclusion_questions.json'))
-inclusion_questions = {}
-for questionnaire in inclusion_question_sets:
-    inclusion_questions.update(inclusion_questions_json[questionnaire])
-    
-extraction_questions_json = json.load(open('extraction_questions.json'))
-extraction_questions={}
-for questionnaire in extraction_question_sets:
-    extraction_questions.update(extraction_questions_json[questionnaire])
-
 master_list_path = output_dir+"master_list.csv"
 master_list_excel_path = output_dir+"master_list.xlsx"
 json_file_path = output_dir+"json/_emr_labeled_sections.json"

@@ -30,7 +30,7 @@ class ClinicalNotesExtractor:
         if filter_list is None:
             self.filter_mrns=False
         else:
-            self.selected_mrns=[ self._map_mrn(mrn) for mrn in filter_list if self._map_mrn(mrn) is not False]
+            self.selected_mrns=list(set([ self._map_mrn(mrn) for mrn in filter_list if self._map_mrn(mrn) is not False]))
             self.filter_mrns=True
 
         self._prep_out_dir()
