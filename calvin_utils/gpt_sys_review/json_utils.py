@@ -8,6 +8,7 @@ import numpy as np
 import json
 import os
 import re
+from fractions import Fraction
 
 class SectionLabeler:
     """
@@ -15,7 +16,7 @@ class SectionLabeler:
 
     Attributes:
     - folder_path (str): The path to the folder containing text files.
-    - article_type (str): The type of article (e.g., 'research', 'case').
+    - article_type (str): The type of article (e.g., 'research', 'case', 'emr').
     - lda_model (object): The trained LDA model for topic modeling.
     - vectorizer (object): The CountVectorizer object for text vectorization.
     - chunker (object): The TextChunker object for text chunking.
@@ -29,21 +30,25 @@ class SectionLabeler:
     - save_to_json: Saves the labeled sections to a JSON file.
     """
 
-    def __init__(self, folder_path, article_type, api_key_path=None):
+    def __init__(self, folder_path, article_type, api_key_path=None, is_azure=False, deployment_id=None, api_base=None, api_version=None):
         """
         Initializes the SectionLabeler class with the folder path and article type.
 
         Parameters:
         - api_key_path (str): Path to the file containing the OpenAI API key.
-        - article_type (str): The type of article (e.g., 'research' or 'case').
+        - article_type (str): The type of article (e.g., 'research', 'case', 'emr').
         - folder_path (str): The path to the folder containing text files.
-        - article_type (str): The type of article (e.g., 'research', 'case').
+        - article_type (str): The type of article (e.g., 'research', 'case', 'emr').
         """
         self.api_key_path = api_key_path
         self.folder_path = folder_path
         self.article_type = article_type
         self.chunker = None
         self.output_dict = {}
+        self.is_azure = is_azure
+        self.deployment_id=deployment_id
+        self.api_base=api_base
+        self.api_version=api_version
 
     def select_labels(self):
         # Define section labels for each article type
@@ -61,18 +66,24 @@ class SectionLabeler:
             self.section_headers = {
             "Case_Report": ["yes", "y", "positive", "correct"]
             }
+        elif self.article_type == "emr":
+            self.section_headers = {
+            "emr": ["yes", "y", "positive", "correct"]
+            }
         elif self.article_type == "other":
             self.section_headers = {
                 "Positive": ["yes", "y", "positive", "correct"]
             }
         else:
-            raise ValueError(f"Unknown article type {self.article_type}, choose case or research.")
+            raise ValueError(f"Unknown article type {self.article_type}, choose 'case', 'research', or 'emr'.")
             
     def get_questions(self, manual_question=None):
         if self.article_type == "research":
             questions = None
         elif self.article_type == "case":
-            questions = {'Priotizing implicit and explicit information, do you think this contains a description of a medical case? For example, if the text refers to a patient, seemingly describes a history of presenting illness, or is seemingly describing a medical situation. This could be in referring to hospital course, imaging findings, or laboratory results. ONLY RESPOND AS YES OR NO (Y/N)': 'case_report'}
+            questions = {'Prioritizing implicit and explicit information, do you think this contains a description of a medical case? For example, if the text refers to a patient, seemingly describes a history of presenting illness, or is seemingly describing a medical situation. This could be in referring to hospital course, imaging findings, or laboratory results. ONLY RESPOND AS YES OR NO (Y/N)': 'case_report'}
+        elif self.article_type == "emr":
+            questions = {"Prioritizing implicit and explicit information, do you think this mentions anything about a medical patient? For example, if the text refers to a patient, seemingly describes a history of presenting illness, or is seemingly describing a medical situation. This could be in referring to hospital course, imaging findings, diagnoses, or laboratory results. ONLY RESPOND AS YES OR NO (Y/N)": 'emr'}
         elif self.article_type == "other":
             if manual_question is None:
                 raise ValueError(f"Error, must enter question as a string into process_files. ex: (question='this is my question')")    
@@ -232,14 +243,19 @@ class SectionLabeler:
             labeled_sections, text = self.label_text(text)
         elif self.article_type == 'case':
             questions = self.get_questions()
-            evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers)
+            evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers,question_token_estimate=500)
+            labeled_sections = evaluator.evaluate_all_files()
+        elif self.article_type == 'emr':
+            questions = self.get_questions()
+            # print(f'asking chatGPT with params is_azure={self.is_azure}, api_base={self.api_base}, api_version={self.api_version}')
+            evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers,question_token_estimate=500, is_azure=self.is_azure, deployment_id=self.deployment_id, api_base=self.api_base, api_version=self.api_version)
             labeled_sections = evaluator.evaluate_all_files()
         elif self.article_type == 'other':
             questions = self.get_questions(question)
-            evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers)
+            evaluator = CaseReportLabeler(api_key_path=self.api_key_path, text=text, questions=questions, section_headers=self.section_headers,question_token_estimate=500)
             labeled_sections = evaluator.evaluate_all_files()
         else:
-            raise ValueError(f"Unknown article type {self.article_type}, choose 'case', 'research', or 'other'")
+            raise ValueError(f"Unknown article type {self.article_type}, choose 'case', 'research', 'emr', or 'other'")
         
         return labeled_sections
 
@@ -277,16 +293,22 @@ class SectionLabeler:
         TODO--this can be dramatically improved by saving a JSON file for each article, instead of a single large JSON. 
         To keep it compatible with susbequent code, could combine the JSONs after. 
         """
-        self.select_labels()
-        file_list = os.listdir(self.folder_path)
-        file_list = [f for f in file_list if f.endswith('.txt')]
-        for filename in tqdm(file_list, desc='Segmenting text files'):
-            text = self._open_txt_file(filename)
-            if not text: continue
-            labeled_sections = {}
-            labeled_sections = self._label_sections(text, question)
-            self._store_results(filename, labeled_sections)
-        self.save_to_json(self.output_dict)
+        if self._json_file_exists(self.article_type):
+
+            print(f'_{self.article_type}_labeled_sections.json already exists, skipping processing. If you want to re-process, please delete this file first.')
+        
+        else:
+            
+            self.select_labels()
+            file_list = os.listdir(self.folder_path)
+            file_list = [f for f in file_list if f.endswith('.txt')]
+            for filename in tqdm(file_list, desc='Segmenting text files'):
+                text = self._open_txt_file(filename)
+                if not text: continue
+                labeled_sections = {}
+                labeled_sections = self._label_sections(text, question)
+                self._store_results(filename, labeled_sections)
+            self.save_to_json(self.output_dict)
 
 
 class FilterPapers:
@@ -390,7 +412,7 @@ class InclusionExclusionSummarizer:
     - df (DataFrame): Pandas DataFrame to store summarized results.
     """
     
-    def __init__(self, json_path, questions, acceptable_strings=["1", "good", "excellent", "positive", " y " " y.", "yes", "correct", "is likely", "is possible", "is probable"]):
+    def __init__(self, json_path, questions, acceptable_strings=["1", "good", "excellent", "positive", " y " " y.", "yes", "1.0",  "correct", "is likely", "is possible", "is probable"]):
         """
         Initializes the InclusionExclusionSummarizer class.
         
@@ -402,16 +424,17 @@ class InclusionExclusionSummarizer:
         self.questions = questions
         self.data = self.read_json()
         self.df = self.summarize_results()
-
     
-    def read_json(self):
+    def read_json(self, json_file_path=None):
         """
         Reads JSON data from a file.
         
         Returns:
         - dict: The data read from the JSON file.
         """
-        with open(self.json_path, 'r') as file:
+        if json_file_path is None:
+            json_file_path = self.json_path
+        with open(json_file_path, 'r') as file:
             return json.load(file)
     
     def summarize_results(self):
@@ -426,21 +449,23 @@ class InclusionExclusionSummarizer:
             summary_dict[article] = {}
             for question, chunks in questions.items():
                 # Get the polarity value for the question from the questions dictionary
-                polarity = self.questions.get(question)
-                if polarity is None:
-                    raise ValueError(f"The question from the JSON: \n\n'{question}' \n\n was not found in the questions dictionary.")
+                if question[:11] == 'EXPLANATION': # just skipping these for now. At some point we should probably add the explanations to the output csv.
+                    summary_dict[article][question] = list(chunks.values())
+                    continue
+                # polarity = self.questions.get(question)
+                # if polarity is None:
+                #     raise ValueError(f"The question from the JSON: \n\n'{question}' \n\n was not found in the questions dictionary.")
 
                 # Convert all chunk answers to lowercase and check for "yes" keywords
-                binary_answers = [polarity if any(s in answer.lower() for s in self.acceptable_strings) else abs(1 - polarity) for answer in chunks.values()]
+                binary_answers = [1 if any(s in answer.lower() for s in self.acceptable_strings) else 0 for answer in chunks.values()]
                 
-                # Sum up the binary answers for each question
-                summary_dict[article][question] = sum(binary_answers)
-        
+                # Set answer to 1 if any chunk is positive, otherwise 0
+                summary_dict[article][question] = 1 if sum(binary_answers) > 0 else 0
         # Convert the summary dictionary to a DataFrame
         df = pd.DataFrame.from_dict(summary_dict, orient='index')
         
         # Set all values above 0 to 1
-        df[df > 0] = 1
+        # df[(type(df)!=str) and (df > 0)] = 1
         
         return df
     
@@ -478,108 +503,284 @@ class InclusionExclusionSummarizer:
         - None
         """
         raw_path = self.save_to_csv()
-        automated_path = self.save_to_csv(dropped=True)
         print(f"Your CSV files of filtered manuscripts have been saved to this directory: \n {os.path.dirname(raw_path)}")
-        return self.df, raw_path, automated_path
+        return self.df, raw_path
     
 class CustomSummarizer(InclusionExclusionSummarizer):
     """
     Class to create a custom summary of the results with user-defined keyword mapping and fuzzy matching.
-    
+
     Attributes:
-    - keyword_mapping (dict): Dictionary mapping each key to a list of acceptable values.
+    - keyword_mapping (dict): Dictionary mapping each numeric level to a list of acceptable values.
+        Examples:
+          # Binary (kept for compatibility)
+          {0: ["no","n","negative"], 1: ["yes","y","positive"]}
+
+          # Severity scale
+          {0: ["none","absent"], 1: ["mild"], 2: ["moderate"], 3: ["severe"]}
     """
-    
-    def __init__(self, json_path, answers_binary=False, api_key_path=None, summary_type='llm'):
+
+    def __init__(self, json_path, answer_format, api_key_path=None, summary_type='llm',
+                 chunks_dir=None, is_azure=False, deployment_id=None, api_base=None, api_version=None,
+                 severity_mapping=None, debug=False):
         """
         Initializes the CustomSummarizer class.
-        
+
         Parameters:
         - json_path (str): Path to the JSON file containing the answers.
-        - keyword_mapping (dict): Dictionary mapping each key to a list of acceptable values.
+        - answers_binary (bool): If True, treat as binary (kept for compatibility). If False and
+                                 severity_mapping is provided, treat as severity scale.
+        - severity_mapping (dict|None): Optional numeric->list[str] mapping for severity levels.
+                                        If provided, enables severity mode.
         """
         self.json_path = json_path
         self.api_key_path = api_key_path
         self.summary_type = summary_type
-        self.answers_binary = answers_binary
+        self.answer_format = answer_format
         self.data = self.read_json()
-        if self.answers_binary:
+        self.chunks_dir = chunks_dir
+        self.is_azure = is_azure
+        self.deployment_id = deployment_id
+        self.api_base = api_base
+        self.api_version = api_version
+        self.debug = debug
+
+        # --- NEW: allow severity mapping; else fall back to binary mapping if answers_binary=True ---
+        # self.severity_mode = False
+        if self.answer_format in ["binary_with_unknown_and_explanations", "severity_with_explanations"]:
+
+            self.severity_mode=True
+
+            if severity_mapping is None:
+                raise ValueError(f"Answer type {self.answer_format} cannot be evaluated without a severity_mapping dict, but none was given")
+            if not isinstance(severity_mapping, dict) or len(severity_mapping) == 0:
+                raise ValueError("""Invalid severity mapping. "severity_mapping" must be a non-empty dictionary""")
+            
+            # Normalize keys to ints and values to lowercase lists
             self.keyword_mapping = {
-            0: ["poor", "bad", "negative", "n", "no"],
-            1: ["good", "excellent", "positive", "y", "yes"]
+                int(k): [str(v).lower() for v in vals] for k, vals in severity_mapping.items()
+            }
+
+        elif self.answer_format in ["binary","binary_with_explanations","binary_without_explanations"]:
+            self.severity_mode=False
+            # if self.debug:
+            #     print('Using binary mapping')
+            self.keyword_mapping = {
+                0: ["poor", "bad", "negative", "n", "no", "false", "absent", "No"],
+                1: ["good", "excellent", "positive", "y", "yes", "true", "present", "Yes"]
             }
         else:
-            self.keyword_mapping = None
-    
+            raise ValueError('''"answer_format" is invalid. Allowed answer types are "binary_without_explanations", "binary_with_explanations", "binary_with_unknown_and_explanations","severity_with_explanations"''')
+    # def exact_match(self, answer):
+    #     """Checks for an exact match of keywords in the answer text."""
+    #     if answer == 'Unidentified':
+    #         return np.nan
+    #     cleaned_answer = re.sub(r'[^\w\s\.\-]', '', str(answer).lower()).strip()
+    #     # If model already returns a pure number, respect it
+    #     try:
+    #         val = float(cleaned_answer)
+    #         # accept integer-like numeric outputs directly
+    #         if val.is_integer():
+    #             return int(val)
+    #         return val
+    #     except Exception:
+    #         pass
+
+    #     for key, keywords in self.keyword_mapping.items():
+    #         for keyword in keywords:
+    #             if keyword in cleaned_answer.split():
+    #                 return key
+    #     return None
+
     def exact_match(self, answer):
         """Checks for an exact match of keywords in the answer text."""
-        cleaned_answer = re.sub(r'[^\w\s]', '', answer.lower())
+        if answer == 'Unidentified':
+            return np.nan
+
+        raw = str(answer).strip().lower()
+
+        # --- NEW: explicit binary mapping first ---
+        # This catches pure yes/no outputs for binary-style questions.
+        # if raw in ("Yes", "yes", "y", "true", "1"):
+        #     return 1
+        # if raw in ("No", "no", "n", "false", "0"):
+        #     return 0
+        # ------------------------------------------
+
+        # Keep digits, dot, minus, and slash (so we can handle fractions like 1/4)
+        cleaned_answer = re.sub(r'[^0-9\.\-\/]', '', raw)
+
+        # Try numeric interpretation (for scales like 0/1/2/3, or "1/4", etc.)
+        try:
+            if '/' in cleaned_answer and any(ch.isdigit() for ch in cleaned_answer):
+                val = float(Fraction(cleaned_answer))
+            else:
+                val = float(cleaned_answer)
+
+            if float(val).is_integer():
+                return int(val)
+            return val
+        except Exception:
+            pass
+
+        # Fall back to keyword mapping (severity words etc.)
         for key, keywords in self.keyword_mapping.items():
             for keyword in keywords:
-                if keyword.lower() in cleaned_answer.split():
+                if keyword in raw.split():
                     return key
         return None
-    
+
+
+    # def exact_match(self, answer):
+    #     """Checks for an exact match of keywords in the answer text."""
+    #     if answer == 'Unidentified':
+    #         return np.nan
+
+    #     raw = str(answer).lower().strip()
+    #     # Keep digits, dot, minus, and slash (so we can handle fractions like 1/4)
+    #     cleaned_answer = re.sub(r'[^0-9\.\-\/]', '', raw)
+
+    #     # Try numeric interpretation first
+    #     try:
+    #         if '/' in cleaned_answer and any(ch.isdigit() for ch in cleaned_answer):
+    #             # Interpret things like "1/4" as a true fraction
+    #             val = float(Fraction(cleaned_answer))
+    #         else:
+    #             val = float(cleaned_answer)
+
+    #         if float(val).is_integer():
+    #             return int(val)
+    #         return val
+    #     except Exception:
+    #         pass
+
+    #     # Fall back to keyword mapping
+    #     for key, keywords in self.keyword_mapping.items():
+    #         for keyword in keywords:
+    #             if keyword in raw.split():
+    #                 return key
+    #     return None
+
     def fuzzy_match(self, answer, threshold=60):
         """
         Fuzzy matches the answer with a list of keywords.
-        
-        Parameters:
-        - answer (str): The answer text to be matched.
-        - threshold (int): The similarity ratio threshold for a valid match.
-        
+
         Returns:
-        - int or np.nan or None: Returns the key if a match is found, otherwise None.
+        - numeric level (int/float) or np.nan or None
         """
-        best_match = None
+        cleaned = str(answer).lower()
+        # numeric short-circuit
+        try:
+            val = float(cleaned)
+            if val.is_integer():
+                return int(val)
+            return val
+        except Exception:
+            pass
+
+        best_key = None
         highest_ratio = 0
         for key, keywords in self.keyword_mapping.items():
             for keyword in keywords:
-                ratio = fuzz.ratio(answer.lower(), keyword.lower())
+                ratio = fuzz.ratio(cleaned, keyword.lower())
                 if ratio > highest_ratio:
                     highest_ratio = ratio
-                    best_match = key
-        if highest_ratio >= threshold:
-            return best_match
-        else:
-            return None
-    
+                    best_key = key
+        return best_key if highest_ratio >= threshold else None
+
     def keyword_or_fuzzy_match(self, answer):
         """
         Applies either exact matching or fuzzy matching based on the result of exact matching.
-        
-        Parameters:
-        - answer (str): The answer text to be matched.
-        
-        Returns:
-        - int or np.nan or None: Returns the key if a match is found, otherwise None.
+
+        Returns numeric level (binary or severity), np.nan, or None.
         """
         exact_result = self.exact_match(answer)
         return exact_result if exact_result is not None else self.fuzzy_match(answer)
-    
-    def summarize_results_with_mapping(self):
+
+    def summarize_results_with_mapping(self, positive_explanations_only=False):
         """
-        Summarizes the results based on keyword mapping and fuzzy matching.
-        
-        Returns:
-        - DataFrame: Pandas DataFrame containing the summarized results.
+        Summarizes the results based on keyword mapping/fuzzy matching.
+
+        BEHAVIOR CHANGES:
+        - Binary mode: if no positive evidence (sum == 0) ⇒ return NaN instead of 0 (your requested FP/FN handling).
+        - Severity mode: aggregate by MAX severity over chunks (common choice). If no valid mapped chunks ⇒ NaN.
         """
         summary_dict = {}
+
+
         for article, questions in self.data.items():
             summary_dict[article] = {}
-            for question, chunks in questions.items():
-                #Extract binary data and process
-                if self.keyword_mapping:
-                    mapped_answers = [self.keyword_or_fuzzy_match(answer) for answer in chunks.values()]
-                    if all(x is np.nan for x in mapped_answers) or all(x is None for x in mapped_answers):
-                        summary_dict[article][question] = np.nan
+
+            if self.chunks_dir is not None:
+                chunks_dict = self.read_json(self.chunks_dir + '/' + article + '_chunks.json')
+
+            for question, responses in questions.items():
+                # Keep explanations untouched
+                if question[:11] == 'EXPLANATION' and positive_explanations_only:
+                    # Only keep explanations for “positive” responses
+                    # Note: mapped_answers is the answers for the previous question at this point, ie
+                    # the numerical answers which this answer is explaining. We can't determine if the answer
+                    # is positive from the explanations, so we use the numbers. Ugly but works for now.
+                    # retained_explanations= [
+                        # f"{m}: {expl}" for expl, m in zip(responses.values(), mapped_answers)
+                        # if (self.severity_mode and (m is not None and m is not np.nan and m > 0))
+                        #     or (not self.severity_mode and m == 1)
+                    # ]
+                    retained_explanations= [
+                        f"{m}: {expl}" for expl, m in zip(responses.values(), mapped_answers)
+                        if (m is not None and m is not np.nan and m > 0)
+                    ]
+                    summary_dict[article][question] = '|'.join(retained_explanations)
+
+                elif question[:11] == 'EXPLANATION':
+                    summary_dict[article][question] = '|'.join(list(responses.values()))
+
+                elif self.keyword_mapping:
+                    mapped_answers = [self.keyword_or_fuzzy_match(ans) for ans in responses.values()]
+                    # if any mapped is np.nan while others are valid, warn
+                    if (np.nan in mapped_answers) and not all(x is np.nan for x in mapped_answers):
+                        print(f"Warning: Failed to interpret a chunk from '{article}'. The answers for that subject may be partially incorrect.")
+
+                    valid_answers = [x for x in mapped_answers if (x is not None and not (isinstance(x, float) and np.isnan(x)))]
+
+                    if self.debug:
+                        print(valid_answers)
+                    if len(valid_answers) == 0:
+                        print(f'Warning: no valid responses for question "{question}". Setting final answer to 0')
+                        summary_dict[article][question] = 0
+                        
                     else:
-                        valid_answers = [x for x in mapped_answers if x is not np.nan and x is not None]
-                        summary_dict[article][question] = np.sum(valid_answers) if valid_answers else 'Unidentified'
-                #Extract raw data for research articles
+                        # if self.severity_mode:
+                            # if self.debug:
+                                # print('evaluating severity with mapping for article:', article, 'question:', question)
+                            # Aggregate severity as MAX (can be changed to mean/sum if you prefer)
+                        agg_value = np.max(valid_answers)
+                        
+                        summary_dict[article][question] = agg_value
+                        if self.chunks_dir is not None:
+                            # store chunks that contributed > 0 severity
+                            retained_chunks = [chunks_dict[f'chunk_{i+1}'] for i, m in enumerate(mapped_answers)
+                                            if (m is not None and not (isinstance(m, float) and np.isnan(m)) and m > 0)]
+                            summary_dict[article]['CHUNKS: '+question] = '\n|\n'.join(retained_chunks)
+                        # else:
+                        #     if self.debug:
+                        #         print('evaluating binary answers with mapping for article:', article, 'question:', question)
+                        #     # Binary aggregation = sum of positives > 0 ⇒ positive
+                        #     num_positive = 0
+                        #     for v in valid_answers:
+                        #         if isinstance(v, (int, float)) and v > 0:
+                        #             num_positive += 1
+
+                        #     if num_positive > 0:
+                        #         summary_dict[article][question] = 1
+                        #     else:
+                        #         summary_dict[article][question] = 0
+                            
+
                 elif self.keyword_mapping is None:
+                    # Raw text passthrough (research-style)
                     try:
-                        combined_answers = tuple(chunks.values())
+                        combined_answers = list(responses.values())[0]
                         if not combined_answers:
                             summary_dict[article][question] = 'No Answers'
                         else:
@@ -588,38 +789,58 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                         summary_dict[article][question] = f'Error: {str(e)}'
                 else:
                     raise ValueError("Unacceptable keyword mapping value.")
+
+        # Build DataFrame; DO NOT collapse to 0/1 here (so NaN and severity survive)
         df = pd.DataFrame.from_dict(summary_dict, orient='index').fillna(np.nan)
-        if self.answers_binary:
-            # Set all values above 0 to 1
-            df[df > 0] = 1
         return df
-    
+
     def summarize_with_llm(self):
         summary_dict = {}
         for article, questions in tqdm(self.data.items(), desc='Summarizing final responses with LLM'):
             summary_dict[article] = {}
-            for question, chunks in questions.items():
-                combined_answers = " ".join(str(answer) for answer in chunks.values())
-                summarizer = OpenAISummarizer(api_key_path=self.api_key_path, text=combined_answers, question=question)
-                summary_dict[article][question] = summarizer.evaluate_text()
+            for question, responses in questions.items():
+                combined_answers = " ".join(str(answer) for answer in responses.values())
+
+                if question[:11] == 'EXPLANATION':
+                    summary_dict[article][question] = combined_answers
+                else:
+                    # Keep original binary LLM summarization path for compatibility;
+                    # downstream can still treat 0 as NaN if desired.
+                    question_formatted = (
+                        f'Please summarize the following answers to the question: "{question}" '
+                        f'Respond with 1 for yes or 0 for no, and do not include any explanations. '
+                        f'If the answers are mixed or unclear, please respond with 0.'
+                    )
+                    summarizer = OpenAISummarizer(
+                        api_key_path=self.api_key_path, text=combined_answers, question=question_formatted,
+                        is_azure=self.is_azure, deployment_id=self.deployment_id,
+                        api_base=self.api_base, api_version=self.api_version
+                    )
+                    val = summarizer.evaluate_text()
+                    try:
+                        val = int(val)
+                    except Exception:
+                        val = np.nan
+                    # Convert 0 to NaN to represent "no positive evidence" as requested
+                    summary_dict[article][question] = (1 if val == 1 else np.nan)
+
         return pd.DataFrame.from_dict(summary_dict, orient='index').fillna(np.nan)
-    
-    def summarize(self):
+
+    def summarize(self, positive_explanations_only=False):
         if self.summary_type == 'llm':
             df = self.summarize_with_llm()
         else:
-            df = self.summarize_results_with_mapping()
+            df = self.summarize_results_with_mapping(positive_explanations_only=positive_explanations_only)
         return df
-    
-    def run_custom(self):
+
+    def run_custom(self, positive_explanations_only=False):
         """
         Executes all the summarization, saving, and optional row-dropping steps in one method.
-        
+
         Returns:
         - DataFrame: Pandas DataFrame containing the summarized results.
         """
-        self.df = self.summarize()
+        self.df = self.summarize(positive_explanations_only=positive_explanations_only)
         raw_path = self.save_to_csv(filename=f'responses_raw')
-        automated_path = self.save_to_csv(filename=f'responses_claned_with_{self.summary_type}')
         print(f"Your CSV files of filtered manuscripts have been saved to this directory: \n {os.path.dirname(raw_path)}")
-        return self.df, raw_path, automated_path
+        return self.df, raw_path

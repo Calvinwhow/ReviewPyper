@@ -39,3 +39,17 @@ venv/
 ENV/
 VENV/
 ReviewPyPerVenv/
+.vscode/settings.json
+debug_answer.json
+ross_testing_tools/count_reports.py
+ross_testing_tools/manual_iteration_accuracy_plotting.ipynb
+ross_testing_tools/mydf.csv
+ross_testing_tools/real_bars_to_fake_correl.ipynb
+ross_testing_tools/redact_bars_from_notes.ipynb
+ross_testing_tools/testing.ipynb
+ross_testing_tools/extraction_questions_draft_1.json
+local_test_analyze_clinical_notes_in_azure.py
+unit_testing/temp/master_list.csv
+unit_testing/temp/json_evaluated/emr_strict_extraction_evaluations.json
+unit_testing/temp/json_evaluated/responses_raw.csv
+local_test_analyze_clinical_notes_in_azure.py

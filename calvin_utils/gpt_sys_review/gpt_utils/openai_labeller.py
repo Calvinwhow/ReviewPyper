@@ -29,7 +29,7 @@ class CaseReportLabeler(OpenAIJsonEvaluator):
         evaluate_all_files():
             Processes the entire text, evaluates each chunk, and categorizes them into results_dict based on model answers.
     """
-    def __init__(self, api_key_path, text, questions, section_headers, verbose=False):
+    def __init__(self, api_key_path, text, questions, section_headers, question_token_estimate=500, is_azure=False, deployment_id=None, api_base=None, api_version=None, verbose=False):
         """
         Initialize the CaseReportLabeler.
 
@@ -48,10 +48,16 @@ class CaseReportLabeler(OpenAIJsonEvaluator):
         self.acceptable_answers = self._get_acceptable_answers()
         super().__init__(api_key_path, 
                          json_file_path=None, 
-                         keys_to_consider=None, 
+                         keys_to_consider=None,
+                         question_token_estimate=question_token_estimate,
                          question_type="labelling", 
                          question=questions, 
+                         answer_format='binary',
                          model_choice="gpt3_small_labeler",
+                         is_azure=is_azure,
+                         deployment_id=deployment_id,
+                         api_base=api_base,
+                         api_version=api_version,
                          debug=False, 
                          test_mode=False)
 
@@ -116,7 +122,7 @@ class CaseReportLabeler(OpenAIJsonEvaluator):
         """
         for q_index, q in enumerate(self.questions.keys()):
             conversation = self.generate_submission(chunk, q)
-            answer, tokens_used = self.evaluate_with_openai(conversation)
+            answer, tokens_used, retry_count = self.evaluate_with_openai(conversation, [q])
             yield q, answer, tokens_used
     
     def _evaluate_response(self, answer, chunk, chunk_idx):
@@ -130,11 +136,11 @@ class CaseReportLabeler(OpenAIJsonEvaluator):
         """
         first_key = next(iter(self.results_dict))
         if any(ans in answer.lower() for ans in self.acceptable_answers):
-            self.results_dict[first_key].append(f"Chunk {chunk_idx}: {chunk}")
+            self.results_dict[first_key].append(chunk)
         else:
             if 'other' not in self.results_dict:
                 self.results_dict['other'] = []
-            self.results_dict['other'].append(f"Chunk {chunk_idx}: {chunk}")
+            self.results_dict['other'].append(chunk)
         if self.verbose: print(f"Evaluating chunk {chunk_idx} with answer: {answer}")
     
     def _finalize_results(self):

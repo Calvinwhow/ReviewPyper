@@ -58,7 +58,8 @@ class TitleScreener(OpenAIChatBase):
     def __init__(self, api_key_path, csv_path, question, model_choice="gpt3_small", keywords=None):
         self.csv_path = csv_path
         self.keywords = keywords
-        super().__init__(api_key_path=api_key_path, question=question, model_choice=model_choice)
+        self.question = question
+        super().__init__(api_key_path=api_key_path, question_type="title_screening", model_choice=model_choice)
         self.df = pd.read_csv(csv_path)
     
     def keyword_screen(self):

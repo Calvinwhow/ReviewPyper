@@ -1,4 +1,5 @@
 import openai
+from openai import OpenAI, AzureOpenAI
 
 class OpenAIBase:
     """
@@ -14,7 +15,7 @@ class OpenAIBase:
     - read_api_key: Reads the OpenAI API key from a file.
     - evaluate_with_openai: Evaluates a text chunk based on the question corresponding to the article type.
     """
-    def __init__(self, api_key_path):
+    def __init__(self, api_key_path, is_azure=False, api_base=None, api_version=None):
         """
         Initializes the OpenAIEvaluator class.
 
@@ -23,7 +24,19 @@ class OpenAIBase:
         - article_type (str): The type of article (e.g., 'research', 'case').
         """
         self.api_key = self.read_api_key(api_key_path)
-        openai.api_key = self.api_key
+        self.is_azure = is_azure
+        
+        if self.is_azure:
+            self.client = AzureOpenAI(
+                api_key=self.api_key,
+                api_version=api_version,
+                azure_endpoint=api_base
+            )
+        else:
+            self.client = OpenAI(
+                api_key=self.api_key,
+                base_url=api_base
+            )
 
     def read_api_key(self, file_path):
         """
@@ -54,12 +67,14 @@ class OpenAIBase:
         prompt = f"Text Chunk: {chunk}\n{question_prompt}"
 
         try:
-            response = openai.Completion.create(
-                engine="gpt-3.5-turbo-16k-0613",
-                prompt=prompt,
+            response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo-16k-0613",
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
                 max_tokens=10  # Adjust as needed
             )
-            decision_text = response.choices[0].text.strip()
+            decision_text = response.choices[0].message.content.strip()
             decisions = decision_text.split("\n")
             
             if len(decisions) != len(questions):
