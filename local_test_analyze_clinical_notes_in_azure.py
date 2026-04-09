@@ -4,7 +4,7 @@
 # Set the file(s) you want to analyze (usually from an RPDR request) and the output directory
 notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/00000016.txt',]
 # notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/00000016.txt',]
-output_dir='/Users/rm026/Documents/Code/reviewpyper_testing/tests/msa_sub_16_date_test/'
+output_dir='/Users/rm026/Documents/Code/reviewpyper_testing/tests/msa_sub_16_organization_test_3/'
 
 mrn_file="/Users/rm026/Documents/Code/reviewpyper_testing/msa_fake_mrn_file.txt"
 # Provide the path to your OpenAI API key
@@ -28,7 +28,7 @@ segment_file=False
 # Set the questions for data extraction. This is where you extract what you want to know from the included notes.
 # These are more open-ended than inclusion/exclusion questions, and don't have to be yes/no.
 # See notebook 05, section 02 for examples.
-extraction_question_sets = ['hemiparesis','memory']
+extraction_question_sets = ['bars','hemiparesis']
 
 # Types of answers you want for the extraction step. possible types are:
 # - "binary_without_explanations"
@@ -119,15 +119,15 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
 exclusion_answers = evaluator.evaluate_all_files()
 new_json_path = evaluator.save_to_json(exclusion_answers)
 
+
 from calvin_utils.gpt_sys_review.json_utils import InclusionExclusionSummarizer
 summarizer = InclusionExclusionSummarizer(new_json_path, questions=inclusion_questions)
 result_df, exclusion_raw_path = summarizer.run()
 
 
 from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
-PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, 
-                                              raw_results_path=exclusion_raw_path, 
-                                              filename_col='MRN')
+PostProcessing.update_emr_master_list(master_list_path=master_list_path, 
+                                              raw_results_path=exclusion_raw_path)
 PostProcessing.rename_master_list_columns(master_list_path=master_list_path,
                                           questions_dict=inclusion_questions
                                           )
@@ -166,9 +166,8 @@ onset_summary_path = plotter.run()
 
 if onset_summary_path:
     from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
-    PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, 
-                                                  raw_results_path=onset_summary_path, 
-                                                  filename_col='MRN')
+    PostProcessing.update_emr_master_list(master_list_path=master_list_path, 
+                                                  raw_results_path=onset_summary_path)
 
 severity_dict = {
     0: ["unknown",'no info', 'no information', 'not mentioned', 'not present'],
@@ -191,9 +190,8 @@ custom_summarizer = CustomSummarizer(json_path=output_dir+"json_evaluated/emr_st
 df, raw_path = custom_summarizer.run_custom(positive_explanations_only=True,)
 
 from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
-PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, 
-                                              raw_results_path=raw_path, 
-                                              filename_col='MRN')
+PostProcessing.update_emr_master_list(master_list_path=master_list_path, 
+                                              raw_results_path=raw_path,)
 PostProcessing.rename_master_list_columns(master_list_path=master_list_path,
                                           questions_dict=extraction_questions
                                           )

@@ -1,3 +1,4 @@
+from doctest import debug
 import os
 import numpy as np
 import pandas as pd
@@ -83,13 +84,26 @@ class PostProcessing:
         return master_df
     
     @staticmethod
+    def update_emr_master_list(master_list_path, raw_results_path, debug=False, matching_col='MRN'):
+        '''Merges results into the master list, based on MRN'''
+        master_df = pd.read_csv(master_list_path)
+        raw_results_df = pd.read_csv(raw_results_path)
+
+        master_df = pd.merge(master_df, raw_results_df, on=matching_col, how='outer')
+        if not debug:
+            master_df.to_csv(master_list_path, index=False)
+        return master_df
+
+    @staticmethod
     def rename_master_list_columns(master_list_path, questions_dict):
 
         master_df = pd.read_csv(master_list_path)
-        explanations_dict={f'EXPLANATION: {long_q}':f'Explanation: {short_q}' for long_q, short_q in questions_dict.items()}
-        explanations_dict.update(questions_dict)
         
-        master_df.rename(columns=explanations_dict,inplace=True)
+        new_cols=master_df.columns.values.tolist()
+        for long_q, short_q in questions_dict.items():
+            new_cols=[col.replace(long_q, short_q) for col in new_cols]
+            
+        master_df.columns = new_cols
         master_df.to_csv(master_list_path, index=False)
         
         q_key=pd.DataFrame()

@@ -167,7 +167,7 @@ class TemporalPlotter:
         onsets_pivot = onsets.pivot(index='MRN', columns='Question', values='OnsetDate')
         
         # Clean up column names for readability in CSV
-        onsets_pivot.columns = [f"Onset Date: {col[:50]}..." for col in onsets_pivot.columns]
+        onsets_pivot.columns = [f"Onset Date: {col}" for col in onsets_pivot.columns]
         return onsets_pivot
 
     def export_per_date_longitudinal_data(self, output_path):

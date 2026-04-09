@@ -148,9 +148,8 @@ result_df, exclusion_raw_path = summarizer.run()
 
 
 from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
-PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, 
-                                              raw_results_path=exclusion_raw_path, 
-                                              filename_col='MRN')
+PostProcessing.update_emr_master_list(master_list_path=master_list_path, 
+                                              raw_results_path=exclusion_raw_path,)
 PostProcessing.rename_master_list_columns(master_list_path=master_list_path,
                                           questions_dict=inclusion_questions
                                           )
@@ -192,9 +191,8 @@ onset_summary_path = plotter.run()
 
 if onset_summary_path:
     from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
-    PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, 
-                                                  raw_results_path=onset_summary_path, 
-                                                  filename_col='MRN')
+    PostProcessing.update_emr_master_list(master_list_path=master_list_path, 
+                                                  raw_results_path=onset_summary_path,)
 
 
 severity_dict = {
@@ -220,9 +218,8 @@ custom_summarizer = CustomSummarizer(json_path=output_dir+"json_evaluated/emr_st
 df, raw_path = custom_summarizer.run_custom(positive_explanations_only=True,)
 
 from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
-PostProcessing.add_raw_results_to_master_list(master_list_path=master_list_path, 
-                                              raw_results_path=raw_path, 
-                                              filename_col='MRN')
+PostProcessing.update_emr_master_list(master_list_path=master_list_path, 
+                                              raw_results_path=raw_path,)
 PostProcessing.rename_master_list_columns(master_list_path=master_list_path,
                                           questions_dict=extraction_questions
                                           )
