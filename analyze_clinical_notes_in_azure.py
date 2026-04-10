@@ -2,14 +2,20 @@
 # MODIFY THE VARIABLES BELOW TO FIT YOUR USE CASE! # 
 ################################################################################
 # Set the file(s) you want to analyze (usually from an RPDR request) and the output directory
-notes_file_list=['F:/Code/schmahmann_rpdr_results/rm026_110525111627789405_Dis.txt',
-                 'F:/Code/schmahmann_rpdr_results/rm026_110525111627789405_Prg.txt',]
-
+# notes_file_list=['F:/Code/schmahmann_rpdr_results/rm026_110525111627789405_Dis.txt',
+#                  'F:/Code/schmahmann_rpdr_results/rm026_110525111627789405_Prg.txt',]
+notes_file_list=['F:/hbs_study_patient_notes/RM026_120324154255294233_MGH_Dis.txt',
+                 'F:/hbs_study_patient_notes/RM026_120324154255294233_MGH_Prg.txt']
 # Set the MRN file given by the RPDR request, to ensure proper matching of notes to subjects
 # Some subjects may have multiple MRNs, and this ensure that all notes for a subject are included.
-mrn_file='F:/Code/schmahmann_rpdr_results/rm026_110525111627789405_Mrn.txt'
+# mrn_file='F:/Code/schmahmann_rpdr_results/rm026_110525111627789405_Mrn.txt'
+mrn_file='F:/hbs_study_patient_notes/RM026_120324154255294233_MGH_Mrn.txt'
 
-output_dir='F:/Code/outputs/schmahmann_gpt5_fixed/'
+#Optional: filter the MRNs used
+import pandas as pd
+select_mrns=pd.read_csv('F:/hbs_study_patient_notes/hbs_ross_aryan_gpt_n1205.csv')['MRN']
+
+output_dir='F:/Code/outputs/hbs_depression_memory_redo/'
 
 # Provide the path to your OpenAI API key
 api_key_path = "F:/Code/openai-key.txt"
@@ -26,7 +32,7 @@ inclusion_model_name='gpt-4.1-mini'
 # The extraction model, meanwhile, is for extracting the info you want from the files, 
 # and needs to be more sophisticated. gpt-4 is a good choice.
 
-extraction_model_name='gpt-5.1'
+extraction_model_name='gpt-4.1'
 
 # Define inclusion/exclusion questions. See notebook 04, section 01 for examples.
 # **Critical Note**
@@ -45,7 +51,8 @@ segment_file=False
 # Set the questions for data extraction. This is where you extract what you want to know from the included notes.
 # These are more open-ended than inclusion/exclusion questions, and don't have to be yes/no.
 # See notebook 05, section 02 for examples.
-extraction_question_sets = ['bars','ccas','cnrs']
+# extraction_question_sets = ['bars','ccas','cnrs']
+extraction_question_sets = ['hemiparesis','nih_stroke','depression','moca']
 
 # Types of answers you want for the extraction step. possible types are:
 # - "binary_without_explanations"
@@ -67,29 +74,31 @@ import os
 import json
 
 inclusion_questions_json = json.load(open('inclusion_questions.json'))
-inclusion_questions = {}
-for questionnaire in inclusion_question_sets:
-    inclusion_questions.update(inclusion_questions_json[questionnaire])
+inclusion_questions={q:name for set_name in inclusion_question_sets for q, name in inclusion_questions_json[set_name].items()}
     
-extraction_questions_json = json.load(open('extraction_questions.json', encoding='utf-8'))
-extraction_questions={}
-for questionnaire in extraction_question_sets:
-    extraction_questions.update(extraction_questions_json[questionnaire])
+extraction_questions_json = json.load(open('extraction_questions.json', encoding='UTF-8'))
+extraction_questions={q:name for set_name in extraction_question_sets for q, name in extraction_questions_json[set_name].items()}
 
 master_list_path = output_dir+"master_list.csv"
 master_list_excel_path = output_dir+"master_list.xlsx"
 json_file_path = output_dir+"json/_emr_labeled_sections.json"
 
-from calvin_utils.gpt_sys_review.txt_utils import ClinicalNotesExtractor
-extractor=ClinicalNotesExtractor(notes_file_list, mrn_file, output_dir)
-note_df=extractor.run()
-extractor.generate_master_list()
-extractor.save_master_list()
+from calvin_utils.gpt_sys_review.txt_utils import ClinicalNotesExtractor, TextPreprocessor
+counter=0
+while os.path.isfile(master_list_path): #rename if master list already exists
+    counter+=1
+    master_list_path='/'.join(master_list_path.split('/')[:-1]+[f'master_list_{counter}.csv'])
 
-from calvin_utils.gpt_sys_review.txt_utils import TextPreprocessor
-# Initialize the TextPreprocessor class and preprocess the files
+
+extractor=ClinicalNotesExtractor(notes_file_list, mrn_file, output_dir, filter_list=select_mrns)
 preprocessor = TextPreprocessor(input_dir=output_dir)
-preprocessed_path = preprocessor.process_files()
+if counter==0:    
+    note_df=extractor.run()
+    preprocessed_path = preprocessor.process_files()
+else: # if extraction has already been done, just generate a blank master list 
+    extractor.generate_master_list()
+    extractor.save_master_list()
+    preprocessed_path = preprocessor.output_dir
 
 article_type = 'emr'  # 'case', 'research', 'emr', or 'other'
 
@@ -99,28 +108,11 @@ from calvin_utils.gpt_sys_review.json_utils import SectionLabeler
 ## subjects in it, not just that it exists.
 if os.path.exists(output_dir+"json/_emr_labeled_sections.json"):
     print(f"Found existing labeled sections at {output_dir+'json/_emr_labeled_sections.json'}. Skipping section labeling step.")
-elif segment_file:
+else:
     section_labeler = SectionLabeler(folder_path=preprocessed_path, 
                                     article_type="emr", 
                                     api_key_path=api_key_path,)
-    section_labeler.process_files()
-else:
-    # alternative: just create a json with the full text under 'emr' key
-    # almost nothing gets counted as "other" in SectionLabeler anyways. 
-    # Saves tons of time, cost is basically the same. 
-    # TODO: clean this up later
-    print("Skipping section labeling step.")
-    section_json={}
-    for filename in os.listdir(preprocessed_path):
-        if not filename.endswith('.txt'):
-            continue
-        with open(os.path.join(preprocessed_path, filename)) as file:
-            processed=file.read().replace('|', ',') 
-            section_json[filename.split('.')[0]]={'emr':" ".join(processed.split())}
-
-    os.mkdir(os.path.join(output_dir,'json'))
-    with open(json_file_path, 'w') as f:
-        json.dump(section_json, f, indent=0)
+    section_labeler.process_files(label_files=segment_file)
 
 
 ## Ask inclusion/exclusion questions
@@ -174,8 +166,8 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 # include_explanations=True,
                                 test_mode=test_mode,
                                 model_choice=extraction_model_name,
-                                debug=extraction_debug,
                                 max_workers=50,
+                                debug=extraction_debug,
                                 is_azure=True,
                                 deployment_id=extraction_model_name,
                                 api_base=api_base,
@@ -209,11 +201,11 @@ custom_summarizer = CustomSummarizer(json_path=output_dir+"json_evaluated/emr_st
                                      api_key_path=api_key_path,
                                     #  chunks_dir=extraction_chunks_dir, 
                                      is_azure=True, 
-                                     deployment_id=extraction_model_name, 
-                                     api_base=api_base, api_version=api_version,
                                      debug=False,
                                     #  severity_mapping=severity_dict if extraction_answers_binary else None
-                                     severity_mapping=severity_dict
+                                     severity_mapping=severity_dict,
+                                     deployment_id=extraction_model_name, 
+                                     api_base=api_base, api_version=api_version,
                                     )
 df, raw_path = custom_summarizer.run_custom(positive_explanations_only=True,)
 

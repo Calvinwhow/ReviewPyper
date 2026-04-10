@@ -286,7 +286,22 @@ class SectionLabeler:
             print(f"Failed to read file: {filename} ({e})")
             return None
 
-    def process_files(self, question=None):
+    def skip_labeling(self):
+        print("Skipping section labeling step.")
+        self.output_dict={}
+        for filename in os.listdir(self.folder_path):
+            if not filename.endswith('.txt'):
+                continue
+            with open(os.path.join(self.folder_path, filename)) as file:
+                processed=file.read().replace('|', ',') 
+                self.output_dict[filename.split('.')[0]]={'emr':" ".join(processed.split())}
+
+        # self.save_to_json(section_json)
+        # os.mkdir(os.path.join(output_dir,'json'))
+        # with open(json_file_path, 'w') as f:
+        #     json.dump(section_json, f, indent=0)
+
+    def process_files(self, question=None, label_files=True):
         """
         Processes all text files in the specified folder.
         
@@ -296,8 +311,7 @@ class SectionLabeler:
         if self._json_file_exists(self.article_type):
 
             print(f'_{self.article_type}_labeled_sections.json already exists, skipping processing. If you want to re-process, please delete this file first.')
-        
-        else:
+        elif label_files:
             
             self.select_labels()
             file_list = os.listdir(self.folder_path)
@@ -308,6 +322,9 @@ class SectionLabeler:
                 labeled_sections = {}
                 labeled_sections = self._label_sections(text, question)
                 self._store_results(filename, labeled_sections)
+            self.save_to_json(self.output_dict)
+        else:
+            self.skip_labeling()
             self.save_to_json(self.output_dict)
 
 

@@ -114,8 +114,14 @@ class ClinicalNotesExtractor:
                     continue 
                 
                 parts = header.split(self.separator)
-                if len(parts) > mrn_index:
-                    mrn = parts[mrn_index]
+                note_mrn=parts[mrn_index]
+                mrn = self._map_mrn(note_mrn)
+                if self.filter_mrns and mrn not in self.selected_mrns:
+                    continue
+                elif mrn is False:
+                    print(f"Warning: MRN {note_mrn} from {file} not found in {self.mrn_file}. Skipping note")
+
+                elif len(parts) > mrn_index:
                     
                     # Extract date for sorting
                     # Look for Encounter Date, Visit Date, or the |date time| pattern in RPDR headers

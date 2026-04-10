@@ -65,6 +65,9 @@ json_file_path = output_dir+"json/_emr_labeled_sections.json"
 from calvin_utils.gpt_sys_review.txt_utils import ClinicalNotesExtractor
 extractor=ClinicalNotesExtractor(notes_file_list, mrn_file, output_dir)
 note_df=extractor.run()
+# extractor.generate_master_list()
+# extractor.save_master_list()
+
 
 from calvin_utils.gpt_sys_review.txt_utils import TextPreprocessor
 # Initialize the TextPreprocessor class and preprocess the files
@@ -151,7 +154,7 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 retain_chunks=True, 
                                 # include_explanations=True,
                                 test_mode=test_mode,
-                                response_tokens=8000,
+                                # response_tokens=8000,
                                 model_choice="gpt-5.1",
                                 max_workers=50,
                                 debug=extraction_debug)
