@@ -108,35 +108,37 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
 
 
     ### Evlaluation Methods ###
-    def evaluate_single_file(self, file_name, file_text, formatted_questions, questions_w_explanations):
 
-        print(' Evaluating '+file_name)
-        chunks = self.call_chunker(file_text)  # Chunk text by token limits
+    
+    # def evaluate_single_file(self, file_name, file_text, formatted_questions, questions_w_explanations):
 
-        if self.retain_chunks:
-            chunk_path=self.save_chunks(file_name, chunks)
+    #     print(' Evaluating '+file_name)
+    #     chunks = self.call_chunker(file_text)  # Chunk text by token limits
 
-        file_answers = {} # Initialize a dictionary to store chunk-level answers for each question
-        file_retries=0
-        file_tokens_used=0
-        file_failed_chunks=0
+    #     if self.retain_chunks:
+    #         chunk_path=self.save_chunks(file_name, chunks)
 
-        for chunk_index, chunk in enumerate(chunks):     # Send a query for each chunk
+    #     file_answers = {} # Initialize a dictionary to store chunk-level answers for each question
+    #     file_retries=0
+    #     file_tokens_used=0
+    #     file_failed_chunks=0
 
-            conversation = self.generate_submission(chunk, formatted_questions)   # Generate the conversation to submit
-            answer, tokens_used, retries = self.evaluate_with_openai(conversation, questions_w_explanations) # Evaluate the chunk with OpenAI
-            file_tokens_used += tokens_used
-            file_retries += retries
+    #     for chunk_index, chunk in enumerate(chunks):     # Send a query for each chunk
 
-            if answer=="Unidentified":
-                file_failed_chunks+=1
-                chunk_answers={q:"Unidentified" for q in questions_w_explanations}
-            else:
-                chunk_answers=dict(zip(questions_w_explanations,answer.split("|")))  # Convert the answer string to a dictionary
+    #         conversation = self.generate_submission(chunk, formatted_questions)   # Generate the conversation to submit
+    #         answer, tokens_used, retries = self.evaluate_with_openai(conversation, questions_w_explanations) # Evaluate the chunk with OpenAI
+    #         file_tokens_used += tokens_used
+    #         file_retries += retries
 
-            file_answers[f"chunk_{chunk_index+1}"] = chunk_answers      # Store the answer for this question and this chunk
+    #         if answer=="Unidentified":
+    #             file_failed_chunks+=1
+    #             chunk_answers={q:"Unidentified" for q in questions_w_explanations}
+    #         else:
+    #             chunk_answers=dict(zip(questions_w_explanations,answer.split("|")))  # Convert the answer string to a dictionary
+
+    #         file_answers[f"chunk_{chunk_index+1}"] = chunk_answers      # Store the answer for this question and this chunk
         
-        return file_answers, file_tokens_used, file_retries, file_failed_chunks
+    #     return file_answers, file_tokens_used, file_retries, file_failed_chunks
     
     def format_questions(self, questions_list):
         """Formats the questions for submission to the OpenAI API."""

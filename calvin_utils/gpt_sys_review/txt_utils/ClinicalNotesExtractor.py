@@ -102,6 +102,7 @@ class ClinicalNotesExtractor:
         
         note = ''
         header = ''
+        skipped_mrns=[]
 
         for row in reader:
             note += row
@@ -118,8 +119,13 @@ class ClinicalNotesExtractor:
                 mrn = self._map_mrn(note_mrn)
                 if self.filter_mrns and mrn not in self.selected_mrns:
                     continue
+
                 elif mrn is False:
-                    print(f"Warning: MRN {note_mrn} from {file} not found in {self.mrn_file}. Skipping note")
+                    if note_mrn not in skipped_mrns:
+                        skipped_mrns.append(note_mrn)
+                        print(f"Warning: MRN {note_mrn} from {file} not found in {self.mrn_file}. Skipping note")
+                    else:
+                        continue #only print the warning the first time we encounter a given unmapped MRN, but skip all notes with that MRN
 
                 elif len(parts) > mrn_index:
                     
@@ -191,11 +197,21 @@ class ClinicalNotesExtractor:
         self.master_list.to_csv(master_list_path, index=False)
         print(f"Master list saved to {master_list_path}")
 
+    def combine_files_temp(self):
+        new_input_file = os.path.join(self.output_dir, 'combined_files.txt')
+        with open(new_input_file, 'w') as outfile:
+            for fname in self.input_file_list:
+                with open(fname) as infile:
+                    for line in infile:
+                        outfile.write(line)
+        return new_input_file
+
 
     def run(self, selected_mrns=None):
         """ Runs the entire process of splitting the files, generating the master list, and filtering it."""
-        for file in self.input_file_list:
-            self.split_by_subject(file) 
+        self.split_by_subject(self.combine_files_temp())
+        # for file in self.input_file_list:
+        #     self.split_by_subject(file) 
         self.generate_master_list()
         self.filter_master_list(selected_mrns)
         self.save_master_list()

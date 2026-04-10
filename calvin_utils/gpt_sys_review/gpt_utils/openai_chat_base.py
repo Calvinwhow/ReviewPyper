@@ -177,7 +177,7 @@ class OpenAIChatBase(OpenAIBase):
             print(f"Rate limit error: {e}. Retrying submission. Attempt:({retry_count+1})")
             return retry_count + 1, 30
         elif  type(e).__name__ == 'IndexError':
-            print(f"Index error: {e}. Retrying submission. Attempt:({retry_count+1})")
+            # print(f"Index error: {e}. Retrying submission. Attempt:({retry_count+1})")
             return retry_count + 1, 5
         else:
             print(f"An error occurred: {e}. Retrying submission. Attempt:({retry_count+1})")

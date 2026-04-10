@@ -232,8 +232,8 @@ class TemporalPlotter:
         print(f"Applying permanent flip logic to {len(long_df)} exploded observations...")
         df_acc = self.apply_permanent_flip(long_df)
         
-        print("Generating plots...")
-        self.plot_patient_trajectories(df_acc)
+        # print("Generating plots...")
+        # self.plot_patient_trajectories(df_acc)
         
         print("Summarizing onset dates...")
         summary_df = self.summarize_onsets(df)

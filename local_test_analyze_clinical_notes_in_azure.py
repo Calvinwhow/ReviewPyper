@@ -7,6 +7,11 @@ notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/00000016.txt',
 output_dir='/Users/rm026/Documents/Code/reviewpyper_testing/tests/msa_sub_16_organization_test_3/'
 
 mrn_file="/Users/rm026/Documents/Code/reviewpyper_testing/msa_fake_mrn_file.txt"
+#Optional: filter the MRNs used
+# import pandas as pd
+# select_mrns=pd.read_csv('F:/hbs_study_patient_notes/hbs_ross_aryan_gpt_n1205.csv')['MRN']
+select_mrns=None
+
 # Provide the path to your OpenAI API key
 api_key_path = "/Users/rm026/Documents/code/openai-key.txt"
 
@@ -62,19 +67,21 @@ master_list_path = output_dir+"master_list.csv"
 master_list_excel_path = output_dir+"master_list.xlsx"
 json_file_path = output_dir+"json/_emr_labeled_sections.json"
 
-from calvin_utils.gpt_sys_review.txt_utils import ClinicalNotesExtractor
-extractor=ClinicalNotesExtractor(notes_file_list, mrn_file, output_dir)
-note_df=extractor.run()
-# extractor.generate_master_list()
-# extractor.save_master_list()
+from calvin_utils.gpt_sys_review.txt_utils import ClinicalNotesExtractor, TextPreprocessor
+counter=0
+while os.path.isfile(master_list_path): #rename if master list already exists
+    counter+=1
+    master_list_path='/'.join(master_list_path.split('/')[:-1]+[f'master_list_{counter}.csv'])
 
-
-from calvin_utils.gpt_sys_review.txt_utils import TextPreprocessor
-# Initialize the TextPreprocessor class and preprocess the files
+extractor=ClinicalNotesExtractor(notes_file_list, mrn_file, output_dir, filter_list=select_mrns)
 preprocessor = TextPreprocessor(input_dir=output_dir)
-preprocessed_path = preprocessor.process_files()
-print(f"Preprocessed files saved to {preprocessed_path}")
-article_type = 'emr'  # 'case', 'research', 'emr', or 'other'
+if counter==0:    
+    note_df=extractor.run()
+    preprocessed_path = preprocessor.process_files()
+else: # if extraction has already been done, just generate a blank master list 
+    extractor.generate_master_list()
+    extractor.save_master_list()
+    preprocessed_path = preprocessor.output_dir
 
 from calvin_utils.gpt_sys_review.json_utils import SectionLabeler
 ## Initialize the SectionLabeler class and process the files
@@ -82,28 +89,11 @@ from calvin_utils.gpt_sys_review.json_utils import SectionLabeler
 ## subjects in it, not just that it exists.
 if os.path.exists(output_dir+"json/_emr_labeled_sections.json"):
     print(f"Found existing labeled sections at {output_dir+'json/_emr_labeled_sections.json'}. Skipping section labeling step.")
-elif segment_file:
+else:
     section_labeler = SectionLabeler(folder_path=preprocessed_path, 
                                     article_type="emr", 
                                     api_key_path=api_key_path,)
-    section_labeler.process_files()
-else:
-    # alternative: just create a json with the full text under 'emr' key
-    # almost nothing gets counted as "other" in SectionLabeler anyways. 
-    # Saves tons of time, cost is basically the same. 
-    # TODO: clean this up later
-    print("Skipping section labeling step.")
-    section_json={}
-    for filename in os.listdir(preprocessed_path):
-        if not filename.endswith('.txt'):
-            continue
-        with open(os.path.join(preprocessed_path, filename)) as file:
-            processed=file.read().replace('|', ',') 
-            section_json[filename.split('.')[0]]={'emr':" ".join(processed.split())}
-
-    os.mkdir(os.path.join(output_dir,'json'))
-    with open(json_file_path, 'w') as f:
-        json.dump(section_json, f, indent=0)
+    section_labeler.process_files(label_files=segment_file)
 
 
 # Ask inclusion/exclusion questions
@@ -162,15 +152,7 @@ answers = evaluator.evaluate_all_files()
 extraction_chunks_dir=evaluator.chunk_dir
 evaluated_json_path = evaluator.save_to_json(answers)
 
-# Perform Temporal Analysis
-from calvin_utils.gpt_sys_review.gpt_utils.temporal_analysis import TemporalPlotter
-plotter = TemporalPlotter(json_path=evaluated_json_path, output_dir=output_dir+"/plots/")
-onset_summary_path = plotter.run()
 
-if onset_summary_path:
-    from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
-    PostProcessing.update_emr_master_list(master_list_path=master_list_path, 
-                                                  raw_results_path=onset_summary_path)
 
 severity_dict = {
     0: ["unknown",'no info', 'no information', 'not mentioned', 'not present'],
@@ -195,6 +177,18 @@ df, raw_path = custom_summarizer.run_custom(positive_explanations_only=True,)
 from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
 PostProcessing.update_emr_master_list(master_list_path=master_list_path, 
                                               raw_results_path=raw_path,)
+
+# Perform Temporal Analysis
+from calvin_utils.gpt_sys_review.gpt_utils.temporal_analysis import TemporalPlotter
+plotter = TemporalPlotter(json_path=evaluated_json_path, output_dir=output_dir+"/plots/")
+onset_summary_path = plotter.run()
+
+if onset_summary_path:
+    from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
+    PostProcessing.update_emr_master_list(master_list_path=master_list_path, 
+                                                  raw_results_path=onset_summary_path)
+
+
 PostProcessing.rename_master_list_columns(master_list_path=master_list_path,
                                           questions_dict=extraction_questions
                                           )
