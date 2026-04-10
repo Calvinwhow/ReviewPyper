@@ -25,14 +25,14 @@
     "Does this patient show lack of pleasure from activities or interactions that used to be enjoyable? If the text does not mention enjoyment of activities, respond \"not present\"":"anhedonia",
     "Does this patient show negative attitudes or pessimism about the future and a sense of hopelessness? If the text does not mention pessimism or hopelessness, respond \"not present\"":"pessimism",
     "Is this patient uneasy or generally dissatisfied with life? If the text does not mention depressive symptoms, respond \"not present\"":"dissatisfaction",
-    "Does this patient seem very sad or depressed? If the text does not mention overall mood, respond \"not present\"":"depressed"
+    "Does this patient seem very sad or depressed? If the text does not mention overall mood, respond \"not present\"":"depressed",
+    "Is this patient being treated for depression? For instance, the text may mention the patient being on antidepressant medication or receiving therapy for depression. If the text does not mention treatment, respond \"not present\"":"depression treatment"
 },
 "memory":{
-    "Does this patient show signs of acute, post-lesional, episodic anterograde amnesia? For instance, they may start have difficulty remembering events that happened after a stroke, or be unable to form new memories after the stroke. If the text mentions short-term memory problems only, or memory problems not associated with a stroke, respond \"not present\".":"anterograde_amnesia",
-    "Does this patient show signs of acute, post-lesional, episodic retrograde amnesia? For instance, they may have difficulty remembering events that occured before their stroke. If the text mentions short-term memory problems only, or memory problems not associated with a stroke, respond \"not present\".":"retrograde_amnesia"
+    "Does this patient show signs of acute episodic anterograde amnesia? For instance, they may start having difficulty remembering events that happened after a stroke, or be unable to form new memories after the stroke. If the text mentions short-term memory problems only, respond \"not present\".":"anterograde_amnesia",
+    "Does this patient show signs of acute episodic retrograde amnesia? For instance, they may have difficulty remembering events that occured before a stroke. If the text mentions short-term memory problems only, or memory problems not associated with a stroke, respond \"not present\".":"retrograde_amnesia"
 },
 "billing code":{
-
 },
 "bars":{
     "Does this patient have difficulty walking or disturbed gait? For instance, they may mention the patient staggering, difficulties in half turn, requiring support from a wall or stick, or being entirely unable to walk on their own.":"gait",
@@ -71,28 +71,28 @@
     "Does this patient have unusual affect? For instance, they may have difficulty with focusing attention or mental flexibility; be emotionally labile or show incongruous emotions; show easy sensory overload or avoidant behaviors; express illogical thoughts; lack empathy, be apathetic, or have blunted affect; or be angry or aggressive, irritable, oppositional, with difficulty with social cues and social boundaries. Ignore depression or anxiety symptoms.":"affect"
     },
 "cnrs":{
-    "Does this patient have difficulty maintaining focus or sustained attention, make careless mistakes, or not attend to details?":"attention a1",
-    "Is this patient easily distracted by non-essential or irrelevant stimuli? If the text does not mention distraction, respond \"not present\"":"attention a2",
+    "Does this patient have difficulty maintaining mental focus or sustained attention, make careless mistakes, or not attend to details? Ignore issues with focusing the eyes":"attention a1",
+    "Is this patient easily distracted by non-essential or irrelevant stimuli? If the text does not mention distraction, or the patient is distracted only by pain,respond \"not present\"":"attention a2",
     "Is this patient often \"on the go,\" acting as if \"driven by a motor\" (e.g., is unable to be or uncomfortable being still for extended time), restless, or difficult to keep up with? If the text does not mention restlessness or discomfort sitting still, respond \"not present\"":"attention a3",
     "Does this patient feel compelled to perform habits that are excessive and repetitive, and become distressed when prevented from doing so? If the text does not mention repetitive habits, respond \"not present\"":"attention a4",
     "Does this patient feel driven to complete tasks or behave in a rigid, inflexible way according to specific, personal rules? If the text does not mention rigid thinking or behavior, respond \"not present\"":"attention a5",
-    "Does this patient worry repeatedly or too much about his/her own emotional/physical state, in a way that seems excessive or inappropriate? If the text does not mention worry, respond \"not present\"":"attention b6",
-    "Does this patient repeat the same response (e.g., word, phrase, gesture, behavior) despite being ineffective or inappropriate? THhIf the text does not mention repetitive behavior, respond \"not present\"":"attention b7",
+    "Does this patient worry repeatedly or too much about his/her own emotional/physical state, in a way that seems excessive or inappropriate? If the text does not mention worry, respond \"not present\". Only consider worries that are excessive or inappropriate, and ignore reasonable concerns about a patient's health":"attention b6",
+    "Does this patient repeat the same response (e.g., word, phrase, gesture, behavior) despite being ineffective or inappropriate? If the text does not mention repetitive behavior, respond \"not present\"":"attention b7",
     "Does this patient get mentally “stuck” or have trouble shifting thoughts or mental focus from one activity or situation to another? If the text does not mention issues shifting focus, respond \"not present\"":"attention b8",
     "Is this patient unable to stop repetitive thoughts, urges or images that seem to cause distress? If the text does not mention repetitive thoughts or urges, respond \"not present\"":"attention b9",
-    "Does this patient act hastily or carelessly in the moment without thinking (e.g., interrupting others, trouble waiting his/her turn)":"emotion a10",
-    "Does this patient show rapid changes in emotion that are more intense than usual or unrelated to the situation?":"emotion a11",
-    "Does this patient cry and/or laugh without an apparent trigger or inappropriately?":"emotion a12",
+    "Does this patient act hastily or carelessly in the moment without thinking (e.g., interrupting others, trouble waiting his/her turn). ":"emotion a10",
+    "Does this patient show rapid changes in emotion that are unrelated to the situation?":"emotion a11",
+    "Does this patient cry and/or laugh inappropriately, without an apparent trigger or cause?":"emotion a12",
     "Is this patient overly anxious, and/or do they experience sudden episodes of intense fear or discomfort (e.g., heart racing, shortness of breath, dizziness)?":"emotion a13",
     "Does this patient show lack of pleasure from activities or interactions that used to be enjoyable? If the text does not mention enjoyment of activities, respond \"not present\"":"emotion b14",
-    "Does this patient show negative attitudes or pessimism about the future and a sense of hopelessness? If the text does not mention pessimism or hopelessness, respond \"not present\"":"emotion b15",
+    "Does this patient show negative attitudes or pessimism about the future and a sense of hopelessness? If the text does not mention pessimism or hopelessness, respond \"not present\". If the text indicates that a drug or treatment is improving their negative attitudes, respond \"yes\"":"emotion b15",
     "Is this patient uneasy or generally dissatisfied with life? If the text does not mention depressive symptoms, respond \"not present\"":"emotion b16",
-    "Does this patient seem very sad or depressed? If the text does not mention overall mood, respond \"not present\"":"emotion b17",
-    "Does this patient make repetitive movements, postures, or utterances that follow a particular pattern (e.g., hand flapping, finger flicking, body rocking, repeating noises or phrases)? If the text does not mention repetitive movements, respond \"not present\"":"autism a18",
+    "Does this patient seem very sad or depressed? If the text does not mention overall mood, respond \"not present\". If the text indicates that the patient is being treated for depression, respond \"yes\"":"emotion b17",
+    "Does this patient make repetitive movements, postures, or utterances that follow a particular pattern (e.g., hand flapping, finger flicking, body rocking, repeating noises or phrases)? Ignore cases of involuntary tremor. If the text does not mention repetitive movements, respond \"not present\"":"autism a18",
     "Is this patient drawn to sensory experiences, such as excessive smelling or touching of objects, or fascination with lights or spinning objects? If the text does not mention sensory experiences, respond \"not present\"":"autism a19",
-    "Does this patient avoid or show high sensitivity to light, touch, or texture (including clothing and the mouth-feel of foods)? If the text does not mention sensitivities, respond \"not present\"":"autism b20",
-    "Is this patient easily overwhelmed by, or has an extreme reaction to, sounds, textures, tastes, smells, temperature or lights? If the text does not mention sensitivity to stimulation, respond \"not present\"":"autism b21",
-    "Does this patient communicate in a way that is difficult to follow, illogical, rambling, or nonsensical? If the text does not mention communication, respond \"not present\"":"psychosis a22",
+    "Does this patient avoid or show high sensitivity to light, touch, or texture (including clothing and the mouth-feel of foods)? If the text does not mention sensitivities, or only mentions food sensitivities in relation to trouble swallowing, respond \"not present\"":"autism b20",
+    "Is this patient easily overwhelmed by, or has an extreme reaction to, sounds, textures, tastes, smells, temperature or lights? If the text does not mention sensitivity to stimulation, or only mentions food sensitivities in relation to trouble swallowing, respond \"not present\"":"autism b21",
+    "Does this patient communicate in a way that is difficult to follow, illogical, rambling, or nonsensical? If the text does not mention communication, or if the issues are only related to speech issues such as dysarthria rather than psychological, respond \"not present\"":"psychosis a22",
     "Does this patient express irrational concerns or false beliefs that he/she is threatened in some way (e.g., others are out to hurt him/her)? If the text does not mention false beliefs or paranoia, respond \"not present\"":"psychosis a23",
     "Does this patient see or hear things that they believe are real but are not present? If the text does not mention hallucinations, respond \"not present\"":"psychosis a24",
     "Does this patient have trouble understanding other people's feelings or perspective? If the text does not mention the patient's social interactions, respond \"not present\"":"psychosis b25",
@@ -118,9 +118,6 @@
     "Does this patient seem disinterested, unconcerned, or indifferent to daily activities, future events, themselves or others? For example, they may appear distant or aloof with a lack of emotional reactivity to situations or others that would typically evoke an emotional response, or have trouble understanding another person's feelings or perspective.":"binary",
     "Does this patient act or appear to be unreasonably angry or aggressive? For instance, they may be easily upset or irritable; be intolerant of people entering their personal space or overly assertive or protective about communal space and objects; or be deliberately disobedient, defiant and argumentative.":"binary",
     "Does this patient seem to lack social skills? For example, they may act in a passive, immature, or childlike manner; seem unaware of social cues, or speak or behave in a way that is inappropriate to the situation; be unaware of others' personal space, have difficulty adapting to social situations, act or makes statements in an inappropriate manner; or be overly trusting of others, vulnerable to being tricked or manipulated, or prone to believe highly unlikely statements or claims.":"binary"
-    },
-"fixed_similarities":{
-    "Is this patient unable to identify similarities between objects, such as nose/ear, sheep/elephant, lake/river, or airplane/motorcycle?":"similarities_fixed"
     },
 "hbs_seizure":{
     "Has this patient had a seizure? For example, the text may mention epilepsy, convulsions, or fits. If none of these are mentioned in the text, respond \"not present\" instead of \"no\".":"seizure",
