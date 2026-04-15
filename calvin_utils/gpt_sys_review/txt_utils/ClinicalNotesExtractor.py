@@ -1,5 +1,7 @@
 import pandas as pd
 import os
+from tqdm import tqdm
+from math import isnan
 
 class ClinicalNotesExtractor:
     """
@@ -16,24 +18,39 @@ class ClinicalNotesExtractor:
     - save_master_list: saves the master list to a csv file.
     - run: runs the entire process of splitting the files, generating the master list, and filtering it.
     """
-    def __init__(self, input_file_list, mrn_file, output_dir, filter_list=None, separator="|", MRN_str='MRN', report_end_str='[report_end]'):
+    def __init__(self, input_file_list, mrn_file, output_dir, filter_list=None, separator="|", MRN_str='MRN', report_end_str='[report_end]',debug=False):
         self.MRN_str = MRN_str
         self.report_end_str=report_end_str
         self.separator=separator
         self.input_file_list=input_file_list
         self.mrn_file=mrn_file
-
-        self.mrn_mappings = self._prep_mrn_mapping(self.mrn_file)
         self.output_dir=output_dir
         self.raw_files_dir = output_dir + '_separated'
+        self.debug=debug
 
-        if filter_list is None:
-            self.filter_mrns=False
+        if filter_list is not None:
+            self.selected_mrns=[int(mrn) for mrn in filter_list]
         else:
-            self.selected_mrns=list(set([ self._map_mrn(mrn) for mrn in filter_list if self._map_mrn(mrn) is not False]))
-            self.filter_mrns=True
-
+            self.selected_mrns=None
         self._prep_out_dir()
+
+        self.mrn_mappings = self._prep_mrn_mapping(self.mrn_file)
+
+        if self.selected_mrns:
+            invalid_selections=[[mrn,self._map_mrn(mrn)] for mrn in self.selected_mrns if int(mrn)!=int(self._map_mrn(mrn))]
+
+            if len(invalid_selections)>0:
+            
+                df=pd.DataFrame(invalid_selections,columns=['input_mrn','equivalent_mrn'])
+                if not df['equivalent_mrn'].all():
+                    not_found=df[df['equivalent_mrn'].astype(str)=='False']
+
+                    self.mrn_mappings.update({int(mrn):mrn for mrn in not_found['input_mrn']})
+                    df=df[df['equivalent_mrn'].astype(str)!='False']
+            
+                df.to_csv(output_dir+'equivalent_mrns.csv', index=False)
+                print('Some MRNs in selection list correspond to the same subject. Saving a list of equivalent MRNs')
+
     
     ### Internal API ###
 
@@ -46,26 +63,74 @@ class ClinicalNotesExtractor:
         for row in open(file, "r", encoding='utf-8'):
             yield row
 
+    # def _prep_mrn_mapping(self, mapping_file):
+
+    #     mrn_mappings={}
+        
+    #     with open(mapping_file, 'r', encoding='utf-8') as f:
+
+    #         for line in f:
+                
+    #             if line.startswith('IncomingId') or line.strip() == '':
+    #                 # print("Skipping header or empty line in MRN file.")
+    #                 continue
+                
+    #             parts = line.split('|') # This '|' is NOT related to self.separator; it is used in the MRN files from RPDR.
+    #             primary_mrn = parts[0]
+
+    #             # Note: I want the keys to be int (no leading zero issues) 
+    #             # and the values to be str (keep leading zeroes, for recordkeeping).
+    #             # May be tricky. self._map_mrn converts to int for this reason. 
+    #             if int(primary_mrn) in mrn_mappings.keys():
+    #                 print(f"Warning: Primary MRN {primary_mrn} appears multiple times in {mapping_file}.")
+    #                 primary_mrn=mrn_mappings[int(primary_mrn)] # if there are duplicates, use the first one we see in the file (which is likely the correct one, but we print a warning just in case) 
+                
+    #             mrn_mappings.update({int(mrn): primary_mrn for mrn in parts[4:-1] if mrn.strip() != ''})
+
+    #     return mrn_mappings
+
     def _prep_mrn_mapping(self, mapping_file):
+        df=pd.read_csv(mapping_file, sep='|', dtype=str)
+        df.drop(columns=["IncomingSite","Status"], inplace=True)
+        primaries=[]
         mrn_mappings={}
-        with open(mapping_file, 'r', encoding='utf-8') as f:
 
-            for line in f:
-                
-                if line.startswith('IncomingId') or line.strip() == '':
-                    # print("Skipping header or empty line in MRN file.")
-                    continue
-                
-                parts = line.split('|') # This '|' is NOT related to self.separator; it is used in the MRN files from RPDR.
-                primary_mrn = parts[0]
+        for i, row in tqdm(df.iterrows(), desc='Prepping MRN mapping'):
+            # print(row)
+            primary=row['IncomingId']
+            
+            if self.selected_mrns is not None:
 
-                # Note: I want the keys to be int (no leading zero issues) 
-                # and the values to be str (keep leading zeroes, for recordkeeping).
-                # May be tricky. self._map_mrn converts to int for this reason. 
-                mrn_mappings[int(primary_mrn)] = primary_mrn 
-                mrn_mappings.update({int(mrn): primary_mrn for mrn in parts[4:-1] if mrn.strip() != ''})
+                is_selected=False
+                for mrn in row.values:
+                    if type(mrn)==float and isnan(mrn):
+                        continue
+                    elif int(mrn) in self.selected_mrns and (not pd.isna(mrn) and mrn.strip() != ''):
+                        primary=mrn
+                        is_selected=True
+                        break
+
+                if int(primary) in mrn_mappings.keys() and not is_selected:
+                    primary=mrn_mappings[int(primary)] # if there are duplicates, use the first one we see in the file 
+
+                elif int(primary) in mrn_mappings.keys() and is_selected:
+                    # We now want to update the mapping to use the selected MRN as the primary.
+                    # So, get the original primary, then update the old mappings
+                    # that mapped to the original primary to now map to the selected primary. 
+                    old_primary=mrn_mappings[int(primary)]
+                    for mrn, mapped_primary in mrn_mappings.items():
+                        if mapped_primary == old_primary:
+                            mrn_mappings[int(mrn)] = primary
+
+            mrn_mappings.update({int(mrn): primary for mrn in row if not pd.isna(mrn) and mrn.strip() != ''})
+
+        if self.debug:
+            map_df=pd.DataFrame(list(mrn_mappings.items()), columns=['MRN', 'Primary MRN'])
+            map_df.to_csv(os.path.join(self.output_dir, 'mrn_mappings.csv'), index=False)
+            print(f"Saved MRN mappings to {os.path.join(self.output_dir, 'mrn_mappings.csv')}")
 
         return mrn_mappings
+
 
     def _map_mrn(self,mrn):
         
@@ -77,7 +142,7 @@ class ClinicalNotesExtractor:
 
     ### Public API ###
 
-    def split_by_subject(self, file):
+    def split_by_subject(self, file, make_master_file=False):
         """
         Splits the file so that each subject is in their own file, 
         explicitly sorting all reports chronologically.
@@ -103,8 +168,9 @@ class ClinicalNotesExtractor:
         note = ''
         header = ''
         skipped_mrns=[]
-
-        for row in reader:
+        all_headers=[] # used to stop duplicate notes from being added to a subject's file 
+        
+        for row in tqdm(reader,"Extracting notes"):
             note += row
 
             if self.separator in row:
@@ -113,19 +179,26 @@ class ClinicalNotesExtractor:
             if (self.report_end_str in row) or (row == ''):
                 if header == '':
                     continue 
+                elif header in all_headers:
+                    if self.debug:
+                        print(f"Warning: Duplicate note with header '{header.strip()}' found in {file}. Skipping this note to avoid duplicates in the output.")
+                    continue
+                else:
+                    all_headers.append(header)
                 
                 parts = header.split(self.separator)
                 note_mrn=parts[mrn_index]
+
                 mrn = self._map_mrn(note_mrn)
-                if self.filter_mrns and mrn not in self.selected_mrns:
+
+                if self.selected_mrns and int(mrn) not in self.selected_mrns:
                     continue
 
+                elif mrn is False and note_mrn not in skipped_mrns:
+                    skipped_mrns.append(note_mrn)
+                    print(f"Warning: MRN {note_mrn} from {file} not found in {self.mrn_file}. Skipping note")
                 elif mrn is False:
-                    if note_mrn not in skipped_mrns:
-                        skipped_mrns.append(note_mrn)
-                        print(f"Warning: MRN {note_mrn} from {file} not found in {self.mrn_file}. Skipping note")
-                    else:
-                        continue #only print the warning the first time we encounter a given unmapped MRN, but skip all notes with that MRN
+                    continue #only print the warning the first time we encounter a given unmapped MRN, but skip all notes with that MRN
 
                 elif len(parts) > mrn_index:
                     
@@ -167,6 +240,12 @@ class ClinicalNotesExtractor:
                     subject_file.write(report_text)
                     subject_file.write("\n")
 
+            if make_master_file:
+                with open(self.output_dir+'all_selected_records.txt', 'a', encoding='utf-8') as master_file:
+                    for _, report_text in reports:
+                        master_file.write(report_text)
+                        master_file.write("\n\n")
+
     
     def generate_master_list(self):
         """Generates a master list of all subjects and their notes."""
@@ -180,14 +259,14 @@ class ClinicalNotesExtractor:
         
         self.master_list = pd.DataFrame(master_list)
         
-    def filter_master_list(self, selected_mrns=None):
-        """Filters the master list based on selected MRNs."""
+    # def filter_master_list(self, selected_mrns=None):
+    #     """Filters the master list based on selected MRNs."""
         
-        if selected_mrns:
-            selected_mrns_int = [int(mrn) for mrn in selected_mrns]
-            self.master_list = self.master_list[self.master_list['MRN'].astype(int).isin(selected_mrns_int)]
-        else:
-            print("No list of MRNs given, keeping all subjects in the master list.")
+    #     if selected_mrns:
+    #         selected_mrns_int = [int(mrn) for mrn in selected_mrns]
+    #         self.master_list = self.master_list[self.master_list['MRN'].astype(int).isin(selected_mrns_int)]
+    #     else:
+    #         print("No list of MRNs given, keeping all subjects in the master list.")
         
 
     def save_master_list(self):
@@ -207,13 +286,13 @@ class ClinicalNotesExtractor:
         return new_input_file
 
 
-    def run(self, selected_mrns=None):
+    def run(self, selected_mrns=None, make_master_file=False):
         """ Runs the entire process of splitting the files, generating the master list, and filtering it."""
-        self.split_by_subject(self.combine_files_temp())
+        self.split_by_subject(self.combine_files_temp(), make_master_file=make_master_file)
         # for file in self.input_file_list:
         #     self.split_by_subject(file) 
         self.generate_master_list()
-        self.filter_master_list(selected_mrns)
+        # self.filter_master_list(selected_mrns)
         self.save_master_list()
         return self.master_list
     
