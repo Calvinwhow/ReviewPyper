@@ -100,9 +100,8 @@ from matplotlib.colors import LinearSegmentedColormap
 import seaborn as sns
 
 
-def plot_conf_matrix(array, cmap='Blues', filename=None, figsz=(3,3),show_pct=True):
+def plot_conf_matrix(array, labels, cmap='Blues', filename=None, figsz=(3,3),show_pct=False):
 
-    plt.figure(figsize=figsz)
     df_cm = pd.DataFrame(array, range(len(array)), range(len(array)))
     
     if show_pct:
@@ -125,29 +124,47 @@ def plot_conf_matrix(array, cmap='Blues', filename=None, figsz=(3,3),show_pct=Tr
 
     else:
         annotation=True
-        formatting=".0f"
+        formatting=".2f"
 
-    map=sns.heatmap(df_cm, annot=annotation,
+
+    labels=['Yes','No','Unknown',][:len(array)]
+    
+    htmap=heatmap(df_cm, labels, cmap, annotation=annotation,
+                  formatting=formatting, figsz=figsz)
+    
+    htmap.set_xlabel('Predicted')
+    htmap.set_ylabel('Truth')
+    
+    plt.tight_layout()
+    if filename:
+        plt.savefig(filename, bbox_inches='tight')
+        
+    return htmap
+    
+    
+def heatmap(array, labels,  cmap='Blues', filename=None, annotation=True, formatting=".2f",figsz=(3,3)):
+    
+    df_cm = pd.DataFrame(array, range(len(array)), range(len(array)))
+    plt.figure(figsize=figsz)
+    htmap=sns.heatmap(df_cm, annot=annotation,
                     # annot_kws={"ha": 'left'},
                     fmt=formatting,
                     cbar=False, cmap=cmap,
                     linewidths=1, square=True, linecolor='black') 
 
-    map.set_xlabel('Predicted',)
-    map.set_ylabel('Truth')
+    htmap.set_xticklabels(labels)
+    htmap.set_yticklabels(labels)
 
-    labels=['Yes','No','Unknown',][:len(array)]
-    map.set_xticklabels(labels)
-    map.set_yticklabels(labels)
-
-    map.xaxis.set_label_position('top')
-    map.xaxis.tick_top()
-    map.tick_params(left=False, top=False)
+    htmap.xaxis.set_label_position('top')
+    htmap.xaxis.tick_top()
+    htmap.tick_params(left=False, top=False)
 
     plt.tight_layout()
     if filename:
         plt.savefig(filename, bbox_inches='tight')
-    plt.show()
+        
+    return htmap
+
 
 
 def plot_scores(df, score_names,yrange=(0.1,1.03), title=None,
