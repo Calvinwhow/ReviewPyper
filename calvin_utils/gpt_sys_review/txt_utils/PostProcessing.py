@@ -95,7 +95,33 @@ class PostProcessing:
         return master_df
 
     @staticmethod
-    def rename_master_list_columns(master_list_path, questions_dict):
+    def sort_master_list(df, questions_dict):
+        
+        new_col_order=['MRN','filepath']
+        
+        inc_qs=sorted([colname for colname in df.columns if colname.startswith('inclusion_')])
+        inc_expls=sorted([colname for colname in df.columns if colname.startswith('EXPLANATION: inclusion_')])
+
+        new_col_order+=[val for pair in zip(inc_qs, inc_expls) for val in pair]
+        
+        for question in questions_dict.values():
+
+            colnames=[question]
+            explanations=sorted([col for col in df.columns if f'_explanations: {question}' in col])
+            new_col_order+=colnames+explanations
+
+            onset=f'onset_date: {question}'
+            if onset in df.columns:
+                new_col_order.append(onset)
+        
+        stuff_that_shouldnt_be_here=[col for col in df.columns if col not in new_col_order]
+        new_col_order+=stuff_that_shouldnt_be_here
+        
+        return df[new_col_order]
+
+            
+    @staticmethod
+    def finalize_master_list(master_list_path, questions_dict):
 
         master_df = pd.read_csv(master_list_path)
         
@@ -104,6 +130,7 @@ class PostProcessing:
             new_cols=[col.replace(long_q, short_q) for col in new_cols]
             
         master_df.columns = new_cols
+        master_df=PostProcessing.sort_master_list(master_df, questions_dict)
         master_df.to_csv(master_list_path, index=False)
         
         q_key=pd.DataFrame()
@@ -116,6 +143,7 @@ class PostProcessing:
             q_key=pd.concat([old_q_key, q_key])
 
         q_key.to_csv(questions_key_path, index=False)
+
 
         return master_df
 

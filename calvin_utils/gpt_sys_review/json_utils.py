@@ -733,6 +733,9 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                 
                 for chunk_name, chunk_metadata in chunk_metadatas.items():
                     chunk_answer = self.keyword_or_fuzzy_match(question_data.get(q).get(chunk_name, ""))
+
+                    if np.isnan(chunk_answer):
+                        chunk_answer=0
                     answers.append(int(chunk_answer))
 
                     if self.answer_format in ["binary_with_explanations","binary_with_unknown_and_explanations","severity_with_explanations"]:

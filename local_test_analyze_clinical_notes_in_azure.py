@@ -3,14 +3,22 @@
 ################################################################################
 # Set the file(s) you want to analyze (usually from an RPDR request) and the output directory
 notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/00000016.txt',]
-# notes_file_list=['/Users/rm026/Documents/Code/reviewpyper_testing/00000016.txt',]
-output_dir='/Users/rm026/Documents/Code/reviewpyper_testing/tests/msa_sub_16_organization_test_3/'
+# notes_file_list=["/Users/rm026/Documents/hbs_study_patient_notes/fixed_hbs/all_files/rm026_021126133356272397_Prg.txt",
+#                  '/Users/rm026/Documents/hbs_study_patient_notes/fixed_hbs/all_files/rm026_021126133356272397_Dis.txt',
+#                  '/Users/rm026/Documents/hbs_study_patient_notes/fixed_hbs/all_files/RM026_120324154255294233_MGH_Prg.txt',
+#                  '/Users/rm026/Documents/hbs_study_patient_notes/fixed_hbs/all_files/RM026_120324154255294233_MGH_Dis.txt']
+output_dir='/Users/rm026/Documents/Code/reviewpyper_testing/tests/fix_hbs_only_mrns_w_imgs/'
 
-mrn_file="/Users/rm026/Documents/Code/reviewpyper_testing/msa_fake_mrn_file.txt"
+# mrn_file="/Users/rm026/Documents/Code/reviewpyper_testing/msa_fake_mrn_file.txt"
+mrn_file='/Users/rm026/Documents/hbs_study_patient_notes/fixed_hbs/fixed_hbs_Mrn.txt'
+
 #Optional: filter the MRNs used
-# import pandas as pd
-# select_mrns=pd.read_csv('F:/hbs_study_patient_notes/hbs_ross_aryan_gpt_n1205.csv')['MRN']
-select_mrns=None
+import pandas as pd
+df=pd.read_csv('/Users/rm026/Documents/hbs_study_patient_notes/sub_id_to_mrn_included.csv',dtype=str)
+select_mrns=pd.concat([df['MRN_alt'],df['MRN_primary']]).unique().tolist()
+select_mrns=[x for x in select_mrns if type(x)==str]
+print(len(select_mrns))
+# select_mrns=None
 
 # Provide the path to your OpenAI API key
 api_key_path = "/Users/rm026/Documents/code/openai-key.txt"
@@ -73,7 +81,7 @@ while os.path.isfile(master_list_path): #rename if master list already exists
     counter+=1
     master_list_path='/'.join(master_list_path.split('/')[:-1]+[f'master_list_{counter}.csv'])
 
-extractor=ClinicalNotesExtractor(notes_file_list, mrn_file, output_dir, filter_list=select_mrns)
+extractor=ClinicalNotesExtractor(notes_file_list, mrn_file, output_dir, filter_list=select_mrns, debug=True)
 preprocessor = TextPreprocessor(input_dir=output_dir)
 if counter==0:    
     note_df=extractor.run()

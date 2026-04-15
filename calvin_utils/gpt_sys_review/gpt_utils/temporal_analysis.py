@@ -33,8 +33,8 @@ class TemporalPlotter:
             metadata_by_chunk = content.get('metadata', self.data.get('metadata', {}))
             
             for question, chunks in content.items():
-                # Skip system keys, explanations, and now Onset Dates
-                if question in ['metadata', 'CHUNKS', 'MRN', 'filepath'] or question.startswith('EXPLANATION') or question.startswith('Onset Date:'):
+                # Skip system keys, explanations, and now onset_dates
+                if question in ['metadata', 'CHUNKS', 'MRN', 'filepath'] or question.startswith('EXPLANATION') or question.startswith('onset_date:'):
                     continue
                 
                 if not isinstance(chunks, dict):
@@ -52,7 +52,7 @@ class TemporalPlotter:
                     
                     # Extract date directly from the LLM's new inline output
                     # Fallback to chunk metadata if the LLM didn't return one or if running older files
-                    date_str = str(content.get(f'Onset Date: {question}', {}).get(chunk_id, 'Unknown')).strip()
+                    date_str = str(content.get(f'onset_date: {question}', {}).get(chunk_id, 'Unknown')).strip()
                     if date_str == 'Unknown' or date_str == '':
                         metadata = metadata_by_chunk.get(str(chunk_id), {})
                         date_str = metadata.get('date', 'Unknown')
@@ -167,7 +167,7 @@ class TemporalPlotter:
         onsets_pivot = onsets.pivot(index='MRN', columns='Question', values='OnsetDate')
         
         # Clean up column names for readability in CSV
-        onsets_pivot.columns = [f"Onset Date: {col}" for col in onsets_pivot.columns]
+        onsets_pivot.columns = [f"onset_date: {col}" for col in onsets_pivot.columns]
         return onsets_pivot
 
     def export_per_date_longitudinal_data(self, output_path):
@@ -180,7 +180,7 @@ class TemporalPlotter:
             metadata_by_chunk = content.get('metadata', self.data.get('metadata', {}))
             
             for question, chunks in content.items():
-                if question in ['metadata', 'CHUNKS', 'MRN', 'filepath'] or question.startswith('EXPLANATION') or question.startswith('Onset Date:'):
+                if question in ['metadata', 'CHUNKS', 'MRN', 'filepath'] or question.startswith('EXPLANATION') or question.startswith('onset_date:'):
                     continue
                 if not isinstance(chunks, dict): continue
                 
@@ -235,7 +235,7 @@ class TemporalPlotter:
         # print("Generating plots...")
         # self.plot_patient_trajectories(df_acc)
         
-        print("Summarizing onset dates...")
+        print("Summarizing onset_dates...")
         summary_df = self.summarize_onsets(df)
         summary_path = os.path.join(self.output_dir, "temporal_onsets_summary.csv")
         summary_df.to_csv(summary_path)
