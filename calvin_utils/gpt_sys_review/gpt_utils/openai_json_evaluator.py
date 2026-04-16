@@ -103,7 +103,7 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
             count += 1
         with open(save_file, 'w', encoding='UTF-8') as f:
             json.dump(chunk_dict, f, indent=0)
-        print(f"Saved to: {save_file}")
+        # print(f"Saved to: {save_file}")
         return save_file
 
 
@@ -171,10 +171,9 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
 
     def evaluate_all_files(self):
         """Estimated cost: {tokens_used*self.cost*len(self.questions.items())*len(chunks)}')"""
-
+        print(f'\nEvaluating question type "{self.question_type}"')
         try:
             formatted_questions, questions_w_explanations = self.format_questions(list(self.questions.keys()))
-
             total_tokens_used = 0
             total_chunks = 0
             total_retries = 0
@@ -190,7 +189,7 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
                 return file_name, chunk_index, answer, tokens_used, retries, chunk_metadata
 
             chunk_tasks = []
-            for file_name, file_text in self.relevant_text_by_file.items():
+            for file_name, file_text in tqdm(self.relevant_text_by_file.items(),f'Chunking input: '):
                 chunks, metadata = self.call_chunker(file_text)
                 if self.retain_chunks:
                     self.save_chunks(file_name, chunks, metadata)

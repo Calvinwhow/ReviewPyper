@@ -717,7 +717,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         qs=list(self.data[next(iter(self.data))].keys()) # get question list from first article (assumes all have same questions)
         qs=[q for q in qs if (q != 'metadata' and 'EXPLANATION' not in q) and (not q.startswith('CHUNKS: '))] # filter out metadata and chunk content questions
         # for article, questions in self.data.items(): # 'article' is subject id in EMR mode
-        for article, question_data in self.data.items(): # 'article' is subject id in EMR mode
+        for article, question_data in tqdm(self.data.items(),"Summarizing answers: "): # 'article' is subject id in EMR mode
         
             summary_dict[article] = {}
             self.has_failed_chunk=False
@@ -733,8 +733,8 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                 
                 for chunk_name, chunk_metadata in chunk_metadatas.items():
                     chunk_answer = self.keyword_or_fuzzy_match(question_data.get(q).get(chunk_name, ""))
-
-                    if np.isnan(chunk_answer):
+                    # print(chunk_answer, question_data.get(q).get(chunk_name, ""))
+                    if chunk_answer is None or np.isnan(chunk_answer):
                         chunk_answer=0
                     answers.append(int(chunk_answer))
 
