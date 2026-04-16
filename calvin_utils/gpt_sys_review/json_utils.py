@@ -203,11 +203,11 @@ class SectionLabeler:
         
         if filename is not None and not os.path.exists(filename):
             save_file_path = os.path.join(out_dir, f'{filename}_labeled_sections.json')
-            with open(save_file_path, 'w') as f:
+            with open(save_file_path, 'w', encoding='UTF-8') as f:
                 json.dump(output_dict, f, indent=0)
         else:
             save_file_path = os.path.join(out_dir, f'_{self.article_type}_labeled_sections.json')
-            with open(save_file_path, 'w') as f:
+            with open(save_file_path, 'w', encoding='UTF-8') as f:
                 json.dump(output_dict, f, indent=0)
                 print(f"Saved to: \n {save_file_path}")
                 
@@ -279,7 +279,7 @@ class SectionLabeler:
             print(f"Skipping {filename} as it is already processed.")
             return None
         try:
-            with open(os.path.join(self.folder_path, filename), 'r') as f:
+            with open(os.path.join(self.folder_path, filename), 'r', encoding='UTF-8') as f:
                 text = f.read()
             return text
         except Exception as e:
@@ -292,7 +292,7 @@ class SectionLabeler:
         for filename in os.listdir(self.folder_path):
             if not filename.endswith('.txt'):
                 continue
-            with open(os.path.join(self.folder_path, filename)) as file:
+            with open(os.path.join(self.folder_path, filename), encoding='UTF-8') as file:
                 processed=file.read().replace('|', ',') 
                 self.output_dict[filename.split('.')[0]]={'emr':" ".join(processed.split())}
 
@@ -380,7 +380,7 @@ class FilterPapers:
         Returns:
         - dict: Dictionary containing the labeled sections of all articles.
         """
-        with open(self.json_path, 'r') as file:
+        with open(self.json_path, 'r', encoding='UTF-8') as file:
             return json.load(file)
 
     def filter_json(self):
@@ -405,7 +405,7 @@ class FilterPapers:
         os.makedirs(out_dir, exist_ok=True)
         
         # Save the filtered dictionary to a JSON file
-        with open(os.path.join(out_dir, 'filtered_labeled_sections.json'), 'w') as f:
+        with open(os.path.join(out_dir, 'filtered_labeled_sections.json'), 'w', encoding='UTF-8') as f:
             json.dump(self.filter_json(), f, indent=4)
         return os.path.join(out_dir, 'filtered_labeled_sections.json')
 
@@ -451,7 +451,7 @@ class InclusionExclusionSummarizer:
         """
         if json_file_path is None:
             json_file_path = self.json_path
-        with open(json_file_path, 'r') as file:
+        with open(json_file_path, 'r', encoding='UTF-8') as file:
             return json.load(file)
     
     def summarize_results(self):

@@ -278,9 +278,9 @@ class ClinicalNotesExtractor:
 
     def combine_files_temp(self):
         new_input_file = os.path.join(self.output_dir, 'combined_files.txt')
-        with open(new_input_file, 'w') as outfile:
+        with open(new_input_file, 'w', encoding='UTF-8') as outfile:
             for fname in self.input_file_list:
-                with open(fname) as infile:
+                with open(fname, encoding='UTF-8') as infile:
                     for line in infile:
                         outfile.write(line)
         return new_input_file

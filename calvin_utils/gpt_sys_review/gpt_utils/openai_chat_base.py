@@ -141,7 +141,7 @@ class OpenAIChatBase(OpenAIBase):
 
         if self.debug:
             # print(f"DEBUG RESPONSE: {response}")
-            with open('debug_openai_chat.txt', 'a') as f:
+            with open('debug_openai_chat.txt', 'a', encoding='UTF-8') as f:
                 f.write(f"Conversation: {str(conversation)}\n\nResponse: {str(response.choices[-1].message.content)}\n\n\n")
 
         return response.choices[-1].message.content, response.usage.total_tokens
@@ -165,7 +165,7 @@ class OpenAIChatBase(OpenAIBase):
         if len(new_answer.split("|"))==len(questions):
             return new_answer
         else:
-            with open('error_log.txt', 'a') as f:
+            with open('error_log.txt', 'a', encoding='UTF-8') as f:
                 answer_count=len(answer.replace('\n','|').replace('||','|').split('|'))
                 f.write(f"{answer_count} {answer}\n\n")
             raise IndexError("ChatGPT response does not have the correct number of answers")

@@ -65,7 +65,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__))))
 import json
 
-inclusion_questions_json = json.load(open('inclusion_questions.json'))
+inclusion_questions_json = json.load(open('inclusion_questions.json', encoding='UTF-8'))
 inclusion_questions={q:name for set_name in inclusion_question_sets for q, name in inclusion_questions_json[set_name].items()}
     
 extraction_questions_json = json.load(open('extraction_questions.json'))
@@ -100,41 +100,36 @@ if os.path.exists(output_dir+"json/_emr_labeled_sections.json"):
 else:
     section_labeler = SectionLabeler(folder_path=preprocessed_path, 
                                     article_type="emr", 
-                                    api_key_path=api_key_path,)
+                                    api_key_path=api_key_path,
+                                    label_files=False)
     section_labeler.process_files(label_files=segment_file)
 
 
 # Ask inclusion/exclusion questions
-from calvin_utils.gpt_sys_review.gpt_utils.openai_json_evaluator import OpenAIJsonEvaluator
-evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
-                                json_file_path=json_file_path, 
-                                keys_to_consider=["emr"], 
-                                answer_format='inclusion',
-                                question_type='inclusion', 
-                                model_choice="gpt-4.1-mini", # TODO: Need to find a new cheap model for this that's not in 
-                                # include_explanations=True, # TODO: currently always includes explanations for inclusion questions, and this has to be set to True here. 
-                                question=inclusion_questions, 
-                                test_mode=test_mode,
-                                response_tokens=2000,
-                                debug=False)
-exclusion_answers = evaluator.evaluate_all_files()
-new_json_path = evaluator.save_to_json(exclusion_answers)
+# from calvin_utils.gpt_sys_review.gpt_utils.openai_json_evaluator import OpenAIJsonEvaluator
+# evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
+#                                 json_file_path=json_file_path, 
+#                                 keys_to_consider=["emr"], 
+#                                 answer_format='inclusion',
+#                                 question_type='inclusion', 
+#                                 model_choice="gpt-4.1-mini", # TODO: Need to find a new cheap model for this that's not in 
+#                                 # include_explanations=True, # TODO: currently always includes explanations for inclusion questions, and this has to be set to True here. 
+#                                 question=inclusion_questions, 
+#                                 test_mode=test_mode,
+#                                 response_tokens=2000,
+#                                 debug=False)
+# exclusion_answers = evaluator.evaluate_all_files()
+# new_json_path = evaluator.save_to_json(exclusion_answers)
 
 
-from calvin_utils.gpt_sys_review.json_utils import InclusionExclusionSummarizer
-summarizer = InclusionExclusionSummarizer(new_json_path, questions=inclusion_questions)
-result_df, exclusion_raw_path = summarizer.run()
+# from calvin_utils.gpt_sys_review.json_utils import InclusionExclusionSummarizer
+# summarizer = InclusionExclusionSummarizer(new_json_path, questions=inclusion_questions)
+# result_df, exclusion_raw_path = summarizer.run()
 
 
-from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
-PostProcessing.update_emr_master_list(master_list_path=master_list_path, 
-                                              raw_results_path=exclusion_raw_path)
-PostProcessing.rename_master_list_columns(master_list_path=master_list_path,
-                                          questions_dict=inclusion_questions
-                                          )
-
-
-csv_path = output_dir+"json_evaluated/inclusion_exclusion_results.csv"
+# from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
+# PostProcessing.update_emr_master_list(master_list_path=master_list_path, 
+#                                               raw_results_path=exclusion_raw_path)
 
 extraction_debug=False
 if extraction_debug and os.path.exists('debug_openai_chat.txt'):
@@ -197,7 +192,7 @@ if onset_summary_path:
                                                   raw_results_path=onset_summary_path)
 
 
-PostProcessing.rename_master_list_columns(master_list_path=master_list_path,
+PostProcessing.finalize_master_list(master_list_path=master_list_path,
                                           questions_dict=extraction_questions
                                           )
 

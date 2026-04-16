@@ -54,7 +54,7 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
     def read_json(self, json_file_path):
         """Reads JSON data from a file and returns it as a dictionary."""
         try:
-            with open(json_file_path, 'r') as file:
+            with open(json_file_path, 'r', encoding='UTF-8') as file:
                 return json.load(file)
         except FileNotFoundError:
             print(f"Error: File {json_file_path} not found.")
@@ -84,7 +84,7 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         while os.path.exists(save_file):
             save_file = os.path.join(out_dir, f'{self.question_type}_evaluations_{count}.json')
             count += 1
-        with open(save_file, 'w') as f:
+        with open(save_file, 'w', encoding='UTF-8') as f:
             json.dump(output_dict, f, indent=0)
         print(f"Saved to: {save_file}")
         return save_file
@@ -101,7 +101,7 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         while os.path.exists(save_file):
             save_file = os.path.join(self.chunk_dir, f'{file_name}_chunks_{count}.json')
             count += 1
-        with open(save_file, 'w') as f:
+        with open(save_file, 'w', encoding='UTF-8') as f:
             json.dump(chunk_dict, f, indent=0)
         print(f"Saved to: {save_file}")
         return save_file
@@ -150,7 +150,7 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
             myerror=f'answer_format {self.answer_format} is invalid. Allowed answer types are "inclusion", "binary_without_explanations", "binary_with_explanations", "binary_with_unknown_and_explanations", "severity_with_explanations"'
             raise ValueError(myerror)
         
-        formatted_questions = json.load(open(os.path.join(os.path.dirname(__file__), 'prompts.json')))[self.answer_format]
+        formatted_questions = json.load(open(os.path.join(os.path.dirname(__file__), 'prompts.json', encoding='UTF-8')))[self.answer_format]
         formatted_questions = formatted_questions.replace("[CHUNK_FLAG]", self.chunk_flag)
         formatted_questions += " ".join(questions_w_explanations)
         
@@ -222,11 +222,11 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
 
         except KeyboardInterrupt:
             print("KeyboardInterrupt detected. Saving preliminary results to JSON and closing.")
-            with open('debug_answer.json', 'w') as f:
+            with open('debug_answer.json', 'w', encoding='UTF-8') as f:
                 json.dump(answers, f, indent=0)
             sys.exit(0)
         except Exception as e:
-            with open('debug_answer.json', 'w') as f:
+            with open('debug_answer.json', 'w', encoding='UTF-8') as f:
                 json.dump(answers, f, indent=0)
             raise RuntimeError(f"Critical error occured: \n\t{e}. Saving preliminary results and aborting.")
         

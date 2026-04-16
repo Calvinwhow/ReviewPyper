@@ -15,7 +15,7 @@ class TemporalPlotter:
         self.json_path = json_path
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
-        with open(json_path, 'r') as f:
+        with open(json_path, 'r', encoding='UTF-8') as f:
             self.data = json.load(f)
 
     def extract_temporal_data(self, acceptable_strings=["1", "yes", "true", "present", "y"]):

@@ -73,7 +73,7 @@ accuracy_image = output_dir+"iteration_accuracy.png"
 import os
 import json
 
-inclusion_questions_json = json.load(open('inclusion_questions.json'))
+inclusion_questions_json = json.load(open('inclusion_questions.json', encoding='UTF-8'))
 inclusion_questions={q:name for set_name in inclusion_question_sets for q, name in inclusion_questions_json[set_name].items()}
     
 extraction_questions_json = json.load(open('extraction_questions.json', encoding='UTF-8'))
@@ -142,9 +142,7 @@ result_df, exclusion_raw_path = summarizer.run()
 from calvin_utils.gpt_sys_review.txt_utils import PostProcessing
 PostProcessing.update_emr_master_list(master_list_path=master_list_path, 
                                               raw_results_path=exclusion_raw_path,)
-PostProcessing.rename_master_list_columns(master_list_path=master_list_path,
-                                          questions_dict=inclusion_questions
-                                          )
+
 
 
 csv_path = output_dir+"json_evaluated/inclusion_exclusion_results.csv"
@@ -215,7 +213,7 @@ if onset_summary_path:
     PostProcessing.update_emr_master_list(master_list_path=master_list_path, 
                                                   raw_results_path=onset_summary_path,)
 
-PostProcessing.rename_master_list_columns(master_list_path=master_list_path,
+PostProcessing.finalize_master_list(master_list_path=master_list_path,
                                           questions_dict=extraction_questions
                                           )
 
