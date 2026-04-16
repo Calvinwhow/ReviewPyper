@@ -35,7 +35,7 @@
 "billing code":{
 },
 "bars":{
-    "Does this patient have difficulty walking or disturbed gait? For instance, they may mention the patient staggering, difficulties in half turn, requiring support from a wall or stick, or being entirely unable to walk on their own.":"gait",
+    "Does this patient have difficulty walking or disturbed gait? For instance, they may mention the patient staggering, difficulties in half turn, requiring support from a wall or stick, or being entirely unable to walk on their own. If the text does not mention walking or gait, respond \"not present\"":"gait",
     "Does this patient have difficulty performing the heel-shin maneuver such as lowering their heel jerkily, or with lateral movements?":"heel–shin",
     "Does this patient's speech show dysarthria, or slurring to the point that some words are not intelligible? For instance, the text may mention having to ask the patient to repeat themselves multiple times. Do not consider hypophonia.":"speech",
     "Does this patient have oculomotor abnormalities? For example, the text may mention slowed pursuit, saccadic intrusions, hypo/hypermetric saccade, or nystagmus.":"oculomotor",
