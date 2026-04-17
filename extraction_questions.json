@@ -49,14 +49,14 @@
     "For this patient, rate the severity of finger–nose test abnormalities (dysmetria, oscillating/segmented movement; ignore slowness) on a 0–3 scale. 0=none/absent, 1=mild, 2=moderate, 3=severe. Return only a single integer 0–3; if not mentioned, return 0.": "finger-nose"
     },
 "moca":{
-    "Does this patient have difficulty performing visuospatial or executive tasks such as a path task, copying a line drawing of a bed, or drawing a clock?":"binary",
-    "Does this patient struggle with naming tasks such as naming animals based on pictures?":"binary",
-    "Does this patient have difficulty with memory, such as being unable to remember a list of words read to them?":"binary",
-    "Does this patient have difficulty paying attention? For instance, they may be unable to repeat a list of numbers or letters read to them, either forwards or backwards, or may struggle with a serial subtraction task.":"binary",
-    "Does this patient have difficulty with language skills? For instance, they may have difficulty repeating a sentence told to them. Only consider cognitive problems, and ignore dysarthria, slurring, and any other motor issues":"binary",
-    "Does this patient have difficulty with abstraction? For instance, they may struggle to identify similarities between a hammer and screwdriver, or matches and lamps.":"binary",
-    "Does this patient have difficulty with delayed recall? For instance, if given a list of words, they may have difficulty repeating them back five minutes later.":"binary",
-    "Does this patient have difficulty orienting themselves? For instance, they may not know the date, month, year, day, city, or place they are in.":"binary"
+    "Does this patient have difficulty performing visuospatial or executive tasks such as a path task, copying a line drawing of a bed, or drawing a clock?":"visuospatial",
+    "Does this patient struggle with naming tasks such as naming animals based on pictures?":"naming",
+    "Does this patient have difficulty with memory, such as being unable to remember a list of words read to them?":"memory",
+    "Does this patient have difficulty paying attention? For instance, they may be unable to repeat a list of numbers or letters read to them, either forwards or backwards, or may struggle with a serial subtraction task.":"attention",
+    "Does this patient have difficulty with language skills? For instance, they may have difficulty repeating a sentence told to them. Only consider cognitive problems, and ignore dysarthria, slurring, and any other motor issues":"language",
+    "Does this patient have difficulty with abstraction? For instance, they may struggle to identify similarities between a hammer and screwdriver, or matches and lamps.":"abstraction_similarities",
+    "Does this patient have difficulty with delayed recall? For instance, if given a list of words, they may have difficulty repeating them back five minutes later.":"delayed_recall",
+    "Does this patient have difficulty orienting themselves? For instance, they may not know the date, month, year, day, city, or place they are in.":"orientation"
     },
 "ccas":{
     "Does this patient have difficulty with semantic fluency? For instance, they may not be able to name more than 15 animals in one minute.":"semantic fluency",

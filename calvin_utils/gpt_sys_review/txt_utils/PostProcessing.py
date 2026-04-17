@@ -126,11 +126,19 @@ class PostProcessing:
         master_df = pd.read_csv(master_list_path)
         
         new_cols=master_df.columns.values.tolist()
+        short_qs_counts={}
+        new_questions_dict=questions_dict
         for long_q, short_q in questions_dict.items():
+            if short_q in short_qs_counts.keys(): #handles repeat names
+                short_qs_counts[short_q]+=1
+                short_q=f"{short_q}_{short_qs_counts[short_q]}"
+                new_questions_dict[long_q]=short_q
+            else:
+                short_qs_counts[short_q]=1
             new_cols=[col.replace(long_q, short_q) for col in new_cols]
-            
+
         master_df.columns = new_cols
-        master_df=PostProcessing.sort_master_list(master_df, questions_dict)
+        master_df=PostProcessing.sort_master_list(master_df, new_questions_dict)
         master_df.to_csv(master_list_path, index=False)
         
         q_key=pd.DataFrame()
