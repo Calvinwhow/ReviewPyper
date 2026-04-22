@@ -687,7 +687,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         df = pd.DataFrame.from_dict(summary_dict, orient='index').fillna(np.nan)
         return df
 
-    def compile_answers(self, answers, article_name, question_name):
+    def compile_answers(self, answers, article_name, question_name, has_failed_chunk=False):
                     
         valid_answers = [x for x in answers if (x is not None and not (isinstance(x, float) and np.isnan(x)))]
         if len(valid_answers) == 0:
@@ -695,8 +695,8 @@ class CustomSummarizer(InclusionExclusionSummarizer):
             return 0
 
         elif (np.nan in answers):
-            if not self.has_failed_chunk:
-                self.has_failed_chunk=True # only complains about failed chunks once for any subject
+            if not has_failed_chunk:
+                has_failed_chunk=True # only complains about failed chunks once for any subject
                 print(f"Warning: Failed to interpret a chunk from '{article_name}'. The answers for that subject may be partially incorrect.")
             return np.nanmax(answers)
 
@@ -716,11 +716,11 @@ class CustomSummarizer(InclusionExclusionSummarizer):
 
         qs=list(self.data[next(iter(self.data))].keys()) # get question list from first article (assumes all have same questions)
         qs=[q for q in qs if (q != 'metadata' and 'EXPLANATION' not in q) and (not q.startswith('CHUNKS: '))] # filter out metadata and chunk content questions
-        # for article, questions in self.data.items(): # 'article' is subject id in EMR mode
+
         for article, question_data in tqdm(self.data.items(),"Summarizing answers: "): # 'article' is subject id in EMR mode
         
             summary_dict[article] = {}
-            self.has_failed_chunk=False
+            has_failed_chunk=False
             chunk_metadatas=question_data['metadata']
 
             if self.chunks_dir is not None:
@@ -728,12 +728,12 @@ class CustomSummarizer(InclusionExclusionSummarizer):
 
             for q in qs:
                 answers=[]
-                explanations={}
+                explanations={} # these two are now dicts, so that yes and no answers can be in separate cols
                 saved_chunks={}
                 
                 for chunk_name, chunk_metadata in chunk_metadatas.items():
                     chunk_answer = self.keyword_or_fuzzy_match(question_data.get(q).get(chunk_name, ""))
-                    # print(chunk_answer, question_data.get(q).get(chunk_name, ""))
+                    # default to 0 if response is none or Nan
                     if chunk_answer is None or np.isnan(chunk_answer):
                         chunk_answer=0
                     answers.append(int(chunk_answer))
@@ -754,17 +754,18 @@ class CustomSummarizer(InclusionExclusionSummarizer):
 
                         saved_chunks[int(chunk_answer)].append(f"{chunk_metadata['date_range']}: {this_chunk}")
 
-                summary_dict[article][q] = self.compile_answers(answers, article, q)
+                summary_dict[article][q] = self.compile_answers(answers, article, q, has_failed_chunk)
 
                 for ans, expls in explanations.items():
                     if positive_explanations_only and ans == 0:
                         continue
-                    summary_dict[article][f"{ans}_explanations: {q}"] = '   |   '.join(list(expls))
+                    # indents every new explanation, including the first, for readability.
+                    summary_dict[article][f"{ans}_explanations: {q}"] = "    "+'|\n    '.join(list(expls))
     
                 for ans, q_chunks in saved_chunks.items():
                     if positive_explanations_only and ans == 0:
                         continue
-                    summary_dict[article][f"{ans}_chunks: {q}"] = ' | '.join(list(q_chunks))
+                    summary_dict[article][f"{ans}_chunks: {q}"] = "    "+'|\n    '.join(list(q_chunks))
 
         df = pd.DataFrame.from_dict(summary_dict, orient='index').fillna(np.nan)
 
