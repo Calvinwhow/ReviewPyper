@@ -58,7 +58,7 @@ class PerNoteExtracting(ClinicalNotesExtractor):
         all_headers=[] # used to stop duplicate notes from being added to a subject's file 
         file_list={}
 
-        for row in tqdm(reader,"Extracting notes"):
+        for row in tqdm(reader,"Extracting notes",unit='lines'):
             
             note+=row
 

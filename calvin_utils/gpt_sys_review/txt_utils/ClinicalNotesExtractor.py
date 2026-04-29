@@ -77,7 +77,7 @@ class ClinicalNotesExtractor:
         primaries=[]
         mrn_mappings={}
 
-        for i, row in tqdm(df.iterrows(), desc='Prepping MRN mapping'):
+        for i, row in tqdm(df.iterrows(), desc='Prepping MRN mapping',total=len(df)):
             # print(row)
             primary=row['IncomingId']
             
@@ -150,7 +150,7 @@ class ClinicalNotesExtractor:
         skipped_mrns=[]
         all_headers=[] # used to stop duplicate notes from being added to a subject's file 
         
-        for row in tqdm(reader,"Extracting notes"):
+        for row in tqdm(reader,"Extracting notes",unit='lines'):
             note += row
 
             if self.separator in row:
@@ -161,7 +161,7 @@ class ClinicalNotesExtractor:
                     continue 
                 elif header in all_headers:
                     if self.debug:
-                        print(f"Warning: Duplicate note with header '{header.strip()}' found in {file}. Skipping this note to avoid duplicates in the output.")
+                        print(f"\nWarning: Duplicate note with header '{header.strip()}' found in {file}. Skipping this note to avoid duplicates in the output.")
                     continue
                 else:
                     all_headers.append(header)
@@ -176,7 +176,7 @@ class ClinicalNotesExtractor:
 
                 elif mrn is False and note_mrn not in skipped_mrns:
                     skipped_mrns.append(note_mrn)
-                    print(f"Warning: MRN {note_mrn} from {file} not found in {self.mrn_file}. Skipping note")
+                    print(f"\nWarning: MRN {note_mrn} from {file} not found in {self.mrn_file}. Skipping note")
                 elif mrn is False:
                     continue #only print the warning the first time we encounter a given unmapped MRN, but skip all notes with that MRN
 

@@ -316,7 +316,7 @@ class SectionLabeler:
             self.select_labels()
             file_list = os.listdir(self.folder_path)
             file_list = [f for f in file_list if f.endswith('.txt')]
-            for filename in tqdm(file_list, desc='Segmenting text files'):
+            for filename in tqdm(file_list, desc='Segmenting text files',total=len(file_list)):
                 text = self._open_txt_file(filename)
                 if not text: continue
                 labeled_sections = {}
@@ -717,7 +717,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         qs=list(self.data[next(iter(self.data))].keys()) # get question list from first article (assumes all have same questions)
         qs=[q for q in qs if (q != 'metadata' and 'EXPLANATION' not in q) and (not q.startswith('CHUNKS: '))] # filter out metadata and chunk content questions
 
-        for article, question_data in tqdm(self.data.items(),"Summarizing answers: "): # 'article' is subject id in EMR mode
+        for article, question_data in tqdm(self.data.items(),"Summarizing answers: ",total=len(self.data)): # 'article' is subject id in EMR mode
         
             summary_dict[article] = {}
             has_failed_chunk=False
