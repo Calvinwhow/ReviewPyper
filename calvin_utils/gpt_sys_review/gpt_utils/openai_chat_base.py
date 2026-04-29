@@ -83,11 +83,11 @@ class OpenAIChatBase(OpenAIBase):
     
     ### Chunking methods ###
 
-    def call_chunker(self, selected_text):
+    def call_chunker(self, selected_text, chunk_by_date=False):
         """
         Uses TextChunker defined in text_utils.py to extract text in chunks
         """
-        self.text_chunker = TextChunker(selected_text, self.token_limit)
+        self.text_chunker = TextChunker(selected_text, self.token_limit, chunk_by_date)    
         self.text_chunker.chunk_text()
         chunks = self.text_chunker.get_chunks()
         metadata = self.text_chunker.get_chunk_metadata()

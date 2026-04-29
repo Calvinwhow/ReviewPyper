@@ -4,7 +4,7 @@ class TextChunker:
     A class to chunk a given text into smaller segments based on a token limit.
     """
     
-    def __init__(self, text, token_limit, debug=False):
+    def __init__(self, text, token_limit, chunk_by_date=False,debug=False):
         """
         Initializes the TextChunker class with the text and token limit.
         
@@ -17,13 +17,65 @@ class TextChunker:
         self.token_limit = token_limit
         self.chunks = []
         self.chunk_metadata = []
+        self.chunk_by_date=chunk_by_date
         self.debug = debug
         self.chunk_tokens_dict = {}
 
         if self.debug:
             print(f"Initialized with token limit: {self.token_limit}")
     
+    @staticmethod
+    def count_tokens_in_word(text):
+        """Counts the # of tokens in a word"""
+        #TODO: This is a placeholder. currently we're just counting 1 word=1 token, 
+        # but once we implement a real tokenizer we can use this to ensure consistency
+        return 1
+    
     def chunk_text(self):
+        if self.chunk_by_date:
+            self.chunk_text_by_date()
+        else:
+            self.chunk_text_by_tokenlimit()
+
+
+    def chunk_text_by_date(self):
+        self.text=self.text.replace("EMPI,EPIC_PMRN,MRN_Type,MRN,Report_Number,Report_Date_Time,Report_Description,Report_Status,Report_Type,Report_Text",'')
+        # chunks=selected_text.split('[report_end]')
+        # chunks=[chunk for chunk in chunks if chunk!='']
+        # dates=[ for chunk in chunks]
+        
+        self.chunks=[]
+        self.chunk_metadata = []
+        prev_length=0
+        for note in self.text.split('[report_end]'):
+
+            if note=='':
+                continue
+            # Date: split the 1st 100 characters by the header separator ','
+            # (100 is arbitrarily chosen so that less splitting has to be done)
+            # then date and time are the 5th element, with a space separating 
+            # date and time.  
+            date=note[:100].split(',')[5].split(' ')[0] 
+            length=sum([self.count_tokens_in_word(word) for word in note.split()])
+
+            if self.chunks!=[] and (date==self.chunk_metadata[-1]['date'] and (length+prev_length)<self.token_limit):
+                # If the current and previous notes are from the same day, combine them,
+                # unless the combined chunk would exceed self.token_limit.
+                self.chunks[-1] += note
+
+            else:
+                self.chunks.append(note)
+
+                self.chunk_metadata.append({
+                    'date': date,
+                    'all_dates': [date],
+                    'date_range': date
+                    })
+
+            prev_length=length
+
+
+    def chunk_text_by_tokenlimit(self):
         """
         Splits the text into smaller segments based on the token limit.
         Uses clinical date extraction to power temporal tracking.
@@ -60,7 +112,7 @@ class TextChunker:
                             dates_in_chunk.append(current_date)
 
             
-            tokens_in_word = 1
+            tokens_in_word = self.count_tokens_in_word(word)
             
             if current_chunk_tokens + tokens_in_word <= self.token_limit:
                 current_chunk.append(word)

@@ -68,9 +68,11 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         self.relevant_text_by_file = {}
         for file_name, sections in self.json_data.items():
             selected_text = ""
+
             for key, value in sections.items():
                 if key in self.keys_to_consider:
                     selected_text += value
+            
             self.relevant_text_by_file[file_name] = selected_text
             
     def save_to_json(self, output_dict):
@@ -150,7 +152,7 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
             myerror=f'answer_format {self.answer_format} is invalid. Allowed answer types are "inclusion", "binary_without_explanations", "binary_with_explanations", "binary_with_unknown_and_explanations", "severity_with_explanations"'
             raise ValueError(myerror)
         
-        formatted_questions = json.load(open(os.path.join(os.path.dirname(__file__), 'prompts.json', encoding='UTF-8')))[self.answer_format]
+        formatted_questions = json.load(open(os.path.join(os.path.dirname(__file__), 'prompts.json'), encoding='UTF-8'))[self.answer_format]
         formatted_questions = formatted_questions.replace("[CHUNK_FLAG]", self.chunk_flag)
         formatted_questions += " ".join(questions_w_explanations)
         
@@ -169,7 +171,7 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         return reorganized_answers
 
 
-    def evaluate_all_files(self):
+    def evaluate_all_files(self, chunk_by_date=False):
         """Estimated cost: {tokens_used*self.cost*len(self.questions.items())*len(chunks)}')"""
         print(f'\nEvaluating question type "{self.question_type}"')
         try:
@@ -190,14 +192,20 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
 
             chunk_tasks = []
             for file_name, file_text in tqdm(self.relevant_text_by_file.items(),f'Chunking input: '):
-                chunks, metadata = self.call_chunker(file_text)
+
+                chunks, metadata = self.call_chunker(file_text, chunk_by_date=chunk_by_date)
                 if self.retain_chunks:
                     self.save_chunks(file_name, chunks, metadata)
+                
                 answers[file_name] = {}
                 for chunk_index, chunk in enumerate(chunks):
                     chunk_tasks.append((file_name, chunk_index, chunk, metadata[chunk_index]))
                     total_chunks += 1
 
+            if self.api_key is None:
+                print("No API key given, terminating")
+                return False
+            
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 futures = {executor.submit(process_chunk, task): task for task in chunk_tasks}
                 for future in tqdm(concurrent.futures.as_completed(futures), total=len(chunk_tasks), desc="Processing chunks"):

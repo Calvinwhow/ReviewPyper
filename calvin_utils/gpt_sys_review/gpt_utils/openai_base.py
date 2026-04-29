@@ -32,6 +32,8 @@ class OpenAIBase:
                 api_version=api_version,
                 azure_endpoint=api_base
             )
+        elif self.api_key is None:
+            self.client=None
         else:
             self.client = OpenAI(
                 api_key=self.api_key,
@@ -48,6 +50,8 @@ class OpenAIBase:
         Returns:
         - str: OpenAI API key.
         """
+        if file_path is None:
+            return None
         with open(file_path, 'r') as file:
             return file.readline().strip()
 
