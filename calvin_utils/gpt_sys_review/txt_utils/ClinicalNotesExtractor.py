@@ -33,8 +33,8 @@ class ClinicalNotesExtractor:
         else:
             self.selected_mrns=None
         self._prep_out_dir()
-
-        self.mrn_mappings = self._prep_mrn_mapping(self.mrn_file)
+        if mrn_file is not None:
+            self.mrn_mappings = self._prep_mrn_mapping(self.mrn_file)
 
         if self.selected_mrns:
             invalid_selections=[[mrn,self._map_mrn(mrn)] for mrn in self.selected_mrns if int(mrn)!=int(self._map_mrn(mrn))]
@@ -63,31 +63,13 @@ class ClinicalNotesExtractor:
         for row in open(file, "r", encoding='utf-8'):
             yield row
 
-    # def _prep_mrn_mapping(self, mapping_file):
-
-    #     mrn_mappings={}
-        
-    #     with open(mapping_file, 'r', encoding='utf-8') as f:
-
-    #         for line in f:
-                
-    #             if line.startswith('IncomingId') or line.strip() == '':
-    #                 # print("Skipping header or empty line in MRN file.")
-    #                 continue
-                
-    #             parts = line.split('|') # This '|' is NOT related to self.separator; it is used in the MRN files from RPDR.
-    #             primary_mrn = parts[0]
-
-    #             # Note: I want the keys to be int (no leading zero issues) 
-    #             # and the values to be str (keep leading zeroes, for recordkeeping).
-    #             # May be tricky. self._map_mrn converts to int for this reason. 
-    #             if int(primary_mrn) in mrn_mappings.keys():
-    #                 print(f"Warning: Primary MRN {primary_mrn} appears multiple times in {mapping_file}.")
-    #                 primary_mrn=mrn_mappings[int(primary_mrn)] # if there are duplicates, use the first one we see in the file (which is likely the correct one, but we print a warning just in case) 
-                
-    #             mrn_mappings.update({int(mrn): primary_mrn for mrn in parts[4:-1] if mrn.strip() != ''})
-
-    #     return mrn_mappings
+    def _get_header_info(self, ):
+       
+        split_description=self.header_description.split(self.separator)
+        self.mrn_index=split_description.index(self.MRN_str)
+        self.date_index=split_description.index('Report_Date_Time')
+        self.report_id_index=split_description.index('Report_Number')
+   
 
     def _prep_mrn_mapping(self, mapping_file):
         df=pd.read_csv(mapping_file, sep='|', dtype=str)
@@ -155,13 +137,11 @@ class ClinicalNotesExtractor:
         
         # Identify the MRN column index from the header row
         for row in reader:
-            file_header = row
-            try:
-                mrn_index = file_header.split(self.separator).index(self.MRN_str)
-            except ValueError:
-                continue 
+            self.header_description = row
             break
-        
+        self._get_header_info()
+
+
         # Dictionary to store reports per MRN: {mrn: [(date, full_note_text), ...]}
         subject_reports = defaultdict(list)
         
@@ -187,7 +167,7 @@ class ClinicalNotesExtractor:
                     all_headers.append(header)
                 
                 parts = header.split(self.separator)
-                note_mrn=parts[mrn_index]
+                note_mrn=parts[self.mrn_index]
 
                 mrn = self._map_mrn(note_mrn)
 
@@ -200,13 +180,13 @@ class ClinicalNotesExtractor:
                 elif mrn is False:
                     continue #only print the warning the first time we encounter a given unmapped MRN, but skip all notes with that MRN
 
-                elif len(parts) > mrn_index:
+                elif len(parts) > self.mrn_index:
                     
                     # Extract date for sorting
                     # Look for Encounter Date, Visit Date, or the |date time| pattern in RPDR headers
                     date_str = "01/01/1900"
                     # Pattern 1: Labels in the note body
-                    date_match = re.search(r'(?:Encounter Date:|Visit Date:|Dated:|Signed:)\s*(\d{1,2}/\d{1,2}/\d{4})', note, re.IGNORECASE)
+                    # date_match = re.search(r'(?:Encounter Date:|Visit Date:|Signed:)\s*(\d{1,2}/\d{1,2}/\d{4})', note, re.IGNORECASE)
                     
                     # Pattern 2: RPDR pipe-separated header date (e.g., |11/11/2016 3:30:00 PM|)
                     if not date_match:
@@ -247,12 +227,12 @@ class ClinicalNotesExtractor:
                         master_file.write("\n\n")
 
     
-    def generate_master_list(self):
+    def generate_master_list(self, file_ending='.txt'):
         """Generates a master list of all subjects and their notes."""
         
         master_list = []
         for filename in os.listdir(self.raw_files_dir):
-            if filename.endswith('.txt'):
+            if filename.endswith(file_ending):
                 mrn = filename.split('.')[0]
                 filepath = os.path.join(self.raw_files_dir, filename)
                 master_list.append({'MRN': mrn, 'filepath': filepath})
@@ -273,6 +253,10 @@ class ClinicalNotesExtractor:
         """Saves the master list to a CSV file."""
 
         master_list_path = os.path.join(self.output_dir, 'master_list.csv')
+        counter=0
+        while os.path.isfile(master_list_path): #rename if master list already exists
+            counter+=1
+            master_list_path=master_list_path.replace('.csv',f"_{counter}.csv")
         self.master_list.to_csv(master_list_path, index=False)
         print(f"Master list saved to {master_list_path}")
 
