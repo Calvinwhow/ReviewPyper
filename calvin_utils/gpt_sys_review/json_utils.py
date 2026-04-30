@@ -289,7 +289,8 @@ class SectionLabeler:
     def skip_labeling(self):
         print("Skipping section labeling step.")
         self.output_dict={}
-        for filename in os.listdir(self.folder_path):
+        filelist=os.listdir(self.folder_path)
+        for filename in tqdm(filelist, desc='creating imitation labeling results', total=len(filelist)):
             if not filename.endswith('.txt'):
                 continue
             with open(os.path.join(self.folder_path, filename), encoding='UTF-8') as file:
@@ -665,9 +666,15 @@ class CustomSummarizer(InclusionExclusionSummarizer):
 
         Returns numeric level (binary or severity), np.nan, or None.
         """
-        exact_result = self.exact_match(answer)
-        return exact_result if exact_result is not None else self.fuzzy_match(answer)
-    
+        result = self.exact_match(answer)
+
+        if result is None:
+            result = self.fuzzy_match(answer)
+
+        if result is None or np.isnan(result):
+            result = 0
+
+        return int(result)
 
     def passthrough_without_mapping(self):
         # Raw text passthrough (research-style)
@@ -703,8 +710,23 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         else:
             return np.max(answers)
         
+    def compile_text_data(self, data, data_name, positive_explanations_only=False):
+        """Sorts, formats, and compiles explanations or chunks into a single string for each question."""
+        output_dict={}
+        for ans, text in data.items():
+            if positive_explanations_only and ans == 0:
+                continue
+            elif text==[]:
+                continue
+            # sort by date. Works for both ranges and single dates,
+            # but requires that the date is formatted as YYYY-MM-DD.
+            text.sort(key = lambda x: x.split(':')[0].split()[0])
+            # indents every new explanation for readability.
+            output_dict[f"{ans}_{data_name}"] = "    "+'|\n    '.join(list(text))
+        return output_dict
+        
 
-    def summarize_results_with_mapping(self, positive_explanations_only=False):
+    def summarize_results_with_mapping(self, positive_explanations_only=False, reformat_dates=False):
         """
         Summarizes the results based on keyword mapping/fuzzy matching.
 
@@ -728,44 +750,29 @@ class CustomSummarizer(InclusionExclusionSummarizer):
 
             for q in qs:
                 answers=[]
-                explanations={} # these two are now dicts, so that yes and no answers can be in separate cols
-                saved_chunks={}
+                explanations={n:[] for n in self.keyword_mapping.keys()} # these two are now dicts, so that yes and no answers can be in separate cols
+                saved_chunks={n:[] for n in self.keyword_mapping.keys()}
                 
                 for chunk_name, chunk_metadata in chunk_metadatas.items():
                     chunk_answer = self.keyword_or_fuzzy_match(question_data.get(q).get(chunk_name, ""))
-                    # default to 0 if response is none or Nan
-                    if chunk_answer is None or np.isnan(chunk_answer):
-                        chunk_answer=0
-                    answers.append(int(chunk_answer))
+
+                    answers.append(chunk_answer)
+                    
+                    if reformat_dates:
+                        chunk_metadata['date'] = TextChunker.reformat_date(chunk_metadata['date'])
+                        chunk_metadata['all_dates'] = sorted([TextChunker.reformat_date(d) for d in chunk_metadata['all_dates']])
+                        chunk_metadata['date_range']= f"{chunk_metadata['all_dates'][0]} to {chunk_metadata['all_dates'][-1]}"
 
                     if self.answer_format in ["binary_with_explanations","binary_with_unknown_and_explanations","severity_with_explanations"]:
                         expl = question_data.get(f'EXPLANATION: {q}').get(chunk_name, "")
-                        
-                        if int(chunk_answer) not in explanations.keys():
-                            explanations[int(chunk_answer)] = []
-
-                        explanations[int(chunk_answer)].append(f"{chunk_metadata['date_range']}: {expl}")
+                        explanations[chunk_answer].append(f"{chunk_metadata['date_range']}: {expl}")
 
                     if self.chunks_dir is not None:
-                        this_chunk = chunks_dict.get(chunk_name).get('text')
-
-                        if int(chunk_answer) not in saved_chunks.keys():
-                            saved_chunks[int(chunk_answer)] = []
-
-                        saved_chunks[int(chunk_answer)].append(f"{chunk_metadata['date_range']}: {this_chunk}")
+                        saved_chunks[chunk_answer].append(f"{chunk_metadata['date_range']}: {chunks_dict[chunk_name]['text']}")
 
                 summary_dict[article][q] = self.compile_answers(answers, article, q, has_failed_chunk)
-
-                for ans, expls in explanations.items():
-                    if positive_explanations_only and ans == 0:
-                        continue
-                    # indents every new explanation, including the first, for readability.
-                    summary_dict[article][f"{ans}_explanations: {q}"] = "    "+'|\n    '.join(list(expls))
-    
-                for ans, q_chunks in saved_chunks.items():
-                    if positive_explanations_only and ans == 0:
-                        continue
-                    summary_dict[article][f"{ans}_chunks: {q}"] = "    "+'|\n    '.join(list(q_chunks))
+                summary_dict[article].update(self.compile_text_data(explanations, f'explanations: {q}', positive_explanations_only))
+                summary_dict[article].update(self.compile_text_data(saved_chunks, f'chunks: {q}', positive_explanations_only))
 
         df = pd.DataFrame.from_dict(summary_dict, orient='index').fillna(np.nan)
 
