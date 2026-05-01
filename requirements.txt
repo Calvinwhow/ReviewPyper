@@ -8,3 +8,4 @@ tqdm
 textract-py3
 pytesseract
 matplotlib
+plotly

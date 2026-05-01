@@ -1,7 +1,6 @@
 import json
 import os
 import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime
 
@@ -95,6 +94,8 @@ class TemporalPlotter:
         Plots the trajectories for a specific patient or all patients.
         Generates a separate plot for EACH question for EACH participant.
         """
+        import matplotlib.pyplot as plt
+
         if mrn:
             df = df[df['MRN'] == mrn]
         if questions:
@@ -170,10 +171,11 @@ class TemporalPlotter:
         onsets_pivot.columns = [f"onset_date: {col}" for col in onsets_pivot.columns]
         return onsets_pivot
 
-    def export_per_date_longitudinal_data(self, output_path):
+    def export_per_date_longitudinal_data(self, output_path, symptom_keys=None):
         """
         Explodes the answer for each chunk across all valid dates found within that chunk.
         """
+        symptom_keys = set(symptom_keys) if symptom_keys is not None else None
         records = []
         for mrn, content in self.data.items():
             if not isinstance(content, dict): continue
@@ -181,6 +183,8 @@ class TemporalPlotter:
             
             for question, chunks in content.items():
                 if question in ['metadata', 'CHUNKS', 'MRN', 'filepath'] or question.startswith('EXPLANATION') or question.startswith('onset_date:'):
+                    continue
+                if symptom_keys is not None and question not in symptom_keys:
                     continue
                 if not isinstance(chunks, dict): continue
                 
