@@ -730,7 +730,7 @@ class SymptomProgressionPlotter:
         Build safe output filepath.
         """
         filename = self.make_safe_filename_component(symptom_key)
-        return self.output_dir / prefix + "_" + filename + ext
+        return self.output_dir / f"{prefix}_{filename}{ext}"
 
     @staticmethod
     def make_safe_filename_component(value):
@@ -861,9 +861,6 @@ class SymptomProgressionPlotter:
         if self.series_df is None or self.series_df.empty:
             raise ValueError("No processed symptom data available. Run prepare_data() first.")
 
-        # Ensure output directory exists
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-
         # Build export dataframe: patient ID and condition for each symptom
         records = []
         for symptom_key in self.symptom_keys:
@@ -976,7 +973,7 @@ if __name__ == "__main__":
     output_dir="/Users/cu135/hires_backdrops/t"    
     onset_col="stroke_date"        # From the CSV, determines 'onset' to lock each patient's trace to
     drop_unknown=True              # This removes 'unknown' from showing up on the plot
-    transition_threshold_months=3  # This deteremines within how many months from onset we consider the onset causing the symptom change
+    transition_threshold_months=1  # This deteremines within how many months from onset we consider the onset causing the symptom change
 
     plotter = SymptomProgressionPlotter(
         json_path=json_path,
