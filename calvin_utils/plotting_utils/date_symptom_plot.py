@@ -453,7 +453,7 @@ class SymptomProgressionPlotter:
             raise ValueError("No plotted symptom trajectories were available.")
 
         self.format_figure(fig, self.series_df)
-        output_path = self.get_output_filepath()
+        output_path = self.get_output_filepath("DateSymptomPlot", symptom_key, ".svg")
         fig.write_html(output_path, include_plotlyjs="cdn")
         return fig, output_path
     
@@ -725,13 +725,12 @@ class SymptomProgressionPlotter:
             "ticktext": ["-1: No Data", "0: No", "1: Yes"],
         }
 
-    def get_output_filepath(self):
+    def get_output_filepath(self, prefix, symptom_key, ext):
         """
         Build safe output filepath.
         """
-        filename = "symptom_progression.html"
-
-        return self.output_dir / filename
+        filename = self.make_safe_filename_component(symptom_key)
+        return self.output_dir / prefix + "_" + filename + ext
 
     @staticmethod
     def make_safe_filename_component(value):
@@ -839,8 +838,7 @@ class SymptomProgressionPlotter:
         incidence_df = pd.DataFrame(records)
         
         # Export to CSV
-        output_path = self.output_dir / "transition_incidence.csv"
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path = self.get_output_filepath("TransitionIncidence", symptom_key, ".csv")
         incidence_df.to_csv(output_path, index=False)
         print(f"Transition incidence summary exported to {output_path}")
         
@@ -862,11 +860,6 @@ class SymptomProgressionPlotter:
         """
         if self.series_df is None or self.series_df.empty:
             raise ValueError("No processed symptom data available. Run prepare_data() first.")
-
-        if output_path is None:
-            output_path = self.output_dir / "patient_conditions.csv"
-        else:
-            output_path = Path(output_path)
 
         # Ensure output directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -896,7 +889,7 @@ class SymptomProgressionPlotter:
 
         if export_df.empty:
             raise ValueError("No patient-symptom records to export.")
-
+        output_path = self.get_output_filepath("patient_conditions", symptom_key, '.csv')
         export_df.to_csv(output_path, index=False)
         print(f"Patient conditions exported to {output_path}")
         return export_df
