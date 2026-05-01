@@ -52,7 +52,7 @@ segment_file=False
 # These are more open-ended than inclusion/exclusion questions, and don't have to be yes/no.
 # See notebook 05, section 02 for examples.
 # extraction_question_sets = ['bars','ccas','cnrs']
-extraction_question_sets = ['hemiparesis','nih_stroke','depression','moca']
+extraction_question_sets = ['hemiparesis','nih_stroke','depression','memory','moca','hbs_seizure']
 
 # Types of answers you want for the extraction step. possible types are:
 # - "binary_without_explanations"
@@ -168,8 +168,8 @@ extraction_chunks_dir=evaluator.chunk_dir
 evaluated_json_path = evaluator.save_to_json(answers)
 
 severity_dict = {
-    0: ["unknown",'no info', 'no information', 'not mentioned', 'not present'],
-    1: ["n", "no", "false"],
+    0: ["unknown",'no info', 'not mentioned', 'no mention'],
+    1: ["n", "no", "false", 'not present'],
     2: ["y", "yes", "true", ]
 }
 

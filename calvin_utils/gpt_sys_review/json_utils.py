@@ -1,5 +1,4 @@
 from tqdm import tqdm
-from calvin_utils.gpt_sys_review.txt_utils import TextChunker
 from calvin_utils.gpt_sys_review.gpt_utils.openai_labeller import CaseReportLabeler
 from calvin_utils.gpt_sys_review.gpt_utils.openai_summarizer import OpenAISummarizer
 from fuzzywuzzy import fuzz
@@ -558,6 +557,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         self.api_key_path = api_key_path
         self.summary_type = summary_type
         self.answer_format = answer_format
+        self.has_explanations= self.answer_format in ["binary_with_explanations", "binary_with_unknown_and_explanations","severity_with_explanations"]
         self.data = self.read_json()
         self.chunks_dir = chunks_dir
         self.is_azure = is_azure
@@ -571,8 +571,6 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         # self.severity_mode = False
         if self.answer_format in ["binary_with_unknown_and_explanations", "severity_with_explanations"]:
 
-            self.severity_mode=True
-
             if severity_mapping is None:
                 raise ValueError(f"Answer type {self.answer_format} cannot be evaluated without a severity_mapping dict, but none was given")
             if not isinstance(severity_mapping, dict) or len(severity_mapping) == 0:
@@ -584,15 +582,34 @@ class CustomSummarizer(InclusionExclusionSummarizer):
             }
 
         elif self.answer_format in ["binary","binary_with_explanations","binary_without_explanations"]:
-            self.severity_mode=False
             # if self.debug:
             #     print('Using binary mapping')
             self.keyword_mapping = {
-                0: ["poor", "bad", "negative", "n", "no", "false", "absent", "No"],
-                1: ["good", "excellent", "positive", "y", "yes", "true", "present", "Yes"]
+                0: ["poor", "bad", "negative", "n", "no", "false", "absent"],
+                1: ["good", "excellent", "positive", "y", "yes", "true", "present"]
             }
         else:
             raise ValueError('''"answer_format" is invalid. Allowed answer types are "binary_without_explanations", "binary_with_explanations", "binary_with_unknown_and_explanations","severity_with_explanations"''')
+
+
+    def numerical_interpretation(self, answer):
+        check_numeric_answer = re.sub(r'[^0-9\.\-\/]', '', answer)
+        try:
+            if '/' in check_numeric_answer and any(ch.isdigit() for ch in check_numeric_answer):
+                val = float(Fraction(check_numeric_answer))
+            else:
+                val = float(check_numeric_answer)
+
+            if float(val).is_integer() and float(val) in self.keyword_mapping.keys():
+                return int(val)
+            
+            if self.answer_format=="severity_with_explanations":
+                return val
+            
+        except Exception:
+            pass
+
+        return None
 
 
     def exact_match(self, answer):
@@ -601,37 +618,46 @@ class CustomSummarizer(InclusionExclusionSummarizer):
             return np.nan
 
         raw = str(answer).strip().lower()
+        from string import punctuation
+        raw_no_punctuation = raw.translate(str.maketrans(punctuation, ' '*len(punctuation)))
+        
+        if self.answer_format=='severity_with_explanations': # for severity cases, prioritize numerical interpretation
+            numerical=self.numerical_interpretation(raw)
+            if numerical is not None:
+                return numerical
 
-        # --- NEW: explicit binary mapping first ---
-        # This catches pure yes/no outputs for binary-style questions.
-        # if raw in ("Yes", "yes", "y", "true", "1"):
-        #     return 1
-        # if raw in ("No", "no", "n", "false", "0"):
-        #     return 0
-        # ------------------------------------------
-
-        # Keep digits, dot, minus, and slash (so we can handle fractions like 1/4)
-        cleaned_answer = re.sub(r'[^0-9\.\-\/]', '', raw)
-
-        # Try numeric interpretation (for scales like 0/1/2/3, or "1/4", etc.)
-        try:
-            if '/' in cleaned_answer and any(ch.isdigit() for ch in cleaned_answer):
-                val = float(Fraction(cleaned_answer))
-            else:
-                val = float(cleaned_answer)
-
-            if float(val).is_integer():
-                return int(val)
-            return val
-        except Exception:
-            pass
-
-        # Fall back to keyword mapping (severity words etc.)
+        found_keys_words = []
         for key, keywords in self.keyword_mapping.items():
             for keyword in keywords:
-                if keyword in raw.split():
-                    return key
-        return None
+
+                if ' ' in keyword and keyword in raw_no_punctuation: # for multi-word keywords, check if the whole keyword is in the raw answer
+                    found_keys_words.append((key, keyword))
+                
+                elif keyword in raw_no_punctuation.split(): # for 1-word keywords, check if any word matches exactly (to avoid partial matches)
+                    found_keys_words.append((key, keyword))
+
+        if len(set([k for k, w in found_keys_words]))==1: #If all found keywords correspond to the same key, return that key
+            return found_keys_words[0][0]
+        
+        elif found_keys_words==[] and self.numerical_interpretation(answer) is None: # if we found no keywords, try numeric interpretation. If that fails, return None.
+            return None
+
+        # if we have multiple found keywords that correspond to different keys, 
+        # we need to check if any of the keywords are substrings of each other (e.g. "no" in "no mention")
+        good_keys_words = found_keys_words.copy() # copy of keys we found
+
+        for small_key, small_word in found_keys_words: # loop through found keys and words
+            for big_key, big_word in found_keys_words: # second loop
+        
+                if small_key != big_key and small_word in big_word: #if keys are different but words overlap, this is a problem
+                    good_keys_words.remove((small_key, small_word)) # remove the shorter keyword (e.g. "no" in "no mention")
+                    break # break inner loop since small_key has already been removed
+        
+        if len(set([k for k, w in good_keys_words]))==1: # Check for agreement again.
+            return good_keys_words[0][0]
+        else:
+            return 99 # Indicates conflicting matches.
+
 
     def fuzzy_match(self, answer, threshold=60):
         """
@@ -726,7 +752,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         return output_dict
         
 
-    def summarize_results_with_mapping(self, positive_explanations_only=False, reformat_dates=False):
+    def summarize_results_with_mapping(self, positive_explanations_only=False):
         """
         Summarizes the results based on keyword mapping/fuzzy matching.
 
@@ -750,20 +776,32 @@ class CustomSummarizer(InclusionExclusionSummarizer):
 
             for q in qs:
                 answers=[]
-                explanations={n:[] for n in self.keyword_mapping.keys()} # these two are now dicts, so that yes and no answers can be in separate cols
-                saved_chunks={n:[] for n in self.keyword_mapping.keys()}
+                explanations={n:[] for n in list(self.keyword_mapping.keys())+[99]} # these two are now dicts, so that yes and no answers can be in separate cols
+                saved_chunks={n:[] for n in list(self.keyword_mapping.keys())+[99]}
                 
                 for chunk_name, chunk_metadata in chunk_metadatas.items():
-                    chunk_answer = self.keyword_or_fuzzy_match(question_data.get(q).get(chunk_name, ""))
+
+                    raw_answer = question_data.get(q, {}).get(chunk_name, "")
+                    chunk_answer = self.keyword_or_fuzzy_match(raw_answer)
+
+                    if chunk_answer not in self.keyword_mapping.keys() and chunk_answer != 99: # if the answer is not in our mapping and not the special "conflicting" code, this is a problem
+                        if self.has_explanations:
+                            explanation_warning=f' explanation "{question_data[f"EXPLANATION: {q}"][chunk_name]}"'
+                        else:
+                            explanation_warning=''
+                        print(f"""Warning: unexpected answer "{chunk_answer}" from "{raw_answer}" for article "{article}", question "{q}", 
+                              chunk "{chunk_name}"{explanation_warning}. Setting to 99.""")    
+                        chunk_answer=99
 
                     answers.append(chunk_answer)
                     
-                    if reformat_dates:
-                        chunk_metadata['date'] = TextChunker.reformat_date(chunk_metadata['date'])
-                        chunk_metadata['all_dates'] = sorted([TextChunker.reformat_date(d) for d in chunk_metadata['all_dates']])
-                        chunk_metadata['date_range']= f"{chunk_metadata['all_dates'][0]} to {chunk_metadata['all_dates'][-1]}"
+                    # if reformat_dates:
+                    #     from calvin_utils.gpt_sys_review.txt_utils import TextChunker
+                    #     chunk_metadata['date'] = TextChunker.reformat_date(chunk_metadata['date'])
+                    #     chunk_metadata['all_dates'] = sorted([TextChunker.reformat_date(d) for d in chunk_metadata['all_dates']])
+                    #     chunk_metadata['date_range']= f"{chunk_metadata['all_dates'][0]} to {chunk_metadata['all_dates'][-1]}"
 
-                    if self.answer_format in ["binary_with_explanations","binary_with_unknown_and_explanations","severity_with_explanations"]:
+                    if self.has_explanations:
                         expl = question_data.get(f'EXPLANATION: {q}').get(chunk_name, "")
                         explanations[chunk_answer].append(f"{chunk_metadata['date_range']}: {expl}")
 
@@ -777,76 +815,6 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         df = pd.DataFrame.from_dict(summary_dict, orient='index').fillna(np.nan)
 
         return df
-
-
-            # for question, responses in questions.items(): # question is question text, responses is dict of chunk name to answer
-            #     if question == 'metadata' or question.startswith('CHUNKS'):
-            #         continue
-            #     # Keep explanations untouched
-            #     if question[:11] == 'EXPLANATION' and positive_explanations_only:
-            #         # Only keep explanations for “positive” responses
-            #         # Note: mapped_answers is the answers for the previous question at this point, ie
-            #         # the numerical answers which this answer is explaining. We can't determine if the answer
-            #         # is positive from the explanations, so we use the numbers. Ugly but works for now.
-                    
-            #         retained_explanations= [
-            #             f"{m}: {expl}" for expl, m in zip(responses.values(), mapped_answers)
-            #             if (m is not None and m is not np.nan and m > 0)
-            #         ]    
-            #         summary_dict[article][question] = '|'.join(retained_explanations)
-
-            #     elif question[:11] == 'EXPLANATION':
-            #         summary_dict[article][question] = '|'.join(list(responses.values()))
-
-            #     elif 'dates of the clinical notes' in question or 'dates' in question.lower() and ('Y/N' not in question and 'Yes/No' not in question):
-            #         # Bypass binary keyword mapping for date extraction questions
-            #         summary_dict[article][question] = '|'.join([str(v) for v in responses.values()])
-            #         continue
-                
-            #     elif self.keyword_mapping:
-            #         mapped_answers = [self.keyword_or_fuzzy_match(ans) for ans in responses.values()]
-            #         # if any mapped is np.nan while others are valid, warn
-            #         if (np.nan in mapped_answers) and not all(x is np.nan for x in mapped_answers):
-            #             if has_failed_chunk:
-            #                 continue
-            #             has_failed_chunk=True # only complains about failed chunks once for any subject
-            #             print(f"Warning: Failed to interpret a chunk from '{article}'. The answers for that subject may be partially incorrect.")
-
-            #         valid_answers = [x for x in mapped_answers if (x is not None and not (isinstance(x, float) and np.isnan(x)))]
-
-            #         if self.debug:
-            #             print(valid_answers)
-            #         if len(valid_answers) == 0:
-            #             print(f'Warning: no valid responses for question "{question}". Setting final answer to 0')
-            #             summary_dict[article][question] = 0
-                        
-            #         else:
-            #             agg_value = np.max(valid_answers)
-                        
-            #             summary_dict[article][question] = agg_value
-            #             if self.chunks_dir is not None:
-            #                 # store chunks that contributed > 0 severity
-            #                 retained_chunks = [chunks_dict[f'chunk_{i+1}'] for i, m in enumerate(mapped_answers)
-            #                                 if (m is not None and not (isinstance(m, float) and np.isnan(m)) and m > 0)]
-            #                 summary_dict[article]['CHUNKS: '+question] = '\n|\n'.join(retained_chunks)
-                            
-
-            #     elif self.keyword_mapping is None:
-            #         # Raw text passthrough (research-style)
-            #         try:
-            #             combined_answers = list(responses.values())[0]
-            #             if not combined_answers:
-            #                 summary_dict[article][question] = 'No Answers'
-            #             else:
-            #                 summary_dict[article][question] = combined_answers
-            #         except Exception as e:
-            #             summary_dict[article][question] = f'Error: {str(e)}'
-            #     else:
-            #         raise ValueError("Unacceptable keyword mapping value.")
-
-        # Build DataFrame; DO NOT collapse to 0/1 here (so NaN and severity survive)
-        # df = pd.DataFrame.from_dict(summary_dict, orient='index').fillna(np.nan)
-        # return df
 
     def summarize_with_llm(self):
         summary_dict = {}
