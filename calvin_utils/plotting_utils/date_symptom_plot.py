@@ -385,6 +385,9 @@ class SymptomProgressionPlotter:
         fig = go.Figure()
         plotted_any = False
         shown_trace_classes = set()
+        
+        # Pre-calculate incidence for legend annotations
+        incidence_map = self._calculate_incidence_map()
 
         for symptom_key in self.symptom_keys:
             symptom_df = self.series_df[self.series_df["Question"] == symptom_key]
@@ -410,6 +413,17 @@ class SymptomProgressionPlotter:
 
                 y_display = patient_df["State"] + self.TRACE_Y_OFFSETS[trace_class]
                 color = self.TRACE_COLORS[trace_class]
+                
+                # Build legend name with incidence if available
+                legend_name = trace_class
+                if trace_class in incidence_map:
+                    incidence_pct = incidence_map[trace_class] * 100
+                    legend_name = f"{trace_class} ({self.transition_threshold_months} Month Incidence: {incidence_pct:.1f}%)"
+                else:
+                    incidence_pct = 0
+                    legend_name = f"{trace_class} ({self.transition_threshold_months} Month Incidence: {incidence_pct:.1f}%)"
+                    
+                
                 fig.add_trace(
                     go.Scatter(
                         x=patient_df["months_since_onset"],
@@ -417,7 +431,7 @@ class SymptomProgressionPlotter:
                         mode="lines+markers",
                         line={"shape": "hv", "color": color},
                         marker={"color": color, "size": 5},
-                        name=trace_class,
+                        name=legend_name,
                         legendgroup=trace_class,
                         showlegend=show_legend,
                         hovertemplate=(
@@ -442,6 +456,83 @@ class SymptomProgressionPlotter:
         output_path = self.get_output_filepath()
         fig.write_html(output_path, include_plotlyjs="cdn")
         return fig, output_path
+    
+    def _calculate_incidence_map(self):
+        """
+        Helper method to calculate incidence rates for each transition type.
+        Observes occurrences across ±12-month window (default x_limit) and converts
+        to transition_threshold_months incidence rate.
+        Returns a dict mapping trace_class to normalized incidence ratio.
+        """
+        incidence_map = {}
+        transition_types = ["NO -> YES", "YES -> NO", "NO -> NO", "YES -> YES"]
+        x_limit = 12  # Default observation window
+        
+        for symptom_key in self.symptom_keys:
+            symptom_df = self.series_df[self.series_df["Question"] == symptom_key]
+            if symptom_df.empty:
+                continue
+            
+            # Initialize counters
+            counts = {t: 0 for t in transition_types}
+            total_patients = 0
+            
+            for mrn, patient_df in symptom_df.groupby(self.mrn_col):
+                patient_df = self.prepare_trace_dataframe(patient_df)
+                if self.drop_unknown:
+                    patient_df = patient_df[patient_df["State"] != -1]
+                
+                if patient_df.empty:
+                    continue
+                
+                total_patients += 1
+                
+                # Filter to ±12 month observation window
+                obs_window = patient_df[
+                    (patient_df["months_since_onset"] >= -x_limit) &
+                    (patient_df["months_since_onset"] <= x_limit)
+                ]
+                
+                if obs_window.empty:
+                    continue
+                
+                # Determine state before and after onset within window
+                before = obs_window[obs_window["months_since_onset"] < 0]
+                after = obs_window[obs_window["months_since_onset"] >= 0]
+                
+                before_state = before["State"].max() if not before.empty else -1
+                after_state = after["State"].max() if not after.empty else -1
+                
+                # Map states to YES/NO
+                before_yes = (before_state == 1)
+                after_yes = (after_state == 1)
+                
+                # Classify transition
+                if before_yes and after_yes:
+                    transition = "YES -> YES"
+                elif before_yes and not after_yes:
+                    transition = "YES -> NO"
+                elif not before_yes and after_yes:
+                    transition = "NO -> YES"
+                else:
+                    transition = "NO -> NO"
+                
+                counts[transition] += 1
+            
+            # Convert ±12-month incidence to transition_threshold_months incidence
+            if total_patients > 0:
+                incidence_window_ratio = self.transition_threshold_months / x_limit
+                for transition_type, transition_name in [
+                    ("NO -> YES", "NO BEFORE ONSET | YES AFTER ONSET"),
+                    ("YES -> NO", "YES BEFORE ONSET | NO AFTER ONSET"),
+                    ("NO -> NO", "NO BEFORE ONSET | NO AFTER ONSET"),
+                    ("YES -> YES", "YES BEFORE ONSET | YES AFTER ONSET"),
+                ]:
+                    incidence_x_window = counts[transition_type] / total_patients
+                    incidence_threshold_window = incidence_x_window * incidence_window_ratio
+                    incidence_map[transition_name] = incidence_threshold_window
+        
+        return incidence_map
 
     @staticmethod
     def display_figure(fig):
@@ -653,6 +744,108 @@ class SymptomProgressionPlotter:
         value = value[:30]
         return value.strip("_")
 
+    def calculate_transition_incidence(self, x_limit_months=12):
+        """
+        Calculate incidence rates by observing occurrences across x_limit_months window
+        and converting to transition_threshold_months incidence rate.
+        
+        For each symptom, counts transitions in the ±x_limit window and scales to the
+        transition_threshold_months timeframe (e.g., 3-month incidence).
+        
+        For each transition type:
+        - NO -> YES (incidence of new symptom onset)
+        - YES -> NO (resolution/remission of symptom)
+        - NO -> NO (symptom never develops)
+        - YES -> YES (symptom persists)
+        
+        Args:
+            x_limit_months (float): Observation window in months (default: 12, means ±12 months)
+            
+        Returns:
+            pd.DataFrame: Summary with columns [Symptom, Transition_Type, Count, Total_Patients, Incidence_in_X_months]
+        """
+        if self.series_df is None or self.series_df.empty:
+            raise ValueError("No processed symptom data available. Run prepare_data() first.")
+        
+        records = []
+        transition_types = ["NO -> YES", "YES -> NO", "NO -> NO", "YES -> YES"]
+        
+        for symptom_key in self.symptom_keys:
+            symptom_df = self.series_df[self.series_df["Question"] == symptom_key]
+            if symptom_df.empty:
+                continue
+            
+            # Initialize counters
+            counts = {t: 0 for t in transition_types}
+            total_patients = 0
+            
+            for mrn, patient_df in symptom_df.groupby(self.mrn_col):
+                patient_df = self.prepare_trace_dataframe(patient_df)
+                if self.drop_unknown:
+                    patient_df = patient_df[patient_df["State"] != -1]
+                
+                if patient_df.empty:
+                    continue
+                
+                total_patients += 1
+                
+                # Filter to observation window
+                obs_window = patient_df[
+                    (patient_df["months_since_onset"] >= -x_limit_months) &
+                    (patient_df["months_since_onset"] <= x_limit_months)
+                ]
+                
+                if obs_window.empty:
+                    continue
+                
+                # Determine state before and after onset within window
+                before = obs_window[obs_window["months_since_onset"] < 0]
+                after = obs_window[obs_window["months_since_onset"] >= 0]
+                
+                before_state = before["State"].max() if not before.empty else -1
+                after_state = after["State"].max() if not after.empty else -1
+                
+                # Map states to YES/NO
+                before_yes = (before_state == 1)
+                after_yes = (after_state == 1)
+                
+                # Classify transition
+                if before_yes and after_yes:
+                    transition = "YES -> YES"
+                elif before_yes and not after_yes:
+                    transition = "YES -> NO"
+                elif not before_yes and after_yes:
+                    transition = "NO -> YES"
+                else:
+                    transition = "NO -> NO"
+                
+                counts[transition] += 1
+            
+            # Record incidence for each transition type (even if 0)
+            if total_patients > 0:
+                for transition in transition_types:
+                    incidence_x_window = counts[transition] / total_patients
+                    # Convert to transition_threshold_months incidence
+                    incidence_threshold_window = incidence_x_window * (self.transition_threshold_months / x_limit_months)
+                    
+                    records.append({
+                        "Symptom": symptom_key,
+                        "Transition_Type": transition,
+                        "Count": counts[transition],
+                        "Total_Patients": total_patients,
+                        f"Incidence_in_{int(self.transition_threshold_months)}_months": round(incidence_threshold_window, 3),
+                    })
+        
+        incidence_df = pd.DataFrame(records)
+        
+        # Export to CSV
+        output_path = self.output_dir / "transition_incidence.csv"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        incidence_df.to_csv(output_path, index=False)
+        print(f"Transition incidence summary exported to {output_path}")
+        
+        return incidence_df
+
     def export_csv(self, output_path=None):
         """
         Export patient identifiers and their symptom condition classifications to CSV.
@@ -783,26 +976,31 @@ def parse_args():
 
     return parser.parse_args()
 
-
-def main():
-    args = parse_args()
+if __name__ == "__main__":
+    json_path="/Users/cu135/hires_backdrops/t/emr_strict_extraction_evaluations.json"  # must have symptoms for a patients response from review pyper
+    onset_csv_path="/Users/cu135/Downloads/hbs_depression_evaluated.csv"               # must have an onset date to register to
+    symptoms=["Does this patient have difficulty with memory, such as being unable to remember a list of words read to them?"]        # This is a list of the JSON keys to extract symptoms from
+    output_dir="/Users/cu135/hires_backdrops/t"    
+    onset_col="stroke_date"        # From the CSV, determines 'onset' to lock each patient's trace to
+    drop_unknown=True              # This removes 'unknown' from showing up on the plot
+    transition_threshold_months=3  # This deteremines within how many months from onset we consider the onset causing the symptom change
 
     plotter = SymptomProgressionPlotter(
-        json_path=args.json,
-        onset_csv_path=args.onset,
-        symptoms=args.symptoms,
-        output_dir=args.outdir,
-        onset_col=args.onset_col,
-        drop_unknown=args.drop_unknown,
-        show_yes_before_yes_after=not args.hide_yes_before_yes_after,
-        show_yes_before_no_after=not args.hide_yes_before_no_after,
-        show_no_before_no_after=not args.hide_no_before_no_after,
-        show_no_before_yes_after=not args.hide_no_before_yes_after,
-        display_plot=not args.no_display,
+        json_path=json_path,
+        onset_csv_path=onset_csv_path,
+        symptoms=symptoms,
+        output_dir=output_dir,
+        onset_col=onset_col,
+        drop_unknown=drop_unknown,
+        transition_threshold_months=transition_threshold_months
     )
-
     plotter.run()
-
-
-if __name__ == "__main__":
-    main()
+    plotter.export_csv()
+    
+    # Calculate and export transition incidence
+    incidence_summary = plotter.calculate_transition_incidence(x_limit_months=12)
+    print(f"\n=== TRANSITION INCIDENCE SUMMARY ===")
+    print(f"Observation window: ±12 months")
+    print(f"Reporting incidence in: ±{transition_threshold_months}-month window")
+    print(incidence_summary.to_string(index=False))
+    print(f"\nIncidence = (Count observed in ±12 months / Total Patients) × ({transition_threshold_months} / 12)")
