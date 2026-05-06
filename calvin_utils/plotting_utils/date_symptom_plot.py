@@ -33,12 +33,14 @@ class SymptomProgressionPlotter:
         "YES BEFORE ONSET | NO AFTER ONSET": "#ff7f0e",
         "NO BEFORE ONSET | NO AFTER ONSET": "#7f7f7f",
         "NO BEFORE ONSET | YES AFTER ONSET": "#2ca02c",
+        "NO BEFORE ONSET | YES AFTER ONSET (Non-causal)": "#d62728",
     }
     TRACE_Y_OFFSETS = {
-        "YES BEFORE ONSET | YES AFTER ONSET": 0.05,
-        "YES BEFORE ONSET | NO AFTER ONSET": 0.0,
-        "NO BEFORE ONSET | NO AFTER ONSET": -0.05,
-        "NO BEFORE ONSET | YES AFTER ONSET": 0.0,
+        "YES BEFORE ONSET | YES AFTER ONSET": 0.075,
+        "YES BEFORE ONSET | NO AFTER ONSET": 0.025,
+        "NO BEFORE ONSET | NO AFTER ONSET": -0.075,
+        "NO BEFORE ONSET | YES AFTER ONSET": 0.025,
+        "NO BEFORE ONSET | YES AFTER ONSET (Non-causal)": -0.025,
     }
 
     def __init__(
@@ -46,6 +48,7 @@ class SymptomProgressionPlotter:
         json_path,
         onset_csv_path,
         symptoms,
+        question_key_file=None,
         output_dir="dateTimePlots",
         onset_col="stroke_date",
         date_col="Date",
@@ -58,12 +61,29 @@ class SymptomProgressionPlotter:
         show_yes_before_no_after=True,
         show_no_before_no_after=True,
         show_no_before_yes_after=True,
+        show_no_before_non_causal_after=True,
         display_plot=True,
         transition_threshold_months=3,
     ):
         self.json_path = Path(json_path)
         self.onset_csv_path = Path(onset_csv_path)
-        self.symptom_keys = list(symptoms)
+
+        if question_key_file is not None:
+            question_keys_df = pd.read_csv(question_key_file)
+
+            self.symptom_keys=[]
+            for symptom in symptoms:
+                if symptom in question_keys_df["question_name"].values:
+                    key = question_keys_df[question_keys_df["question_name"] == symptom]["question_text"].values[0]
+                    self.symptom_keys.append(key)
+                else:
+                    self.symptom_keys.append(symptom)
+            
+            self.question_names_dict = dict(zip(question_keys_df["question_text"], question_keys_df["question_name"]))
+            
+        else:
+            self.symptom_keys = list(symptoms)
+
         self.output_dir = Path(output_dir)
         self.requested_onset_col = onset_col
         self.onset_col = onset_col
@@ -79,6 +99,7 @@ class SymptomProgressionPlotter:
             "YES BEFORE ONSET | NO AFTER ONSET": show_yes_before_no_after,
             "NO BEFORE ONSET | NO AFTER ONSET": show_no_before_no_after,
             "NO BEFORE ONSET | YES AFTER ONSET": show_no_before_yes_after,
+            "NO BEFORE ONSET | YES AFTER ONSET (Non-causal)": show_no_before_non_causal_after,
         }
         self.display_plot = display_plot
 
@@ -118,7 +139,6 @@ class SymptomProgressionPlotter:
             str(self.temp_longitudinal_path),
             symptom_keys=self.symptom_keys,
         )
-
         if self.review_df is None or self.review_df.empty:
             raise ValueError("No valid longitudinal data could be extracted from JSON.")
 
@@ -138,12 +158,13 @@ class SymptomProgressionPlotter:
                     continue
                 if isinstance(value, dict):
                     available_keys.add(key)
-
-        missing = [key for key in self.symptom_keys if key not in available_keys]
+        
+        shortened_keys = set([self.question_names_dict.get(key, key) for key in available_keys])
+        missing = [key for key in self.symptom_keys if key not in available_keys.union(shortened_keys)]
         if not missing:
             return
 
-        available = "\n".join(f"  - {key}" for key in sorted(available_keys))
+        available = "\n".join(f"  - {key}" for key in sorted(shortened_keys))
         raise ValueError(
             "Requested symptom keys were not found in the evaluated JSON: "
             f"{missing}\nAvailable symptom keys:\n{available}"
@@ -345,7 +366,7 @@ class SymptomProgressionPlotter:
         Build trajectories from wide-format symptom columns.
         """
         records = []
-        available_keys = [key for key in self.symptom_keys if key in self.merged_df.columns]
+        available_keys = [self.question_names_dict[key] for key in self.symptom_keys if self.question_names_dict[key] in self.merged_df.columns]
 
         for key in available_keys:
             symptom_df = self.merged_df[[self.mrn_col, "months_since_onset", key]].copy()
@@ -418,10 +439,10 @@ class SymptomProgressionPlotter:
                 legend_name = trace_class
                 if trace_class in incidence_map:
                     incidence_pct = incidence_map[trace_class] * 100
-                    legend_name = f"{trace_class} ({self.transition_threshold_months} Month Incidence: {incidence_pct:.1f}%)"
+                    legend_name = f"{trace_class}\n({self.transition_threshold_months} Month Incidence: {incidence_pct:.1f}%)"
                 else:
                     incidence_pct = 0
-                    legend_name = f"{trace_class} ({self.transition_threshold_months} Month Incidence: {incidence_pct:.1f}%)"
+                    legend_name = f"{trace_class}\n({self.transition_threshold_months} Month Incidence: {incidence_pct:.1f}%)"
                     
                 
                 fig.add_trace(
@@ -465,7 +486,7 @@ class SymptomProgressionPlotter:
         Returns a dict mapping trace_class to normalized incidence ratio.
         """
         incidence_map = {}
-        transition_types = ["NO -> YES", "YES -> NO", "NO -> NO", "YES -> YES"]
+        transition_types = ["NO -> YES", "YES -> NO", "NO -> NO", "YES -> YES", "NO -> YES (Non-causal)"]
         x_limit = 12  # Default observation window
         
         for symptom_key in self.symptom_keys:
@@ -527,6 +548,7 @@ class SymptomProgressionPlotter:
                     ("YES -> NO", "YES BEFORE ONSET | NO AFTER ONSET"),
                     ("NO -> NO", "NO BEFORE ONSET | NO AFTER ONSET"),
                     ("YES -> YES", "YES BEFORE ONSET | YES AFTER ONSET"),
+                    ("NO -> YES (Non-causal)", "NO BEFORE ONSET | YES AFTER ONSET (Non-causal)"),
                 ]:
                     incidence_x_window = counts[transition_type] / total_patients
                     incidence_threshold_window = incidence_x_window * incidence_window_ratio
@@ -602,7 +624,7 @@ class SymptomProgressionPlotter:
         return states
 
     @staticmethod
-    def classify_trace(patient_df, transition_threshold_months=3):
+    def classify_trace(patient_df, transition_threshold_months=3, remove_delayed_conversions=True):
         """
         Classify a trajectory by whether Yes appears before and after onset.
         
@@ -612,13 +634,14 @@ class SymptomProgressionPlotter:
         Args:
             patient_df: DataFrame with State and months_since_onset columns
             transition_threshold_months: Maximum months from onset for a transition to count
+            remove_delayed_conversions: Whether to remove delayed conversions from the classification
         """
         before_df = patient_df[patient_df["months_since_onset"] < 0]
         after_df = patient_df[patient_df["months_since_onset"] >= 0]
 
         before_yes = bool((before_df["State"] == 1).any())
         after_yes = bool((after_df["State"] == 1).any())
-
+        delayed_occurence=False
         # If there's a transition after onset, check if it occurs within threshold
         if before_yes and not after_yes:
             # Transition from YES to NO - check if NO occurs within threshold
@@ -637,9 +660,14 @@ class SymptomProgressionPlotter:
                 if first_yes_time > transition_threshold_months:
                     # Transition occurs too late, treat as still NO after onset
                     after_yes = False
+                    delayed_occurence=True
 
         before_label = "YES BEFORE ONSET" if before_yes else "NO BEFORE ONSET"
         after_label = "YES AFTER ONSET" if after_yes else "NO AFTER ONSET"
+        if delayed_occurence and remove_delayed_conversions:
+            after_label = "YES AFTER ONSET (Non-causal)"
+        # create secondary classification where transition happened after transition_threshold_months
+        # add an optional argument to skip this if needed.
         return f"{before_label} | {after_label}"
 
     def validate_symptom_keys(self):
@@ -768,7 +796,7 @@ class SymptomProgressionPlotter:
             raise ValueError("No processed symptom data available. Run prepare_data() first.")
         
         records = []
-        transition_types = ["NO -> YES", "YES -> NO", "NO -> NO", "YES -> YES"]
+        transition_types = ["NO -> YES", "YES -> NO", "NO -> NO", "YES -> YES", "NO -> YES (Non-causal)"]
         
         for symptom_key in self.symptom_keys:
             symptom_df = self.series_df[self.series_df["Question"] == symptom_key]
@@ -896,7 +924,8 @@ class SymptomProgressionPlotter:
 
         if export_df.empty:
             raise ValueError("No patient-symptom records to export.")
-
+        if self.question_names_dict is not None:
+            export_df['Symptom'] = export_df['Symptom'].map(self.question_names_dict)
         export_df.to_csv(output_path, index=False)
         print(f"Patient conditions exported to {output_path}")
         return export_df
@@ -966,6 +995,12 @@ def parse_args():
         "--hide_no_before_yes_after",
         action="store_true",
         help="Hide traces classified as NO BEFORE ONSET | YES AFTER ONSET.",
+    )
+
+    parser.add_argument(
+        "--hide_no_before_non_causal_after",
+        action="store_true",
+        help="Hide traces classified as NO BEFORE ONSET | YES AFTER ONSET (Non-causal).",
     )
 
     parser.add_argument(
