@@ -366,7 +366,7 @@ class SymptomProgressionPlotter:
         Build trajectories from wide-format symptom columns.
         """
         records = []
-        available_keys = [self.question_names_dict[key] for key in self.symptom_keys if self.question_names_dict[key] in self.merged_df.columns]
+        available_keys = [self.question_names_dict.get(key, key) for key in self.symptom_keys if self.question_names_dict.get(key, key) in self.merged_df.columns]
 
         for key in available_keys:
             symptom_df = self.merged_df[[self.mrn_col, "months_since_onset", key]].copy()
@@ -474,7 +474,7 @@ class SymptomProgressionPlotter:
             raise ValueError("No plotted symptom trajectories were available.")
 
         self.format_figure(fig, self.series_df)
-        output_path = self.get_output_filepath("DateSymptomPlot", symptom_key, ".svg")
+        output_path = self.get_output_filepath("DateSymptomPlot", self.question_names_dict.get(symptom_key, symptom_key), ".html")
         fig.write_html(output_path, include_plotlyjs="cdn")
         return fig, output_path
     
@@ -914,8 +914,16 @@ class SymptomProgressionPlotter:
 
         if export_df.empty:
             raise ValueError("No patient-symptom records to export.")
+        
         if self.question_names_dict is not None:
             export_df['Symptom'] = export_df['Symptom'].map(self.question_names_dict)
+            keys=[self.question_names_dict.get(key, key) for key in self.symptom_keys]
+        else:
+            keys=self.symptom_keys
+        
+        if output_path is None:
+            output_path = self.get_output_filepath("PatientConditions", keys, ".csv")
+        
         export_df.to_csv(output_path, index=False)
         print(f"Patient conditions exported to {output_path}")
         return export_df
