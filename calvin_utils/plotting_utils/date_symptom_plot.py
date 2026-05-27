@@ -1,4 +1,5 @@
 import argparse
+from numbers import Real
 import re
 import sys
 from pathlib import Path
@@ -9,6 +10,39 @@ if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from calvin_utils.gpt_sys_review.gpt_utils.temporal_analysis import TemporalPlotter
+
+
+def normalize_transition_window(transition_threshold_months):
+    """
+    Normalize scalar or (lower, upper) transition-window configuration.
+    """
+    if isinstance(transition_threshold_months, (tuple, list)):
+        if len(transition_threshold_months) != 2:
+            raise ValueError("transition_threshold_months must be a scalar or (lower, upper).")
+        lower, upper = transition_threshold_months
+    else:
+        lower, upper = 0, transition_threshold_months
+
+    if not isinstance(lower, Real) or not isinstance(upper, Real):
+        raise TypeError("transition window bounds must be numeric.")
+    if lower < 0:
+        raise ValueError("transition lower limit must be >= 0.")
+    if upper < lower:
+        raise ValueError("transition upper limit must be >= lower limit.")
+
+    return float(lower), float(upper)
+
+
+def format_transition_window_label(transition_window_months):
+    """
+    Format transition window bounds for legends and output column names.
+    """
+    lower, upper = transition_window_months
+    lower_label = f"{lower:g}"
+    upper_label = f"{upper:g}"
+    if lower == 0:
+        return upper_label
+    return f"{lower_label}-{upper_label}"
 
 
 class SymptomPlottingStatusCalculator:
@@ -37,7 +71,26 @@ class SymptomPlottingStatusCalculator:
         self.state_rule = state_rule
         self.floor_threshold = floor_threshold
         self.coerce_observation_threshold = coerce_observation_threshold
-        self.transition_threshold_months = transition_threshold_months
+        self.set_transition_threshold_months(transition_threshold_months)
+
+    def set_transition_threshold_months(self, transition_threshold_months):
+        """
+        Store a backward-compatible transition threshold plus explicit bounds.
+        """
+        lower, upper = normalize_transition_window(transition_threshold_months)
+        self.transition_lower_limit_months = lower
+        self.transition_upper_limit_months = upper
+        self.transition_threshold_months = upper
+        self.transition_window_months = (lower, upper)
+
+    def is_in_transition_window(self, month):
+        """
+        Return whether month is inside the configured post-onset window.
+        """
+        return (
+            month is not None
+            and self.transition_lower_limit_months <= month <= self.transition_upper_limit_months
+        )
 
     @staticmethod
     def raw_status_to_state(raw_status):
@@ -138,7 +191,7 @@ class SymptomPlottingStatusCalculator:
                     locked_state = 1
             elif raw_state == 1:
                 state = 1
-            elif month is not None and month <= self.transition_threshold_months and state != 1:
+            elif month is not None and month <= self.transition_upper_limit_months and state != 1:
                 state = raw_state
 
             states.append(state)
@@ -163,8 +216,7 @@ class SymptomPlottingStatusCalculator:
         target_state = 0 if baseline_state == 1 else 1
         for index, (raw_state, month) in enumerate(zip(raw_states, months_since_onset)):
             if (
-                month is not None
-                and 0 <= month <= self.transition_threshold_months
+                self.is_in_transition_window(month)
                 and raw_state == target_state
             ):
                 return index
@@ -176,8 +228,7 @@ class SymptomPlottingStatusCalculator:
         configured post-onset threshold window.
         """
         return (
-            month is not None
-            and 0 <= month <= self.transition_threshold_months
+            self.is_in_transition_window(month)
             and state in {0, 1}
             and raw_state in {0, 1}
             and raw_state != state
@@ -269,10 +320,11 @@ class SymptomPlottingConditions:
         threshold window only. Later symptom changes do not alter class/color.
         """
         state_col = "RawState" if "RawState" in patient_df.columns else "State"
+        lower_limit, upper_limit = normalize_transition_window(transition_threshold_months)
         before_df = patient_df[patient_df["months_since_onset"] < 0]
         window_df = patient_df[
-            (patient_df["months_since_onset"] >= 0)
-            & (patient_df["months_since_onset"] <= transition_threshold_months)
+            (patient_df["months_since_onset"] >= lower_limit)
+            & (patient_df["months_since_onset"] <= upper_limit)
         ]
 
         before_yes = bool((before_df[state_col] == 1).any())
@@ -396,6 +448,8 @@ class SymptomProgressionPlotter:
         self.requested_symptom_keys = list(symptoms)
         self.symptom_keys = list(symptoms)
         self.symptom_key_map = {}
+        self.question_key_file = Path(question_key_file) if question_key_file is not None else None
+        self.question_names_dict = None
         self.output_dir = Path(output_dir)
         self.requested_onset_col = onset_col
         self.onset_col = onset_col
@@ -405,7 +459,7 @@ class SymptomProgressionPlotter:
         self.min_valid_year = min_valid_year
         self.max_valid_year = max_valid_year
         self.drop_unknown = drop_unknown
-        self.transition_threshold_months = transition_threshold_months
+        self.set_transition_threshold_months(transition_threshold_months)
         self.state_rule = state_rule
         self.state_floor_threshold = state_floor_threshold
         self.coerce_observation_threshold = coerce_observation_threshold
@@ -421,7 +475,7 @@ class SymptomProgressionPlotter:
             state_rule,
             floor_threshold=state_floor_threshold,
             coerce_observation_threshold=coerce_observation_threshold,
-            transition_threshold_months=transition_threshold_months,
+            transition_threshold_months=self.transition_window_months,
         )
         self.plotting_conditions = SymptomPlottingConditions()
 
@@ -429,6 +483,30 @@ class SymptomProgressionPlotter:
         self.onset_df = None
         self.merged_df = None
         self.series_df = None
+
+    def set_transition_threshold_months(self, transition_threshold_months):
+        """
+        Store a backward-compatible transition threshold plus explicit bounds.
+        """
+        lower, upper = normalize_transition_window(transition_threshold_months)
+        self.transition_lower_limit_months = lower
+        self.transition_upper_limit_months = upper
+        self.transition_threshold_months = upper
+        self.transition_window_months = (lower, upper)
+
+    def transition_window_label(self):
+        """
+        Return the transition window as a compact display label.
+        """
+        return format_transition_window_label(self.transition_window_months)
+
+    def get_symptom_display_name(self, symptom_key):
+        """
+        Return a display/output label for a symptom key when a label map exists.
+        """
+        if self.question_names_dict:
+            return self.question_names_dict.get(symptom_key, symptom_key)
+        return symptom_key
 
     def run(self):
         """
@@ -792,7 +870,7 @@ class SymptomProgressionPlotter:
 
                 trace_class = self.plotting_conditions.classify_trace(
                     patient_df,
-                    self.transition_threshold_months,
+                    self.transition_window_months,
                 )
                 if not self.enabled_trace_conditions[trace_class]:
                     continue
@@ -809,10 +887,10 @@ class SymptomProgressionPlotter:
                 legend_name = trace_class
                 if trace_class in incidence_map:
                     incidence_pct = incidence_map[trace_class] * 100
-                    legend_name = f"{trace_class}\n({self.transition_threshold_months} Month Incidence: {incidence_pct:.1f}%)"
+                    legend_name = f"{trace_class}\n({self.transition_window_label()} Month Incidence: {incidence_pct:.1f}%)"
                 else:
                     incidence_pct = 0
-                    legend_name = f"{trace_class}\n({self.transition_threshold_months} Month Incidence: {incidence_pct:.1f}%)"
+                    legend_name = f"{trace_class}\n({self.transition_window_label()} Month Incidence: {incidence_pct:.1f}%)"
                     
                 
                 fig.add_trace(
@@ -844,7 +922,12 @@ class SymptomProgressionPlotter:
             raise ValueError("No plotted symptom trajectories were available.")
 
         self.format_figure(fig, self.series_df)
-        output_path = self.get_output_filepath("DateSymptomPlot", self.question_names_dict.get(symptom_key, symptom_key), ".html")
+        output_symptoms = [
+            self.get_symptom_display_name(key)
+            for key in self.symptom_keys
+        ]
+        output_key = output_symptoms[0] if len(output_symptoms) == 1 else "multiple_symptoms"
+        output_path = self.get_output_filepath("DateSymptomPlot", output_key, ".html")
         fig.write_html(output_path, include_plotlyjs="cdn")
         return fig, output_path
     
@@ -879,7 +962,7 @@ class SymptomProgressionPlotter:
                 
                 trace_class = self.plotting_conditions.classify_trace(
                     patient_df,
-                    self.transition_threshold_months,
+                    self.transition_window_months,
                 )
                 counts[trace_class] += 1
             
@@ -1099,7 +1182,7 @@ class SymptomProgressionPlotter:
                 
                 trace_class = self.plotting_conditions.classify_trace(
                     patient_df,
-                    self.transition_threshold_months,
+                    self.transition_window_months,
                 )
                 transition = trace_class_to_transition[trace_class]
 
@@ -1115,7 +1198,7 @@ class SymptomProgressionPlotter:
                         "Transition_Type": transition,
                         "Count": counts[transition],
                         "Total_Patients": total_patients,
-                        f"Incidence_in_{int(self.transition_threshold_months)}_months": round(incidence_threshold_window, 3),
+                        f"Incidence_in_{self.transition_window_label()}_months": round(incidence_threshold_window, 3),
                     })
         
         incidence_df = pd.DataFrame(records)
@@ -1160,7 +1243,7 @@ class SymptomProgressionPlotter:
 
                 condition = self.plotting_conditions.classify_trace(
                     patient_df,
-                    self.transition_threshold_months,
+                    self.transition_window_months,
                 )
                 records.append({
                     self.mrn_col: mrn,
@@ -1173,11 +1256,11 @@ class SymptomProgressionPlotter:
         if export_df.empty:
             raise ValueError("No patient-symptom records to export.")
         
-        if self.question_names_dict is not None:
-            export_df['Symptom'] = export_df['Symptom'].map(self.question_names_dict)
-            keys=[self.question_names_dict.get(key, key) for key in self.symptom_keys]
-        else:
-            keys=self.symptom_keys
+        export_df["Symptom"] = export_df["Symptom"].map(self.get_symptom_display_name)
+        keys = [
+            self.get_symptom_display_name(key)
+            for key in self.symptom_keys
+        ]
         
         if output_path is None:
             output_path = self.get_output_filepath("PatientConditions", keys, ".csv")
