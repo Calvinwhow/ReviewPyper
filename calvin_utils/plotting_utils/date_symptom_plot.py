@@ -356,12 +356,14 @@ class SymptomProgressionPlotter:
         "YES BEFORE ONSET | NO AFTER ONSET": "#ff7f0e",
         "NO BEFORE ONSET | NO AFTER ONSET": "#7f7f7f",
         "NO BEFORE ONSET | YES AFTER ONSET": "#2ca02c",
+        "NO BEFORE ONSET | YES AFTER ONSET (Non-causal)": "#d62728",
     }
     TRACE_Y_OFFSETS = {
-        "YES BEFORE ONSET | YES AFTER ONSET": 0.05,
-        "YES BEFORE ONSET | NO AFTER ONSET": 0.0,
-        "NO BEFORE ONSET | NO AFTER ONSET": -0.05,
-        "NO BEFORE ONSET | YES AFTER ONSET": 0.0,
+        "YES BEFORE ONSET | YES AFTER ONSET": 0.075,
+        "YES BEFORE ONSET | NO AFTER ONSET": 0.025,
+        "NO BEFORE ONSET | NO AFTER ONSET": -0.075,
+        "NO BEFORE ONSET | YES AFTER ONSET": 0.025,
+        "NO BEFORE ONSET | YES AFTER ONSET (Non-causal)": -0.025,
     }
 
     def __init__(
@@ -369,6 +371,7 @@ class SymptomProgressionPlotter:
         json_path,
         onset_csv_path,
         symptoms,
+        question_key_file=None,
         output_dir="dateTimePlots",
         onset_col="stroke_date",
         date_col="Date",
@@ -381,6 +384,7 @@ class SymptomProgressionPlotter:
         show_yes_before_no_after=True,
         show_no_before_no_after=True,
         show_no_before_yes_after=True,
+        show_no_before_non_causal_after=True,
         display_plot=True,
         transition_threshold_months=3,
         state_rule="hierarchical",
@@ -410,6 +414,7 @@ class SymptomProgressionPlotter:
             "YES BEFORE ONSET | NO AFTER ONSET": show_yes_before_no_after,
             "NO BEFORE ONSET | NO AFTER ONSET": show_no_before_no_after,
             "NO BEFORE ONSET | YES AFTER ONSET": show_no_before_yes_after,
+            "NO BEFORE ONSET | YES AFTER ONSET (Non-causal)": show_no_before_non_causal_after,
         }
         self.display_plot = display_plot
         self.status_calculator = SymptomPlottingStatusCalculator(
@@ -456,7 +461,6 @@ class SymptomProgressionPlotter:
             str(self.temp_longitudinal_path),
             symptom_keys=self.symptom_keys,
         )
-
         if self.review_df is None or self.review_df.empty:
             raise ValueError("No valid longitudinal data could be extracted from JSON.")
 
@@ -805,10 +809,10 @@ class SymptomProgressionPlotter:
                 legend_name = trace_class
                 if trace_class in incidence_map:
                     incidence_pct = incidence_map[trace_class] * 100
-                    legend_name = f"{trace_class} ({self.transition_threshold_months} Month Incidence: {incidence_pct:.1f}%)"
+                    legend_name = f"{trace_class}\n({self.transition_threshold_months} Month Incidence: {incidence_pct:.1f}%)"
                 else:
                     incidence_pct = 0
-                    legend_name = f"{trace_class} ({self.transition_threshold_months} Month Incidence: {incidence_pct:.1f}%)"
+                    legend_name = f"{trace_class}\n({self.transition_threshold_months} Month Incidence: {incidence_pct:.1f}%)"
                     
                 
                 fig.add_trace(
@@ -840,7 +844,7 @@ class SymptomProgressionPlotter:
             raise ValueError("No plotted symptom trajectories were available.")
 
         self.format_figure(fig, self.series_df)
-        output_path = self.get_output_filepath("DateSymptomPlot", symptom_key, ".svg")
+        output_path = self.get_output_filepath("DateSymptomPlot", self.question_names_dict.get(symptom_key, symptom_key), ".html")
         fig.write_html(output_path, include_plotlyjs="cdn")
         return fig, output_path
     
@@ -922,7 +926,7 @@ class SymptomProgressionPlotter:
         return SymptomPlottingStatusCalculator(state_rule="coerce").calculate_states(status_series)
 
     @staticmethod
-    def classify_trace(patient_df, transition_threshold_months=3):
+    def classify_trace(patient_df, transition_threshold_months=3, remove_delayed_conversions=True):
         """
         Classify a trajectory by whether Yes appears before and after onset.
         
@@ -932,6 +936,7 @@ class SymptomProgressionPlotter:
         Args:
             patient_df: DataFrame with State and months_since_onset columns
             transition_threshold_months: Maximum months from onset for a transition to count
+            remove_delayed_conversions: Whether to remove delayed conversions from the classification
         """
         return SymptomPlottingConditions.classify_trace(
             patient_df,
@@ -1167,7 +1172,16 @@ class SymptomProgressionPlotter:
 
         if export_df.empty:
             raise ValueError("No patient-symptom records to export.")
-        output_path = self.get_output_filepath("patient_conditions", symptom_key, '.csv')
+        
+        if self.question_names_dict is not None:
+            export_df['Symptom'] = export_df['Symptom'].map(self.question_names_dict)
+            keys=[self.question_names_dict.get(key, key) for key in self.symptom_keys]
+        else:
+            keys=self.symptom_keys
+        
+        if output_path is None:
+            output_path = self.get_output_filepath("PatientConditions", keys, ".csv")
+        
         export_df.to_csv(output_path, index=False)
         print(f"Patient conditions exported to {output_path}")
         return export_df
@@ -1268,6 +1282,12 @@ def parse_args():
         "--hide_no_before_yes_after",
         action="store_true",
         help="Hide traces classified as NO BEFORE ONSET | YES AFTER ONSET.",
+    )
+
+    parser.add_argument(
+        "--hide_no_before_non_causal_after",
+        action="store_true",
+        help="Hide traces classified as NO BEFORE ONSET | YES AFTER ONSET (Non-causal).",
     )
 
     parser.add_argument(

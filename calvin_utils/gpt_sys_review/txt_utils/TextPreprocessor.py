@@ -73,7 +73,7 @@ class TextPreprocessor:
         """
         raw_txt_files = os.listdir(self.raw_txt_file_dir)                          # get target files
         raw_txt_files = [f for f in raw_txt_files if f.endswith('.txt')]    # make sure only to process .txt files
-        for filename in tqdm(raw_txt_files, desc='Preprocessing text files'):
+        for filename in tqdm(raw_txt_files, desc='Preprocessing text files',total=len(raw_txt_files)):
             input_filepath = os.path.join(self.raw_txt_file_dir, filename)
             output_filepath = os.path.join(self.output_dir, filename)
 

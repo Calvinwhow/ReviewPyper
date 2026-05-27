@@ -191,7 +191,7 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
                 return file_name, chunk_index, answer, tokens_used, retries, chunk_metadata
 
             chunk_tasks = []
-            for file_name, file_text in tqdm(self.relevant_text_by_file.items(),f'Chunking input: '):
+            for file_name, file_text in tqdm(self.relevant_text_by_file.items(),f'Chunking input: ',total=len(self.relevant_text_by_file)):
 
                 chunks, metadata = self.call_chunker(file_text, chunk_by_date=chunk_by_date)
                 if self.retain_chunks:

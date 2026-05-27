@@ -37,6 +37,19 @@ class TextChunker:
         else:
             self.chunk_text_by_tokenlimit()
 
+    @staticmethod
+    def reformat_date(date_str):
+        """Reformats a date string from M/D/YYYY to YYYY-mm-dd for easier sorting.
+           This format is also good for the final output, since it makes comparing dates
+           easy for the eye."""
+        if date_str.lower() == "unknown date":
+            return date_str
+        
+        from datetime import datetime
+        datetime_obj=datetime.strptime(date_str, "%m/%d/%Y").date()
+        new_date_str = datetime_obj.strftime("%Y-%m-%d")
+        
+        return new_date_str
 
     def chunk_text_by_date(self):
         self.text=self.text.replace("EMPI,EPIC_PMRN,MRN_Type,MRN,Report_Number,Report_Date_Time,Report_Description,Report_Status,Report_Type,Report_Text",'')
@@ -55,7 +68,7 @@ class TextChunker:
             # (100 is arbitrarily chosen so that less splitting has to be done)
             # then date and time are the 5th element, with a space separating 
             # date and time.  
-            date=note[:100].split(',')[5].split(' ')[0] 
+            date=self.reformat_date(note[:100].split(',')[5].split(' ')[0])
             length=sum([self.count_tokens_in_word(word) for word in note.split()])
 
             if self.chunks!=[] and (date==self.chunk_metadata[-1]['date'] and (length+prev_length)<self.token_limit):
