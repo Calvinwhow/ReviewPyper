@@ -113,7 +113,8 @@ class PostProcessing:
             onset=f'onset_date: {question}'
             if onset in df.columns:
                 new_col_order.append(onset)
-        
+
+        new_col_order=[col for col in new_col_order if col in df.columns]
         stuff_that_shouldnt_be_here=[col for col in df.columns if col not in new_col_order]
         new_col_order+=stuff_that_shouldnt_be_here
         

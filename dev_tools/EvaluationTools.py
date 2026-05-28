@@ -100,7 +100,7 @@ from matplotlib.colors import LinearSegmentedColormap
 import seaborn as sns
 
 
-def plot_conf_matrix(array, labels, cmap='Blues', filename=None, figsz=(3,3),show_pct=False):
+def plot_conf_matrix(array, cmap='Blues', filename=None, figsz=(3,3),show_pct=False):
 
     df_cm = pd.DataFrame(array, range(len(array)), range(len(array)))
     
