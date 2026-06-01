@@ -187,10 +187,12 @@ def plot_scores(df, score_names,yrange=(0.1,1.03), title=None,
 
 import ptitprince as pt
 
-def raincloud_plot(stats_df, color=None, figsz=(6,4), filename=None,ylims=None, include_accuracy=True, debug=False,):
+def raincloud_plot(stats_df, color=None, figsz=(6,4), filename=None,ylims=None, include_accuracy=True,point_sz=3, debug=False,):
     
     if color is None:
         color='#1F77B4'
+    
+    stats_df=stats_df[stats_df['question']!='overall']
 
     setstuff=[]
     cols=[]
@@ -200,7 +202,7 @@ def raincloud_plot(stats_df, color=None, figsz=(6,4), filename=None,ylims=None, 
         labels=["Accuracy","Sensitivity","Specificity","NPV",'PPV']
     else:
         columns_to_use=stats_df.columns[2:]
-        labels
+        labels=["Sensitivity","Specificity","NPV",'PPV']
     for col in columns_to_use:
         setstuff+=['ccas']*len(stats_df)
         cols+=[col]*len(stats_df)
@@ -215,7 +217,7 @@ def raincloud_plot(stats_df, color=None, figsz=(6,4), filename=None,ylims=None, 
 
     plt.figure(figsize=figsz)
     rc=pt.RainCloud(data=accdf, y='scores',x='scoretype',hue='scoretype',
-                bw=0.5, cut=0, orient='v', palette=[color]*5, width_viol=.5, width_box=.3,)
+                bw=0.5, cut=0, orient='v', palette=[color]*5, width_viol=.5, width_box=.3,point_size=point_sz)
     rc.set_xticklabels(labels)
 
     rc.set_xlabel('')
@@ -230,7 +232,7 @@ def raincloud_plot(stats_df, color=None, figsz=(6,4), filename=None,ylims=None, 
         plt.savefig(filename)
 
 
-def barplot(data, xlabels,ylabel=None,colors=None, figsz=(4,4), filename=None, ylims=(0,1),ytick_spacing=0.05):
+def barplot(data, xlabels,ylabel=None,colors=None, figsz=(4,4), filename=None, ylims=(0,1), ytick_spacing=0.05):
     
     new_df=pd.DataFrame()
     new_df['name']=xlabels

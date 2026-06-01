@@ -25,7 +25,7 @@
     "Does this patient show lack of pleasure from activities or interactions that used to be enjoyable? If the text does not mention enjoyment of activities, respond \"not mentioned\"":"anhedonia",
     "Does this patient show negative attitudes or pessimism about the future and a sense of hopelessness? If the text does not mention pessimism or hopelessness, respond \"not mentioned\"":"pessimism",
     "Is this patient uneasy or generally dissatisfied with life? If the text does not mention depressive symptoms, respond \"not mentioned\"":"dissatisfaction",
-    "Does this patient seem very sad or depressed? If the text does not mention overall mood, respond \"not mentioned\"":"depressed",
+    "Does this patient seem depressed, or do they have a depression diagnosis? If the text does not mention depression or overall mood, respond \"not mentioned\"":"depressed",
     "Is this patient being treated for depression? For instance, the text may mention the patient being on antidepressant medication or receiving therapy for depression. If the text does not mention treatment, respond \"not mentioned\"":"depression treatment"
 },
 "memory":{

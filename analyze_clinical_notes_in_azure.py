@@ -169,7 +169,7 @@ evaluated_json_path = evaluator.save_to_json(answers)
 
 severity_dict = {
     0: ["unknown",'no info', 'not mentioned', 'no mention'],
-    1: ["n", "no", "false", 'not present'],
+    1: ["n", "no", "false",],
     2: ["y", "yes", "true", ]
 }
 
