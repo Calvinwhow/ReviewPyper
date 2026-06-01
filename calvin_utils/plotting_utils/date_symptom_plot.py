@@ -1,4 +1,5 @@
 import argparse
+from numbers import Real
 import re
 import sys
 from pathlib import Path
@@ -9,6 +10,380 @@ if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from calvin_utils.gpt_sys_review.gpt_utils.temporal_analysis import TemporalPlotter
+
+
+def normalize_transition_window(transition_threshold_months):
+    """
+    Normalize scalar or (lower, upper) transition-window configuration.
+    """
+    if isinstance(transition_threshold_months, (tuple, list)):
+        if len(transition_threshold_months) != 2:
+            raise ValueError("transition_threshold_months must be a scalar or (lower, upper).")
+        lower, upper = transition_threshold_months
+    else:
+        lower, upper = 0, transition_threshold_months
+
+    if not isinstance(lower, Real) or not isinstance(upper, Real):
+        raise TypeError("transition window bounds must be numeric.")
+    if lower < 0:
+        raise ValueError("transition lower limit must be >= 0.")
+    if upper < lower:
+        raise ValueError("transition upper limit must be >= lower limit.")
+
+    return float(lower), float(upper)
+
+
+def format_transition_window_label(transition_window_months):
+    """
+    Format transition window bounds for legends and output column names.
+    """
+    lower, upper = transition_window_months
+    lower_label = f"{lower:g}"
+    upper_label = f"{upper:g}"
+    if lower == 0:
+        return upper_label
+    return f"{lower_label}-{upper_label}"
+
+
+class SymptomPlottingStatusCalculator:
+    """
+    Convert ReviewPyper statuses into plotting state values.
+    """
+    VALID_RULES = {"raw", "hierarchical", "coerce", "average"}
+
+    STATE_LABELS = {
+        -1: "No data",
+        0: "No",
+        1: "Yes",
+    }
+
+    def __init__(
+        self,
+        state_rule="hierarchical",
+        floor_threshold=None,
+        coerce_observation_threshold=3,
+        transition_threshold_months=3,
+    ):
+        if state_rule not in self.VALID_RULES:
+            valid = ", ".join(sorted(self.VALID_RULES))
+            raise ValueError(f"state_rule must be one of: {valid}")
+
+        self.state_rule = state_rule
+        self.floor_threshold = floor_threshold
+        self.coerce_observation_threshold = coerce_observation_threshold
+        self.set_transition_threshold_months(transition_threshold_months)
+
+    def set_transition_threshold_months(self, transition_threshold_months):
+        """
+        Store a backward-compatible transition threshold plus explicit bounds.
+        """
+        lower, upper = normalize_transition_window(transition_threshold_months)
+        self.transition_lower_limit_months = lower
+        self.transition_upper_limit_months = upper
+        self.transition_threshold_months = upper
+        self.transition_window_months = (lower, upper)
+
+    def is_in_transition_window(self, month):
+        """
+        Return whether month is inside the configured post-onset window.
+        """
+        return (
+            month is not None
+            and self.transition_lower_limit_months <= month <= self.transition_upper_limit_months
+        )
+
+    @staticmethod
+    def raw_status_to_state(raw_status):
+        """
+        Map raw ReviewPyper status into plot state.
+
+        ReviewPyper status:
+          - 2 -> 1  (Yes)
+          - 1 -> 0  (No)
+          - any other value -> -1 (No data)
+        """
+        if raw_status == 2:
+            return 1
+        if raw_status == 1:
+            return 0
+        return -1
+
+    def raw_states(self, status_series):
+        """
+        Convert raw statuses directly to plotted state values.
+        """
+        return [self.raw_status_to_state(raw_status) for raw_status in status_series]
+
+    def coerce_states(self, status_series):
+        """
+        Change the plotted state only after more than the configured number of
+        consecutive observations support the new Yes/No state.
+        """
+        state = -1
+        candidate_state = None
+        candidate_count = 0
+        states = []
+
+        for raw_status in status_series:
+            raw_state = self.raw_status_to_state(raw_status)
+
+            if raw_state == -1:
+                states.append(state)
+                continue
+
+            if state == -1:
+                state = raw_state
+                candidate_state = None
+                candidate_count = 0
+            elif raw_state == state:
+                candidate_state = None
+                candidate_count = 0
+            else:
+                if raw_state == candidate_state:
+                    candidate_count += 1
+                else:
+                    candidate_state = raw_state
+                    candidate_count = 1
+
+                if candidate_count > self.coerce_observation_threshold:
+                    state = candidate_state
+                    candidate_state = None
+                    candidate_count = 0
+
+            states.append(state)
+
+        return states
+
+    def hierarchical_states(self, status_series, months_since_onset=None):
+        """
+        Plot symptom state over time. For baseline-Yes patients, any No inside
+        the onset threshold window locks the trajectory to No permanently.
+        For baseline-No patients, any Yes inside the onset threshold window
+        locks the trajectory to Yes permanently.
+        """
+        raw_states = self.raw_states(status_series)
+        states = []
+
+        if months_since_onset is None:
+            months_since_onset = [None] * len(status_series)
+
+        baseline_state = self.baseline_state(raw_states, months_since_onset)
+        conversion_index = self.threshold_conversion_index(raw_states, months_since_onset, baseline_state)
+        state = -1
+        locked_state = None
+
+        for index, (raw_state, month) in enumerate(zip(raw_states, months_since_onset)):
+            if locked_state is not None:
+                states.append(locked_state)
+                continue
+
+            if raw_state == -1:
+                states.append(state)
+                continue
+
+            if state == -1:
+                state = raw_state
+            elif conversion_index is not None and index == conversion_index:
+                state = raw_state
+                if baseline_state == 1 and raw_state == 0:
+                    locked_state = 0
+                elif baseline_state == 0 and raw_state == 1:
+                    locked_state = 1
+            elif raw_state == 1:
+                state = 1
+            elif month is not None and month <= self.transition_upper_limit_months and state != 1:
+                state = raw_state
+
+            states.append(state)
+
+        return states
+
+    @staticmethod
+    def baseline_state(raw_states, months_since_onset):
+        """
+        Before onset, any Yes means baseline Yes. Otherwise baseline is No.
+        """
+        for raw_state, month in zip(raw_states, months_since_onset):
+            if month is not None and month < 0 and raw_state == 1:
+                return 1
+        return 0
+
+    def threshold_conversion_index(self, raw_states, months_since_onset, baseline_state):
+        """
+        Return the first index where a patient converts away from baseline
+        during the post-onset threshold window.
+        """
+        target_state = 0 if baseline_state == 1 else 1
+        for index, (raw_state, month) in enumerate(zip(raw_states, months_since_onset)):
+            if (
+                self.is_in_transition_window(month)
+                and raw_state == target_state
+            ):
+                return index
+        return None
+
+    def is_threshold_transition(self, state, raw_state, month):
+        """
+        Return whether raw_state is a real Yes/No transition within the
+        configured post-onset threshold window.
+        """
+        return (
+            self.is_in_transition_window(month)
+            and state in {0, 1}
+            and raw_state in {0, 1}
+            and raw_state != state
+        )
+
+    def average_states(self, status_series):
+        """
+        Convert raw statuses to states, then average each point with its
+        immediate previous and next point when available.
+        """
+        states = self.raw_states(status_series)
+        averaged_states = []
+
+        for index, state in enumerate(states):
+            window = states[max(0, index - 1):index + 2]
+            averaged_states.append(sum(window) / len(window))
+
+        return averaged_states
+
+    def calculate_states(self, status_series, months_since_onset=None):
+        """
+        Return plotted state values using the configured state rule.
+        """
+        if self.state_rule == "raw":
+            states = self.raw_states(status_series)
+        elif self.state_rule == "hierarchical":
+            states = self.hierarchical_states(status_series, months_since_onset)
+        elif self.state_rule == "average":
+            states = self.average_states(status_series)
+        else:
+            states = self.coerce_states(status_series)
+
+        return self.apply_floor_threshold(states)
+
+    def apply_floor_threshold(self, states):
+        """
+        Set values below floor_threshold to 0.
+        """
+        if self.floor_threshold is None:
+            return states
+
+        return [
+            0 if state < self.floor_threshold else state
+            for state in states
+        ]
+
+    def prepare_trace_dataframe(self, patient_df):
+        """
+        Sort one trajectory and add plotting State and StateLabel columns.
+        """
+        patient_df = patient_df.sort_values("months_since_onset").copy()
+        patient_df["RawState"] = self.raw_states(patient_df["Status"])
+        patient_df["State"] = self.calculate_states(
+            patient_df["Status"],
+            patient_df["months_since_onset"],
+        )
+        patient_df["StateLabel"] = patient_df["State"].map(self.STATE_LABELS)
+        patient_df["StateLabel"] = patient_df["StateLabel"].fillna(
+            patient_df["State"].map(lambda state: f"{state:.2f}")
+        )
+        return patient_df
+
+
+class SymptomPlottingConditions:
+    """
+    Classify plotted symptom trajectories from already-calculated state values.
+    """
+    TRACE_TRANSITIONS = {
+        "NO -> YES": "NO BEFORE ONSET | YES AFTER ONSET",
+        "YES -> NO": "YES BEFORE ONSET | NO AFTER ONSET",
+        "NO -> NO": "NO BEFORE ONSET | NO AFTER ONSET",
+        "YES -> YES": "YES BEFORE ONSET | YES AFTER ONSET",
+    }
+    TRANSITION_TYPES = list(TRACE_TRANSITIONS.keys())
+
+    @staticmethod
+    def final_state(df):
+        """
+        Return the last plotted state in a trajectory segment.
+        """
+        if df.empty:
+            return -1
+        return df.sort_values("months_since_onset")["State"].iloc[-1]
+
+    @classmethod
+    def classify_trace(cls, patient_df, transition_threshold_months=3):
+        """
+        Classify a trajectory from baseline-before-onset and the post-onset
+        threshold window only. Later symptom changes do not alter class/color.
+        """
+        state_col = "RawState" if "RawState" in patient_df.columns else "State"
+        lower_limit, upper_limit = normalize_transition_window(transition_threshold_months)
+        before_df = patient_df[patient_df["months_since_onset"] < 0]
+        window_df = patient_df[
+            (patient_df["months_since_onset"] >= lower_limit)
+            & (patient_df["months_since_onset"] <= upper_limit)
+        ]
+
+        before_yes = bool((before_df[state_col] == 1).any())
+        if before_yes:
+            after_yes = not bool((window_df[state_col] == 0).any())
+        else:
+            after_yes = bool((window_df[state_col] == 1).any())
+
+        before_label = "YES BEFORE ONSET" if before_yes else "NO BEFORE ONSET"
+        after_label = "YES AFTER ONSET" if after_yes else "NO AFTER ONSET"
+        return f"{before_label} | {after_label}"
+
+    @staticmethod
+    def states_to_transition(before_state, after_state):
+        """
+        Return the transition label for before/after onset states.
+        """
+        before_yes = before_state == 1
+        after_yes = after_state == 1
+
+        if before_yes and after_yes:
+            return "YES -> YES"
+        if before_yes and not after_yes:
+            return "YES -> NO"
+        if not before_yes and after_yes:
+            return "NO -> YES"
+        return "NO -> NO"
+
+    @classmethod
+    def classify_window_transition(cls, patient_df, x_limit_months):
+        """
+        Return transition type within a symmetric onset observation window.
+        """
+        obs_window = patient_df[
+            (patient_df["months_since_onset"] >= -x_limit_months)
+            & (patient_df["months_since_onset"] <= x_limit_months)
+        ]
+
+        if obs_window.empty:
+            return None
+
+        before = obs_window[obs_window["months_since_onset"] < 0]
+        after = obs_window[obs_window["months_since_onset"] >= 0]
+
+        state_col = "RawState" if "RawState" in patient_df.columns else "State"
+        before_state = 1 if (before[state_col] == 1).any() else 0
+        if before_state == 1:
+            after_state = 0 if (after[state_col] == 0).any() else 1
+        else:
+            after_state = 1 if (after[state_col] == 1).any() else 0
+        return cls.states_to_transition(before_state, after_state)
+
+    @classmethod
+    def transition_to_trace_class(cls, transition):
+        """
+        Return the plotted trace class for a transition label.
+        """
+        return cls.TRACE_TRANSITIONS[transition]
+
 
 class SymptomProgressionPlotter:
     """
@@ -64,26 +439,17 @@ class SymptomProgressionPlotter:
         show_no_before_non_causal_after=True,
         display_plot=True,
         transition_threshold_months=3,
+        state_rule="hierarchical",
+        state_floor_threshold=None,
+        coerce_observation_threshold=3,
     ):
         self.json_path = Path(json_path)
         self.onset_csv_path = Path(onset_csv_path)
-
-        if question_key_file is not None:
-            question_keys_df = pd.read_csv(question_key_file)
-
-            self.symptom_keys=[]
-            for symptom in symptoms:
-                if symptom in question_keys_df["question_name"].values:
-                    key = question_keys_df[question_keys_df["question_name"] == symptom]["question_text"].values[0]
-                    self.symptom_keys.append(key)
-                else:
-                    self.symptom_keys.append(symptom)
-            
-            self.question_names_dict = dict(zip(question_keys_df["question_text"], question_keys_df["question_name"]))
-            
-        else:
-            self.symptom_keys = list(symptoms)
-
+        self.requested_symptom_keys = list(symptoms)
+        self.symptom_keys = list(symptoms)
+        self.symptom_key_map = {}
+        self.question_key_file = Path(question_key_file) if question_key_file is not None else None
+        self.question_names_dict = None
         self.output_dir = Path(output_dir)
         self.requested_onset_col = onset_col
         self.onset_col = onset_col
@@ -93,7 +459,10 @@ class SymptomProgressionPlotter:
         self.min_valid_year = min_valid_year
         self.max_valid_year = max_valid_year
         self.drop_unknown = drop_unknown
-        self.transition_threshold_months = transition_threshold_months
+        self.set_transition_threshold_months(transition_threshold_months)
+        self.state_rule = state_rule
+        self.state_floor_threshold = state_floor_threshold
+        self.coerce_observation_threshold = coerce_observation_threshold
         self.enabled_trace_conditions = {
             "YES BEFORE ONSET | YES AFTER ONSET": show_yes_before_yes_after,
             "YES BEFORE ONSET | NO AFTER ONSET": show_yes_before_no_after,
@@ -102,11 +471,42 @@ class SymptomProgressionPlotter:
             "NO BEFORE ONSET | YES AFTER ONSET (Non-causal)": show_no_before_non_causal_after,
         }
         self.display_plot = display_plot
+        self.status_calculator = SymptomPlottingStatusCalculator(
+            state_rule,
+            floor_threshold=state_floor_threshold,
+            coerce_observation_threshold=coerce_observation_threshold,
+            transition_threshold_months=self.transition_window_months,
+        )
+        self.plotting_conditions = SymptomPlottingConditions()
 
         self.review_df = None
         self.onset_df = None
         self.merged_df = None
         self.series_df = None
+
+    def set_transition_threshold_months(self, transition_threshold_months):
+        """
+        Store a backward-compatible transition threshold plus explicit bounds.
+        """
+        lower, upper = normalize_transition_window(transition_threshold_months)
+        self.transition_lower_limit_months = lower
+        self.transition_upper_limit_months = upper
+        self.transition_threshold_months = upper
+        self.transition_window_months = (lower, upper)
+
+    def transition_window_label(self):
+        """
+        Return the transition window as a compact display label.
+        """
+        return format_transition_window_label(self.transition_window_months)
+
+    def get_symptom_display_name(self, symptom_key):
+        """
+        Return a display/output label for a symptom key when a label map exists.
+        """
+        if self.question_names_dict:
+            return self.question_names_dict.get(symptom_key, symptom_key)
+        return symptom_key
 
     def run(self):
         """
@@ -133,7 +533,7 @@ class SymptomProgressionPlotter:
             json_path=str(self.json_path),
             output_dir=str(self.output_dir),
         )
-        self.validate_json_symptom_keys(plotter.data)
+        self.resolve_json_symptom_keys(plotter.data)
 
         self.review_df = plotter.export_per_date_longitudinal_data(
             str(self.temp_longitudinal_path),
@@ -142,10 +542,30 @@ class SymptomProgressionPlotter:
         if self.review_df is None or self.review_df.empty:
             raise ValueError("No valid longitudinal data could be extracted from JSON.")
 
-    def validate_json_symptom_keys(self, data):
+    def resolve_json_symptom_keys(self, data):
         """
-        Validate requested symptom keys against the evaluated JSON before doing
-        the expensive per-date export.
+        Resolve requested symptom strings against evaluated JSON keys. Requests
+        can be exact keys or unique substrings of a full key.
+        """
+        available_keys = self.get_json_symptom_keys(data)
+        resolved_keys = []
+        symptom_key_map = {}
+
+        for requested_key in self.requested_symptom_keys:
+            resolved_key = self.resolve_symptom_key(requested_key, available_keys)
+            resolved_keys.append(resolved_key)
+            symptom_key_map[requested_key] = resolved_key
+
+            if resolved_key != requested_key:
+                print(f"Resolved symptom substring to JSON key:\n  {requested_key}\n  -> {resolved_key}")
+
+        self.symptom_keys = resolved_keys
+        self.symptom_key_map = symptom_key_map
+
+    @classmethod
+    def get_json_symptom_keys(cls, data):
+        """
+        Return symptom/question keys available in ReviewPyper evaluated JSON.
         """
         available_keys = set()
         skipped_keys = {'metadata', 'CHUNKS', 'MRN', 'filepath'}
@@ -158,16 +578,36 @@ class SymptomProgressionPlotter:
                     continue
                 if isinstance(value, dict):
                     available_keys.add(key)
-        
-        shortened_keys = set([self.question_names_dict.get(key, key) for key in available_keys])
-        missing = [key for key in self.symptom_keys if key not in available_keys.union(shortened_keys)]
-        if not missing:
-            return
 
-        available = "\n".join(f"  - {key}" for key in sorted(shortened_keys))
+        return available_keys
+
+    @staticmethod
+    def resolve_symptom_key(requested_key, available_keys):
+        """
+        Resolve one requested symptom key by exact match or unique substring.
+        """
+        if requested_key in available_keys:
+            return requested_key
+
+        matches = [
+            available_key for available_key in available_keys
+            if requested_key in available_key
+        ]
+
+        if len(matches) == 1:
+            return matches[0]
+
+        available = "\n".join(f"  - {key}" for key in sorted(available_keys))
+        if not matches:
+            raise ValueError(
+                "Requested symptom key was not found as an exact key or substring "
+                f"in the evaluated JSON: {requested_key}\nAvailable symptom keys:\n{available}"
+            )
+
+        matched = "\n".join(f"  - {key}" for key in sorted(matches))
         raise ValueError(
-            "Requested symptom keys were not found in the evaluated JSON: "
-            f"{missing}\nAvailable symptom keys:\n{available}"
+            "Requested symptom substring matched multiple JSON keys. Use a more "
+            f"specific substring.\nRequested: {requested_key}\nMatches:\n{matched}"
         )
 
     def load_onset_data(self):
@@ -366,7 +806,12 @@ class SymptomProgressionPlotter:
         Build trajectories from wide-format symptom columns.
         """
         records = []
-        available_keys = [self.question_names_dict.get(key, key) for key in self.symptom_keys if self.question_names_dict.get(key, key) in self.merged_df.columns]
+        available_keys = []
+        for key in self.symptom_keys:
+            try:
+                available_keys.append(self.resolve_symptom_key(key, set(self.merged_df.columns)))
+            except ValueError:
+                continue
 
         for key in available_keys:
             symptom_df = self.merged_df[[self.mrn_col, "months_since_onset", key]].copy()
@@ -417,13 +862,16 @@ class SymptomProgressionPlotter:
                 continue
 
             for mrn, patient_df in symptom_df.groupby(self.mrn_col):
-                patient_df = self.prepare_trace_dataframe(patient_df)
+                patient_df = self.status_calculator.prepare_trace_dataframe(patient_df)
                 if self.drop_unknown:
                     patient_df = patient_df[patient_df["State"] != -1]
                     if patient_df.empty:
                         continue
 
-                trace_class = self.classify_trace(patient_df, self.transition_threshold_months)
+                trace_class = self.plotting_conditions.classify_trace(
+                    patient_df,
+                    self.transition_window_months,
+                )
                 if not self.enabled_trace_conditions[trace_class]:
                     continue
 
@@ -439,10 +887,10 @@ class SymptomProgressionPlotter:
                 legend_name = trace_class
                 if trace_class in incidence_map:
                     incidence_pct = incidence_map[trace_class] * 100
-                    legend_name = f"{trace_class}\n({self.transition_threshold_months} Month Incidence: {incidence_pct:.1f}%)"
+                    legend_name = f"{trace_class}\n({self.transition_window_label()} Month Incidence: {incidence_pct:.1f}%)"
                 else:
                     incidence_pct = 0
-                    legend_name = f"{trace_class}\n({self.transition_threshold_months} Month Incidence: {incidence_pct:.1f}%)"
+                    legend_name = f"{trace_class}\n({self.transition_window_label()} Month Incidence: {incidence_pct:.1f}%)"
                     
                 
                 fig.add_trace(
@@ -474,32 +922,36 @@ class SymptomProgressionPlotter:
             raise ValueError("No plotted symptom trajectories were available.")
 
         self.format_figure(fig, self.series_df)
-        output_path = self.get_output_filepath("DateSymptomPlot", self.question_names_dict.get(symptom_key, symptom_key), ".html")
+        output_symptoms = [
+            self.get_symptom_display_name(key)
+            for key in self.symptom_keys
+        ]
+        output_key = output_symptoms[0] if len(output_symptoms) == 1 else "multiple_symptoms"
+        output_path = self.get_output_filepath("DateSymptomPlot", output_key, ".html")
         fig.write_html(output_path, include_plotlyjs="cdn")
         return fig, output_path
     
     def _calculate_incidence_map(self):
         """
-        Helper method to calculate incidence rates for each transition type.
-        Observes occurrences across ±12-month window (default x_limit) and converts
-        to transition_threshold_months incidence rate.
+        Calculate incidence rates using the onset-to-threshold classification
+        window. No wider observation window or scaling is applied.
         Returns a dict mapping trace_class to normalized incidence ratio.
         """
         incidence_map = {}
-        transition_types = ["NO -> YES", "YES -> NO", "NO -> NO", "YES -> YES", "NO -> YES (Non-causal)"]
-        x_limit = 12  # Default observation window
         
         for symptom_key in self.symptom_keys:
             symptom_df = self.series_df[self.series_df["Question"] == symptom_key]
             if symptom_df.empty:
                 continue
             
-            # Initialize counters
-            counts = {t: 0 for t in transition_types}
+            counts = {
+                trace_class: 0
+                for trace_class in self.plotting_conditions.TRACE_TRANSITIONS.values()
+            }
             total_patients = 0
             
             for mrn, patient_df in symptom_df.groupby(self.mrn_col):
-                patient_df = self.prepare_trace_dataframe(patient_df)
+                patient_df = self.status_calculator.prepare_trace_dataframe(patient_df)
                 if self.drop_unknown:
                     patient_df = patient_df[patient_df["State"] != -1]
                 
@@ -508,51 +960,15 @@ class SymptomProgressionPlotter:
                 
                 total_patients += 1
                 
-                # Filter to ±12 month observation window
-                obs_window = patient_df[
-                    (patient_df["months_since_onset"] >= -x_limit) &
-                    (patient_df["months_since_onset"] <= x_limit)
-                ]
-                
-                if obs_window.empty:
-                    continue
-                
-                # Determine state before and after onset within window
-                before = obs_window[obs_window["months_since_onset"] < 0]
-                after = obs_window[obs_window["months_since_onset"] >= 0]
-                
-                before_state = before["State"].max() if not before.empty else -1
-                after_state = after["State"].max() if not after.empty else -1
-                
-                # Map states to YES/NO
-                before_yes = (before_state == 1)
-                after_yes = (after_state == 1)
-                
-                # Classify transition
-                if before_yes and after_yes:
-                    transition = "YES -> YES"
-                elif before_yes and not after_yes:
-                    transition = "YES -> NO"
-                elif not before_yes and after_yes:
-                    transition = "NO -> YES"
-                else:
-                    transition = "NO -> NO"
-                
-                counts[transition] += 1
+                trace_class = self.plotting_conditions.classify_trace(
+                    patient_df,
+                    self.transition_window_months,
+                )
+                counts[trace_class] += 1
             
-            # Convert ±12-month incidence to transition_threshold_months incidence
             if total_patients > 0:
-                incidence_window_ratio = self.transition_threshold_months / x_limit
-                for transition_type, transition_name in [
-                    ("NO -> YES", "NO BEFORE ONSET | YES AFTER ONSET"),
-                    ("YES -> NO", "YES BEFORE ONSET | NO AFTER ONSET"),
-                    ("NO -> NO", "NO BEFORE ONSET | NO AFTER ONSET"),
-                    ("YES -> YES", "YES BEFORE ONSET | YES AFTER ONSET"),
-                    ("NO -> YES (Non-causal)", "NO BEFORE ONSET | YES AFTER ONSET (Non-causal)"),
-                ]:
-                    incidence_x_window = counts[transition_type] / total_patients
-                    incidence_threshold_window = incidence_x_window * incidence_window_ratio
-                    incidence_map[transition_name] = incidence_threshold_window
+                for trace_class, count in counts.items():
+                    incidence_map[trace_class] = count / total_patients
         
         return incidence_map
 
@@ -576,52 +992,21 @@ class SymptomProgressionPlotter:
     @classmethod
     def prepare_trace_dataframe(cls, patient_df):
         """
-        Sort one trajectory and apply symptom timing carry-forward rules.
+        Sort one trajectory and map raw ReviewPyper status to plot state.
 
         Raw ReviewPyper status is mapped as:
           - 2 -> 1  (Yes)
           - 1 -> 0  (No)
           - 0 -> -1 (No data)
-
-        Then:
-          - once Yes occurs, all later points remain Yes
-          - before Yes, No carries forward over later No Data
         """
-        patient_df = patient_df.sort_values("months_since_onset").copy()
-        patient_df["State"] = cls.apply_state_rules(patient_df["Status"])
-        patient_df["StateLabel"] = patient_df["State"].map({
-            -1: "No data",
-            0: "No",
-            1: "Yes",
-        })
-        return patient_df
+        return SymptomPlottingStatusCalculator().prepare_trace_dataframe(patient_df)
 
     @staticmethod
     def apply_state_rules(status_series):
         """
-        Apply the state machine for symptom timing.
+        Legacy wrapper for the explicit coerce rule.
         """
-        state = -1
-        states = []
-
-        for raw_status in status_series:
-            if raw_status == 2:
-                raw_state = 1
-            elif raw_status == 1:
-                raw_state = 0
-            else:
-                raw_state = -1
-
-            if state == 1:
-                pass
-            elif raw_state == 1:
-                state = 1
-            elif raw_state == 0:
-                state = 0
-
-            states.append(state)
-
-        return states
+        return SymptomPlottingStatusCalculator(state_rule="coerce").calculate_states(status_series)
 
     @staticmethod
     def classify_trace(patient_df, transition_threshold_months=3, remove_delayed_conversions=True):
@@ -636,39 +1021,10 @@ class SymptomProgressionPlotter:
             transition_threshold_months: Maximum months from onset for a transition to count
             remove_delayed_conversions: Whether to remove delayed conversions from the classification
         """
-        before_df = patient_df[patient_df["months_since_onset"] < 0]
-        after_df = patient_df[patient_df["months_since_onset"] >= 0]
-
-        before_yes = bool((before_df["State"] == 1).any())
-        after_yes = bool((after_df["State"] == 1).any())
-        delayed_occurence=False
-        # If there's a transition after onset, check if it occurs within threshold
-        if before_yes and not after_yes:
-            # Transition from YES to NO - check if NO occurs within threshold
-            no_after = after_df[after_df["State"] == 0]
-            if not no_after.empty:
-                first_no_time = no_after["months_since_onset"].min()
-                if first_no_time > transition_threshold_months:
-                    # Transition occurs too late, treat as still YES after onset
-                    after_yes = True
-        
-        elif not before_yes and after_yes:
-            # Transition from NO to YES - check if YES occurs within threshold
-            yes_after = after_df[after_df["State"] == 1]
-            if not yes_after.empty:
-                first_yes_time = yes_after["months_since_onset"].min()
-                if first_yes_time > transition_threshold_months:
-                    # Transition occurs too late, treat as still NO after onset
-                    after_yes = False
-                    delayed_occurence=True
-
-        before_label = "YES BEFORE ONSET" if before_yes else "NO BEFORE ONSET"
-        after_label = "YES AFTER ONSET" if after_yes else "NO AFTER ONSET"
-        if delayed_occurence and remove_delayed_conversions:
-            after_label = "YES AFTER ONSET (Non-causal)"
-        # create secondary classification where transition happened after transition_threshold_months
-        # add an optional argument to skip this if needed.
-        return f"{before_label} | {after_label}"
+        return SymptomPlottingConditions.classify_trace(
+            patient_df,
+            transition_threshold_months,
+        )
 
     def validate_symptom_keys(self):
         """
@@ -680,9 +1036,17 @@ class SymptomProgressionPlotter:
             return
 
         available_keys = sorted(source_df["Question"].dropna().astype(str).unique())
-        missing = [key for key in self.symptom_keys if key not in available_keys]
+        missing = []
+        resolved_keys = []
+
+        for key in self.symptom_keys:
+            try:
+                resolved_keys.append(self.resolve_symptom_key(key, set(available_keys)))
+            except ValueError:
+                missing.append(key)
 
         if not missing:
+            self.symptom_keys = resolved_keys
             return
 
         available = "\n".join(f"  - {key}" for key in available_keys)
@@ -771,13 +1135,9 @@ class SymptomProgressionPlotter:
         value = value[:30]
         return value.strip("_")
 
-    def calculate_transition_incidence(self, x_limit_months=12):
+    def calculate_transition_incidence(self, x_limit_months=None):
         """
-        Calculate incidence rates by observing occurrences across x_limit_months window
-        and converting to transition_threshold_months incidence rate.
-        
-        For each symptom, counts transitions in the ±x_limit window and scales to the
-        transition_threshold_months timeframe (e.g., 3-month incidence).
+        Calculate transition incidence using the onset-to-threshold window.
         
         For each transition type:
         - NO -> YES (incidence of new symptom onset)
@@ -786,7 +1146,7 @@ class SymptomProgressionPlotter:
         - YES -> YES (symptom persists)
         
         Args:
-            x_limit_months (float): Observation window in months (default: 12, means ±12 months)
+            x_limit_months: Deprecated; retained for backward compatibility and ignored.
             
         Returns:
             pd.DataFrame: Summary with columns [Symptom, Transition_Type, Count, Total_Patients, Incidence_in_X_months]
@@ -795,7 +1155,11 @@ class SymptomProgressionPlotter:
             raise ValueError("No processed symptom data available. Run prepare_data() first.")
         
         records = []
-        transition_types = ["NO -> YES", "YES -> NO", "NO -> NO", "YES -> YES", "NO -> YES (Non-causal)"]
+        transition_types = self.plotting_conditions.TRANSITION_TYPES
+        trace_class_to_transition = {
+            trace_class: transition
+            for transition, trace_class in self.plotting_conditions.TRACE_TRANSITIONS.items()
+        }
         
         for symptom_key in self.symptom_keys:
             symptom_df = self.series_df[self.series_df["Question"] == symptom_key]
@@ -807,7 +1171,7 @@ class SymptomProgressionPlotter:
             total_patients = 0
             
             for mrn, patient_df in symptom_df.groupby(self.mrn_col):
-                patient_df = self.prepare_trace_dataframe(patient_df)
+                patient_df = self.status_calculator.prepare_trace_dataframe(patient_df)
                 if self.drop_unknown:
                     patient_df = patient_df[patient_df["State"] != -1]
                 
@@ -816,51 +1180,25 @@ class SymptomProgressionPlotter:
                 
                 total_patients += 1
                 
-                # Filter to observation window
-                obs_window = patient_df[
-                    (patient_df["months_since_onset"] >= -x_limit_months) &
-                    (patient_df["months_since_onset"] <= x_limit_months)
-                ]
-                
-                if obs_window.empty:
-                    continue
-                
-                # Determine state before and after onset within window
-                before = obs_window[obs_window["months_since_onset"] < 0]
-                after = obs_window[obs_window["months_since_onset"] >= 0]
-                
-                before_state = before["State"].max() if not before.empty else -1
-                after_state = after["State"].max() if not after.empty else -1
-                
-                # Map states to YES/NO
-                before_yes = (before_state == 1)
-                after_yes = (after_state == 1)
-                
-                # Classify transition
-                if before_yes and after_yes:
-                    transition = "YES -> YES"
-                elif before_yes and not after_yes:
-                    transition = "YES -> NO"
-                elif not before_yes and after_yes:
-                    transition = "NO -> YES"
-                else:
-                    transition = "NO -> NO"
-                
+                trace_class = self.plotting_conditions.classify_trace(
+                    patient_df,
+                    self.transition_window_months,
+                )
+                transition = trace_class_to_transition[trace_class]
+
                 counts[transition] += 1
             
             # Record incidence for each transition type (even if 0)
             if total_patients > 0:
                 for transition in transition_types:
-                    incidence_x_window = counts[transition] / total_patients
-                    # Convert to transition_threshold_months incidence
-                    incidence_threshold_window = incidence_x_window * (self.transition_threshold_months / x_limit_months)
+                    incidence_threshold_window = counts[transition] / total_patients
                     
                     records.append({
                         "Symptom": symptom_key,
                         "Transition_Type": transition,
                         "Count": counts[transition],
                         "Total_Patients": total_patients,
-                        f"Incidence_in_{int(self.transition_threshold_months)}_months": round(incidence_threshold_window, 3),
+                        f"Incidence_in_{self.transition_window_label()}_months": round(incidence_threshold_window, 3),
                     })
         
         incidence_df = pd.DataFrame(records)
@@ -897,13 +1235,16 @@ class SymptomProgressionPlotter:
                 continue
 
             for mrn, patient_df in symptom_df.groupby(self.mrn_col):
-                patient_df = self.prepare_trace_dataframe(patient_df)
+                patient_df = self.status_calculator.prepare_trace_dataframe(patient_df)
                 if self.drop_unknown:
                     patient_df = patient_df[patient_df["State"] != -1]
                     if patient_df.empty:
                         continue
 
-                condition = self.classify_trace(patient_df, self.transition_threshold_months)
+                condition = self.plotting_conditions.classify_trace(
+                    patient_df,
+                    self.transition_window_months,
+                )
                 records.append({
                     self.mrn_col: mrn,
                     "Symptom": symptom_key,
@@ -915,11 +1256,11 @@ class SymptomProgressionPlotter:
         if export_df.empty:
             raise ValueError("No patient-symptom records to export.")
         
-        if self.question_names_dict is not None:
-            export_df['Symptom'] = export_df['Symptom'].map(self.question_names_dict)
-            keys=[self.question_names_dict.get(key, key) for key in self.symptom_keys]
-        else:
-            keys=self.symptom_keys
+        export_df["Symptom"] = export_df["Symptom"].map(self.get_symptom_display_name)
+        keys = [
+            self.get_symptom_display_name(key)
+            for key in self.symptom_keys
+        ]
         
         if output_path is None:
             output_path = self.get_output_filepath("PatientConditions", keys, ".csv")
@@ -968,7 +1309,38 @@ def parse_args():
     parser.add_argument(
         "--drop_unknown",
         action="store_true",
-        help="Hide -1/no-data portions of traces after applying carry-forward rules.",
+        help="Hide -1/no-data portions of traces after applying state rules.",
+    )
+
+    parser.add_argument(
+        "--state_rule",
+        default="hierarchical",
+        choices=sorted(SymptomPlottingStatusCalculator.VALID_RULES),
+        help=(
+            "State calculation rule: raw leaves direct 1/0/-1 values; "
+            "hierarchical carries forward the current state and accepts "
+            "observed Yes->No or No->Yes transitions immediately; "
+            "coerce changes state only after repeated observations support "
+            "the new value; average averages each point with its immediate "
+            "neighbors."
+        ),
+    )
+
+    parser.add_argument(
+        "--state_floor_threshold",
+        type=float,
+        default=None,
+        help="Set calculated state values below this threshold to 0.",
+    )
+
+    parser.add_argument(
+        "--coerce_observation_threshold",
+        type=int,
+        default=3,
+        help=(
+            "For state_rule=coerce, require more than this many consecutive "
+            "observations before switching to a new Yes/No state."
+        ),
     )
 
     parser.add_argument(
@@ -1017,6 +1389,9 @@ if __name__ == "__main__":
     onset_col="stroke_date"        # From the CSV, determines 'onset' to lock each patient's trace to
     drop_unknown=True              # This removes 'unknown' from showing up on the plot
     transition_threshold_months=1  # This deteremines within how many months from onset we consider the onset causing the symptom change
+    state_rule="hierarchical"      # One of: raw, hierarchical, coerce, average
+    state_floor_threshold=None     # Values below this threshold are set to 0
+    coerce_observation_threshold=3 # Coerce changes state after >3 repeated observations
 
     plotter = SymptomProgressionPlotter(
         json_path=json_path,
@@ -1025,7 +1400,10 @@ if __name__ == "__main__":
         output_dir=output_dir,
         onset_col=onset_col,
         drop_unknown=drop_unknown,
-        transition_threshold_months=transition_threshold_months
+        transition_threshold_months=transition_threshold_months,
+        state_rule=state_rule,
+        state_floor_threshold=state_floor_threshold,
+        coerce_observation_threshold=coerce_observation_threshold,
     )
     plotter.run()
     plotter.export_csv()
