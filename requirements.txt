@@ -9,3 +9,4 @@ textract-py3
 pytesseract
 matplotlib
 plotly
+nbformat>=4.2.0
