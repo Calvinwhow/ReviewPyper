@@ -301,18 +301,22 @@ class SectionLabeler:
         # with open(json_file_path, 'w') as f:
         #     json.dump(section_json, f, indent=0)
 
-    def process_files(self, question=None, label_files=True):
+    def process_files(self, question=None, skip_segmentation=False):
         """
         Processes all text files in the specified folder.
         
         TODO--this can be dramatically improved by saving a JSON file for each article, instead of a single large JSON. 
         To keep it compatible with susbequent code, could combine the JSONs after. 
         """
-        if self._json_file_exists(self.article_type):
+        if skip_segmentation:
+            self.skip_labeling()
+            self.save_to_json(self.output_dict)
+
+        elif self._json_file_exists(self.article_type):
 
             print(f'_{self.article_type}_labeled_sections.json already exists, skipping processing. If you want to re-process, please delete this file first.')
-        elif label_files:
-            
+
+        else:
             self.select_labels()
             file_list = os.listdir(self.folder_path)
             file_list = [f for f in file_list if f.endswith('.txt')]
@@ -322,9 +326,6 @@ class SectionLabeler:
                 labeled_sections = {}
                 labeled_sections = self._label_sections(text, question)
                 self._store_results(filename, labeled_sections)
-            self.save_to_json(self.output_dict)
-        else:
-            self.skip_labeling()
             self.save_to_json(self.output_dict)
 
 

@@ -6,7 +6,7 @@ from calvin_utils.gpt_sys_review.txt_utils.ClinicalNotesExtractor import Clinica
 import json
 from datetime import datetime
 
-class PerNoteExtracting(ClinicalNotesExtractor):
+class PerNoteExtractor(ClinicalNotesExtractor):
     """
     A class to process clinical notes from an RPDR request and organize them in a csv.
 

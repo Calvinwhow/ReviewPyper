@@ -249,14 +249,17 @@ class ClinicalNotesExtractor:
     #         print("No list of MRNs given, keeping all subjects in the master list.")
         
 
-    def save_master_list(self):
+    def save_master_list(self, run_counter=None):
         """Saves the master list to a CSV file."""
 
         master_list_path = os.path.join(self.output_dir, 'master_list.csv')
-        counter=0
-        while os.path.isfile(master_list_path): #rename if master list already exists
-            counter+=1
-            master_list_path=os.path.join(self.output_dir, f'master_list_{counter}.csv')
+        if run_counter is not None:
+            master_list_path = os.path.join(self.output_dir, f'master_list_{run_counter}.csv')
+        else:
+            counter=0
+            while os.path.isfile(master_list_path): #rename if master list already exists
+                counter+=1
+                master_list_path=os.path.join(self.output_dir, f'master_list_{counter}.csv')
         self.master_list.to_csv(master_list_path, index=False)
         print(f"Master list saved to {master_list_path}")
 
