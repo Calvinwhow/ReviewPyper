@@ -15,8 +15,18 @@ def confusion_matrix(truth_vector, pred_vector, dimension=3):
     for truth, pred in zip(truth_vector,pred_vector):
         if type(truth)==str and truth.lower()=='o':
             truth=0
-        if type(pred)==str:
+
+        if type(pred)==str and not pred.isdigit():
             print(f"Skipping string prediction: {pred}")
+            continue
+        elif type(pred)==str:
+            pred=int(pred)
+        elif np.isnan(pred):
+            print(f"Skipping NaN prediction")
+            continue
+
+        if np.isnan(truth):
+            print(f"Skipping NaN truth")
             continue
         
         matrix[-1-int(float(truth))][-1-int(float(pred))]+=1
@@ -48,8 +58,8 @@ def sensitivity(conf_matrix,):
     return sensitivity
 
 def specificity(conf_matrix,):
-    ground_truth_neg=sum(conf_matrix[1])
     true_negatives=conf_matrix[1][1]
+    ground_truth_neg=sum(conf_matrix[1])
     specificity=div_check_zeros(true_negatives, ground_truth_neg)
     return specificity
 
@@ -65,6 +75,12 @@ def neg_pred_power(conf_matrix,):
     neg_pred_power=div_check_zeros(true_negatives, predicted_negatives)
     return neg_pred_power
 
+def false_pos_rate(conf_matrix):
+    false_positives=conf_matrix[1][0]
+    ground_truth_neg=sum(conf_matrix[1])
+    false_pos_rate=div_check_zeros(false_positives, ground_truth_neg)
+    return false_pos_rate
+
 def combine_no_and_unknown(conf):
     output=np.asarray([conf[0],conf[1]+conf[2]])
     output=np.asarray([output[:,0],output[:,1]+output[:,2]])
@@ -78,7 +94,7 @@ def ignore_unknown(conf):
     return conf[:-1,:-1]
 
 
-def statistical_df(confusion_matrix_dict,include_accuracy=True):
+def statistical_df(confusion_matrix_dict,include_accuracy=True, include_fpr=False):
     
     confusion_matrix_dict['overall']=sum(list(confusion_matrix_dict.values()))
 
@@ -91,6 +107,8 @@ def statistical_df(confusion_matrix_dict,include_accuracy=True):
     out_df['sensitivity']=[sensitivity(matrix) for q, matrix in confusion_matrix_dict.items()]
     out_df['positive predictive power']=[pos_pred_power(matrix) for q, matrix in confusion_matrix_dict.items()]
     out_df['negative predictive power']=[neg_pred_power(matrix) for q, matrix in confusion_matrix_dict.items()]
+    if include_fpr:
+        out_df['false positive rate']=[false_pos_rate(matrix) for q, matrix in confusion_matrix_dict.items()]
 
     out_df.reset_index(inplace=True, names='question')
     
@@ -198,22 +216,23 @@ def raincloud_plot(stats_df, color=None, figsz=(6,4), filename=None,ylims=None, 
     cols=[]
     acc=[]
     if include_accuracy:
-        columns_to_use=stats_df.columns[1:]
+        columns_to_use=['accuracy', 'sensitivity','specificity','negative predictive power', 'positive predictive power']
         labels=["Accuracy","Sensitivity","Specificity","NPV",'PPV']
     else:
-        columns_to_use=stats_df.columns[2:]
+        columns_to_use=['sensitivity','specificity','negative predictive power', 'positive predictive power']
         labels=["Sensitivity","Specificity","NPV",'PPV']
+
     for col in columns_to_use:
         setstuff+=['ccas']*len(stats_df)
         cols+=[col]*len(stats_df)
         acc+=stats_df[col].values.tolist()
+
     accdf=pd.DataFrame()
     accdf['set']=setstuff
     accdf['scores']=acc
     accdf['scoretype']=cols
     if debug: 
         print(accdf[accdf['scoretype']=='specificity'])
-
 
     plt.figure(figsize=figsz)
     rc=pt.RainCloud(data=accdf, y='scores',x='scoretype',hue='scoretype',
@@ -242,21 +261,14 @@ def barplot(data, xlabels,ylabel=None,colors=None, figsz=(4,4), filename=None, y
     new_df['color']=colors[:len(new_df)]
     
     plt.figure(figsize=figsz)
-    bar1=sns.barplot(data=new_df, y='value',x='name',  hue='color', legend=False)
-    # bar2=sns.barplot(x=labels, hue=labels,y=[0,1,0], palette=['#FFFFFF','#FFFFFF', '#FFFFFF',])
-    # bar3=sns.barplot(x=labels, hue=labels,y=[accuracy(bars_conf),accuracy(ccas_conf),0], palette=['#FFFFFF',])
+    bar1=sns.barplot(data=new_df, y='value',x='name',  hue='color', palette=colors, legend=False)
     bar1.set_ylabel(ylabel)
 
     plt.ylim(.8,1)
-    # import matplotlib.patches as patches
-    # present_patch = patches.Patch(color='#1F77B4', label="Present")
-    # absent_patch = patches.Patch(color="#ABCBE0", label="Absent")
-    # pending_patch = patches.Patch(color="#9F9F9F", label="Pending")
     bar1.set_xticklabels(xlabels)
     bar1.set_xlabel('')
     bar1.set_yticks(np.arange(ylims[0],ylims[1]+ytick_spacing,ytick_spacing))
     bar1.set_ylim(ylims)
-    # bar1.legend(handles=[pending_patch], labels=['Pending'], loc='lower left',bbox_to_anchor=(1, .76), frameon=False)
     sns.despine()
     plt.tight_layout()
     if filename is not None:
