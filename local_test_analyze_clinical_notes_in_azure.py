@@ -77,7 +77,7 @@ env=EmrEnvironment(output_dir+'env.json')
 env.update({"notes_file_list": notes_file_list,
          "mrn_file": mrn_file,
          "output_dir": output_dir,
-         'select_mrns': select_mrns,
+         "select_mrns": select_mrns.values.tolist() if select_mrns is not None else None,
          "api_key_path": api_key_path,
          "api_base": api_base,
          "api_version": api_version,

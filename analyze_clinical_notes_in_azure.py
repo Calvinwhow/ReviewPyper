@@ -77,7 +77,7 @@ env=EmrEnvironment(output_dir+'env.json')
 env.update({"notes_file_list": notes_file_list,
          "mrn_file": mrn_file,
          "output_dir": output_dir,
-         "select_mrns": select_mrns,
+         "select_mrns": select_mrns.values.tolist() if select_mrns is not None else None,
          "api_key_path": api_key_path,
          "api_base": api_base,
          "api_version": api_version,
@@ -199,8 +199,7 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 api_base=api_base,
                                 api_version=api_version)
 answers = evaluator.evaluate_all_files(chunk_by_date=True)
-if answers is False:
-    exit()
+
 extraction_chunks_dir=evaluator.chunk_dir
 evaluated_json_path = evaluator.save_to_json(answers)
 env.update({'extraction_chunks_dir': extraction_chunks_dir, 'evaluated_json_path': evaluated_json_path, 'extraction_questions_completed': True})
