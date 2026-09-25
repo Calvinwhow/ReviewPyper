@@ -558,7 +558,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         self.api_key_path = api_key_path
         self.summary_type = summary_type
         self.answer_format = answer_format
-        self.has_explanations= self.answer_format in ["binary_with_explanations", "binary_with_unknown_and_explanations","severity_with_explanations"]
+        self.has_explanations = self.answer_format in ["binary_with_explanations", "binary_with_unknown_and_explanations","severity_with_explanations", "severity_with_unknown_and_explanations"]
         self.data = self.read_json()
         self.chunks_dir = chunks_dir
         self.is_azure = is_azure
@@ -570,7 +570,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
 
         # --- NEW: allow severity mapping; else fall back to binary mapping if answers_binary=True ---
         # self.severity_mode = False
-        if self.answer_format in ["binary_with_unknown_and_explanations", "severity_with_explanations"]:
+        if self.answer_format in ["binary_with_unknown_and_explanations", "severity_with_explanations", "severity_with_unknown_and_explanations"]:
 
             if severity_mapping is None:
                 raise ValueError(f"Answer type {self.answer_format} cannot be evaluated without a severity_mapping dict, but none was given")

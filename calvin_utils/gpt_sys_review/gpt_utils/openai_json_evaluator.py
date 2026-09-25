@@ -144,10 +144,14 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
     
     def format_questions(self, questions_list):
         """Formats the questions for submission to the OpenAI API."""
-        if self.answer_format in ['inclusion', "binary_with_explanations",'binary_with_unknown_and_explanations',"severity_with_explanations",]:
+        if self.answer_format in ['inclusion', 
+                                  "binary_with_explanations",'binary_with_unknown_and_explanations',
+                                  "severity_with_explanations",'severity_with_unknown_and_explanations',]:
             questions_w_explanations=[prepend+q for q in questions_list for prepend in ['','EXPLANATION: ']]     
+
         elif self.answer_format=="binary" or self.answer_format=="binary_without_explanations":
             questions_w_explanations=questions_list
+            
         else:            
             myerror=f'answer_format {self.answer_format} is invalid. Allowed answer types are "inclusion", "binary_without_explanations", "binary_with_explanations", "binary_with_unknown_and_explanations", "severity_with_explanations"'
             raise ValueError(myerror)
