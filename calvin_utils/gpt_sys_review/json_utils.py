@@ -570,7 +570,7 @@ class CustomSummarizer(InclusionExclusionSummarizer):
 
         # --- NEW: allow severity mapping; else fall back to binary mapping if answers_binary=True ---
         # self.severity_mode = False
-        if self.answer_format in ["binary_with_unknown_and_explanations", "severity_with_explanations", "severity_with_unknown_and_explanations"]:
+        if self.answer_format in ["binary_with_unknown_and_explanations", "severity_with_explanations", ]:
 
             if severity_mapping is None:
                 raise ValueError(f"Answer type {self.answer_format} cannot be evaluated without a severity_mapping dict, but none was given")
@@ -589,8 +589,10 @@ class CustomSummarizer(InclusionExclusionSummarizer):
                 0: ["poor", "bad", "negative", "n", "no", "false", "absent"],
                 1: ["good", "excellent", "positive", "y", "yes", "true", "present"]
             }
+        elif self.answer_format=="severity_with_unknown_and_explanations":
+            self.keyword_mapping=None
         else:
-            raise ValueError('''"answer_format" is invalid. Allowed answer types are "binary_without_explanations", "binary_with_explanations", "binary_with_unknown_and_explanations","severity_with_explanations"''')
+            raise ValueError('''"answer_format" is invalid. Allowed answer types are "binary_without_explanations", "binary_with_explanations", "binary_with_unknown_and_explanations","severity_with_explanations","severity_with_unknown_and_explanations"''')
 
 
     def numerical_interpretation(self, answer):

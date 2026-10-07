@@ -47,6 +47,14 @@
     "Which of these most closely describes the patient's oculomotor ability?. Ignore any slowness. -1: No information about oculomotor ability provided. 0: Normal. 1: Slightly slowed pursuit, saccadic intrusions, hypo/hypermetric saccade, nystagmus. 2: Prominently slowed pursuit, saccadic intrusions, hypo/hypermetric saccade, nystagmus": "oculomotor",
     "Which of these most closely describes how the patient performs the finger-to-nose test?. -1: No information about the finger-to-nose test provided. 0: Normal. 1: Oscillating movement of arm and/or hand without decomposition of the movement. 2: Segmented movement in 2 phases and / or moderate dysmetria in reaching nose. 3: Segmented movement in more than 2 phases and / or considerable dysmetria in reaching nose. 4: Dysmetria preventing the patient from reaching nose": "finger-nose"
     },
+"bars_answer":{
+    "What score did the clinician give this patient on the BARS questionnaire gait question? If no score is given in the text, respond \"-1\"": "gait_clinician",
+    "What score did the clinician give this patient on the BARS questionnaire heel-shin test? If separate right and left values are given in the text, report both separated by a slash. If no score is given in the text, respond \"-1\"": "heel-shin_clinician",
+    "What score did the clinician give this patient on the BARS questionnaire speech/dysarthria question? If no score is given in the text, respond \"-1\"": "speech_clinician",
+    "What score did the clinician give this patient on the BARS questionnaire oculomotor test? If separate right and left values are given in the text, report both separated by a slash. If no score is given in the text, respond \"-1\"": "oculomotor_clinician",
+    "What score did the clinician give this patient on the BARS questionnaire finger-to-nose test? If separate right and left values are given in the text, report both separated by a slash. If no score is given in the text, respond \"-1\"": "finger-nose_clinician",
+    "What overall score did the clinician give this patient on the BARS questionnaire? If no score is given in the text, respond \"-1\"": "total_clinician"
+    },
 "moca":{
     "Does this patient have difficulty performing visuospatial or executive tasks such as a path task, copying a line drawing of a bed, or drawing a clock?":"visuospatial",
     "Does this patient struggle with naming tasks such as naming animals based on pictures?":"naming",
@@ -70,7 +78,7 @@
     "Does this patient have difficulty completing a go-no go task, where they raise their finger if the doctor taps the table once, but not if they tap twice?":"go-no go",
     "Does this patient have unusual affect? For instance, they may have difficulty with mental flexibility; be emotionally labile or show incongruous emotions; show easy sensory overload or avoidant behaviors; express illogical thoughts; lack empathy, be apathetic, or have blunted affect; or be angry or aggressive, irritable, oppositional, with difficulty with social cues and social boundaries. Ignore depression or anxiety symptoms.":"affect"
     },
-"ccas_severity":{
+"ccas_answers":{
     "How many animals or living creatures is this patient able to name in one minute? If an animal naming task is not mentioned, respond \"-1\"":"semantic fluency",
     "How many words beginning with the letter F is this patient able to name in one minute? If a phonemic naming task is not mentioned, respond \"-1\"":"phonemic fluency",
     "How many words is this patient able to name in one minute in a category switching task, where they need to switch between naming a vegetable and a profession or job?  If a category switching task is not mentioned, respond \"-1\"":"category switching",
