@@ -74,22 +74,76 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
                     selected_text += value
             
             self.relevant_text_by_file[file_name] = selected_text
-            
-    def save_to_json(self, output_dict):
-        """Saves the labeled sections to a JSON file."""
-        # Create a new directory in the same root folder
+
+
+    def create_output_filename(self, filetype_suffix='json'):
+
         out_dir = os.path.dirname(self.json_path) + "_evaluated"
         os.makedirs(out_dir, exist_ok=True)
-        base_save_file = os.path.join(out_dir, f'{self.question_type}_evaluations.json')
+
+        base_save_file = os.path.join(out_dir, f'{self.question_type}_evaluations.{filetype_suffix}')
+
         save_file = base_save_file
         count = 1
         while os.path.exists(save_file):
-            save_file = os.path.join(out_dir, f'{self.question_type}_evaluations_{count}.json')
+            save_file = os.path.join(out_dir, f'{self.question_type}_evaluations_{count}.{filetype_suffix}')
             count += 1
+        
+        return save_file 
+            
+    def save_to_json(self, output_dict):
+        """Saves the labeled sections to a JSON file."""
+        save_file=self.create_output_filename(filetype_suffix='json')
+
         with open(save_file, 'w', encoding='UTF-8') as f:
             json.dump(output_dict, f, indent=0)
         print(f"Saved to: {save_file}")
+
         return save_file
+    
+    def replace_long_question_names(self, df, questions_dict):
+        
+        new_cols=df.columns
+        
+        for short_q, long_q in questions_dict.items():
+            new_cols=[col.replace(short_q, long_q) for col in new_cols]
+
+        return new_cols
+
+    def save_raw_results_to_csv(self, output_dict):
+        """Saves the same information as the JSON file, but in CSV form.
+        Each row is an individual note, with date and answers."""
+
+        import pandas as pd
+        subject_dfs=[]
+
+        for subject, subject_data in output_dict.items():
+
+            subdf=pd.DataFrame(subject_data)
+            
+            # subdf.reset_index(names='chunk', inplace=True)
+            subdf.insert(0, 'MRN',subject)
+            
+            subdf.insert(1,'date', [metadata['date'] for metadata in subdf['metadata']])
+            subdf.sort_values(by='date', inplace=True)
+            subdf.drop(columns='metadata', inplace=True)
+
+            subject_dfs.append(subdf)
+
+        out=pd.concat(subject_dfs)
+        out.sort_values(by=['MRN','date'], inplace=True)
+        out.reset_index(names='chunk', inplace=True)
+        
+        mrn_col = out.pop("MRN")
+        out.insert(0, 'MRN', mrn_col)
+
+        out.columns=self.replace_long_question_names(out, self.questions)
+
+        save_file=self.create_output_filename(filetype_suffix='csv')
+        out.to_csv(save_file, index=False)
+
+        return save_file
+
     
     def save_chunks(self, file_name, chunks, metadata=None):
 

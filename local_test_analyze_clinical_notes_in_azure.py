@@ -111,23 +111,22 @@ json_file_path = output_dir+"json/_emr_labeled_sections.json"
 env.update({"master_list_path": master_list_path,
             "master_list_excel_path": master_list_excel_path,
             "json_file_path": json_file_path})
-
 ############# Preprocess text and split into individual notes #############
 
 from calvin_utils.gpt_sys_review.txt_utils import PerNoteExtractor, TextPreprocessor
 extractor=PerNoteExtractor(notes_file_list, mrn_file, output_dir)
 preprocessor = TextPreprocessor(input_dir=output_dir)
 
-if env.parameters['extraction_completed']==True:    
+if env.parameters['extraction_completed']==False:    
     note_df=extractor.run()
     preprocessed_path = preprocessor.process_files()
-    env.update({'preprocessed_path': preprocessed_path})
 
 else: # if extraction has already been done, just generate a blank master list 
     extractor.generate_master_list()
     extractor.save_master_list(run_counter=env.counter)
     preprocessed_path = preprocessor.output_dir
-    env.update({'extraction_completed': True, 'preprocessed_path': preprocessed_path})
+
+env.update({'extraction_completed': True, 'preprocessed_path': preprocessed_path})
 
 ############# Exclude irrelevant text with SectionLabeler (currently skipping, by setting skip_segmentation=True) #############
 
@@ -191,10 +190,11 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 max_workers=50,
                                 debug=extraction_debug)
 answers = evaluator.evaluate_all_files(chunk_by_date=True)
-if answers is False:
-    exit()
+
+
 extraction_chunks_dir=evaluator.chunk_dir
 evaluated_json_path = evaluator.save_to_json(answers)
+evaluated_raw_csv_path = evaluator.save_raw_results_to_csv(answers)
 env.update({'extraction_chunks_dir': extraction_chunks_dir, 'evaluated_json_path': evaluated_json_path, 'extraction_questions_completed': True})
 
 ############# Summarize extraction results #############
@@ -204,6 +204,7 @@ severity_dict = {
     1: ["n", "no", "false",],
     2: ["y", "yes", "true", ]
 }
+
 summary_type='mapping'
 env.update({'severity_dict': severity_dict, summary_type: summary_type})
 

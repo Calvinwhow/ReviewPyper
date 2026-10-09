@@ -32,7 +32,6 @@
     "Does this patient show signs of acute episodic anterograde amnesia? For instance, they may start having difficulty remembering events that happened after a stroke, or be unable to form new memories after the stroke. If the text mentions short-term memory problems only, respond \"not mentioned\".":"anterograde_amnesia",
     "Does this patient show signs of acute episodic retrograde amnesia? For instance, they may have difficulty remembering events that occured before a stroke. If the text mentions short-term memory problems only, or memory problems not associated with a stroke, respond \"not mentioned\".":"retrograde_amnesia"
 },
-"billing code":{},
 "bars":{
     "Does this patient have difficulty walking or disturbed gait? For instance, they may mention the patient staggering, difficulties in half turn, requiring support from a wall or stick, or being entirely unable to walk on their own. If the text does not mention walking or gait, or only mentions gait changes caused by pain or injury, respond \"not mentioned\"":"gait",
     "Does this patient have difficulty performing the heel-shin maneuver such as lowering their heel jerkily, or with lateral movements?":"heel–shin",
@@ -47,7 +46,7 @@
     "Which of these most closely describes the patient's oculomotor ability?. Ignore any slowness. -1: No information about oculomotor ability provided. 0: Normal. 1: Slightly slowed pursuit, saccadic intrusions, hypo/hypermetric saccade, nystagmus. 2: Prominently slowed pursuit, saccadic intrusions, hypo/hypermetric saccade, nystagmus": "oculomotor",
     "Which of these most closely describes how the patient performs the finger-to-nose test?. -1: No information about the finger-to-nose test provided. 0: Normal. 1: Oscillating movement of arm and/or hand without decomposition of the movement. 2: Segmented movement in 2 phases and / or moderate dysmetria in reaching nose. 3: Segmented movement in more than 2 phases and / or considerable dysmetria in reaching nose. 4: Dysmetria preventing the patient from reaching nose": "finger-nose"
     },
-"bars_answer":{
+"bars_pull_scores":{
     "What score did the clinician give this patient on the BARS questionnaire gait question? If no score is given in the text, respond \"-1\"": "gait_clinician",
     "What score did the clinician give this patient on the BARS questionnaire heel-shin test? If separate right and left values are given in the text, report both separated by a slash. If no score is given in the text, respond \"-1\"": "heel-shin_clinician",
     "What score did the clinician give this patient on the BARS questionnaire speech/dysarthria question? If no score is given in the text, respond \"-1\"": "speech_clinician",
@@ -78,7 +77,7 @@
     "Does this patient have difficulty completing a go-no go task, where they raise their finger if the doctor taps the table once, but not if they tap twice?":"go-no go",
     "Does this patient have unusual affect? For instance, they may have difficulty with mental flexibility; be emotionally labile or show incongruous emotions; show easy sensory overload or avoidant behaviors; express illogical thoughts; lack empathy, be apathetic, or have blunted affect; or be angry or aggressive, irritable, oppositional, with difficulty with social cues and social boundaries. Ignore depression or anxiety symptoms.":"affect"
     },
-"ccas_answers":{
+"ccas_severity":{
     "How many animals or living creatures is this patient able to name in one minute? If an animal naming task is not mentioned, respond \"-1\"":"semantic fluency",
     "How many words beginning with the letter F is this patient able to name in one minute? If a phonemic naming task is not mentioned, respond \"-1\"":"phonemic fluency",
     "How many words is this patient able to name in one minute in a category switching task, where they need to switch between naming a vegetable and a profession or job?  If a category switching task is not mentioned, respond \"-1\"":"category switching",
@@ -87,8 +86,31 @@
     "Is this patient unable to correctly draw a cube, with the correct number of lines?  Respond \"1\" for yes and \"0\" for no. If a cube draw task is not mentioned, respond \"-1\"":"cube draw",
     "What is this patient's score on a cube draw/cube copy task? If a cube draw or copy task is not mentioned, respond \"-1\"":"cube copy",
     "How many words is this patient able to remember in a verbal recall task?. If a verbal recall test is not mentioned, respond \"-1\"":"verbal recall",
-    "How many pairs of words is the patient able to identify similarities between on an abstraction task? If a similarities task is not mentioned, respond \"-1\"":"similarities",
+    "How many pairs of words is the patient able to identify similarities between words on an abstraction/similarities task? If a similarities task is not mentioned, respond \"-1\"":"similarities",
     "Does this patient have difficulty completing a go-no go task, where they raise their finger if the doctor taps the table once, but not if they tap twice?  Respond \"1\" for yes and \"0\" for no. If a go-no go task is not mentioned, respond \"-1\"":"go-no go"
+    },
+"ccas_fail":{
+    "Did this patient fail the CCAS semantic fluency task, where they are asked to name as many animals as they can in one minute? A score of 15 or less is considered a failure. Respond 1 for yes and 0 for no, and if the CCAS questionnaire is not mentioned, respond \"-1\"":"semantic fluency fail",
+    "Did this patient fail the CCAS phonemic fluency task, where they are asked to name as many words starting with F as they can in one minute? A score of 9 or less is considered a failure. Respond 1 for yes and 0 for no, and if the CCAS questionnaire is not mentioned, respond \"-1\"":"phonemic fluency fail",
+    "Did this patient fail the CCAS category switching task, where they need to switch between naming a vegetable and a profession or job? A score of 9 or less is considered a failure. Respond 1 for yes and 0 for no, and if the CCAS questionnaire is not mentioned, respond \"-1\"":"category switching fail",
+    "Did this patient fail the CCAS digit span forwards task, where they are asked to repeat strings of digits read to them? A score of 5 or less is considered a failure. Respond 1 for yes and 0 for no, and if the CCAS questionnaire is not mentioned, respond \"-1\"":"digit span forwards fail",
+    "Did this patient fail the CCAS digit span backwards task, where they are asked to repeat strings of digits read to them in reverse? A score of 3 or less is considered a failure. Respond 1 for yes and 0 for no, and if the CCAS questionnaire is not mentioned, respond \"-1\"":"digit span backwards fail",
+    "Did this patient fail the CCAS cube draw/cube copy task, where they are asked to draw a 3D cube? A score of 12 or less is considered a failure.":"cube draw/copy fail",
+    "Did this patient fail the CCAS verbal recall task? A score of 10 or less is considered a failure. Respond 1 for yes and 0 for no, and if the CCAS questionnaire is not mentioned, respond \"-1\"":"verbal recall fail",
+    "Did this patient fail the CCAS similarities task, where they are asked to explain similarities between words? A score of 6 or less is considered a failure. Respond 1 for yes and 0 for no, and if the CCAS questionnaire is not mentioned, respond \"-1\"":"similarities fail",
+    "Did this patient fail the CCAS go-no go task, where they raise their finger if the doctor taps the table once, but not if they tap twice? A score of 0 is considered a failure. Respond 1 for yes and 0 for no, and if the CCAS questionnaire is not mentioned, respond \"-1\"":"go-no go fail"
+    },
+"ccas_pull_scores":{
+    "What score did the clinician give this patient on the CCAS questionnaire semantic fluency question? If no score is given in the text, respond \"-1\"":"semantic fluency clinician",
+    "What score did the clinician give this patient on the CCAS questionnaire phonemic fluency question? If no score is given in the text, respond \"-1\"":"phonemic fluency clinician",
+    "What score did the clinician give this patient on the CCAS questionnaire category switching question? If no score is given in the text, respond \"-1\"":"category switching clinician",
+    "What score did the clinician give this patient on the CCAS questionnaire digit span forwards question? If no score is given in the text, respond \"-1\"":"digit span forwards clinician",
+    "What score did the clinician give this patient on the CCAS questionnaire digit span backwards question? If no score is given in the text, respond \"-1\"":"digit span backwards clinician",
+    "What score did the clinician give this patient on the CCAS questionnaire cube draw/cube copy question? If no score is given in the text, respond \"-1\"":"cube draw/copy clinician",
+    "What score did the clinician give this patient on the CCAS questionnaire verbal recall question? If no score is given in the text, respond \"-1\"":"verbal recall clinician",
+    "What score did the clinician give this patient on the CCAS questionnaire similarities question? If no score is given in the text, respond \"-1\"":"similarities clinician",
+    "What score did the clinician give this patient on the CCAS questionnaire go-no go question? If no score is given in the text, respond \"-1\"":"go-no go clinician",
+    "What overall score did the clinician give this patient on the CCAS questionnaire? If no score is given in the text, respond \"-1\"":"ccas total clinician"
     },
 "cnrs":{
     "Does this patient have difficulty maintaining mental focus or sustained attention, make careless mistakes, or not attend to details? If the text only mentions that the patient is alert or oriented, or only mentions memory, respond \"not mentioned\". Ignore issues with focusing the eyes.":"attention a1",
@@ -126,18 +148,6 @@
     "Does this patient seem unaware of social cues, or speak or behave in a way that is inappropriate to the situation? If the text does not mention social cues or appropriateness, respond \"not mentioned\"":"social b33",
     "Does this patient seem unaware of others' personal space, have difficulty adapting to social situations, or act or make statements in a socially inappropriate manner? If the text does not mention social difficulties or inappropriate behavior, respond \"not mentioned\"":"social b34",
     "Is this patient overly trusting of others, vulnerable to being tricked or manipulated, or prone to believe highly unlikely statements or claims? If the text does not mention trustfulness or gullibility, respond \"not mentioned\"":"social b35"
-    },
-"cnrs_combined_columns":{
-    "Does this patient have difficulty maintaining focus or sustained attention? For example, they may make careless mistakes or not attend to details; be easily distracted by non-essential or irrelevant stimuli; often be “on the go,” acting as if “driven by a motor” (e.g., is unable to be or uncomfortable being still for extended time); feel compelled to perform habits that are excessive and repetitive, and become distressed when prevented from doing so; or feel driven to complete tasks or behave in a rigid, inflexible way according to specific, personal rules.":"binary",
-    "Does this patient get mentally “stuck” or have trouble shifting thoughts or mental focus from one activity or situation to another? For example, they may repeat the same responses (e.g., word, phrase, gesture, behavior) despite being ineffective or inappropriate, worry repeatedly or too much about their own emotional/physical state, or be unable to stop repetitive thoughts, urges or images that seem to cause distress.":"binary",
-    "Does this patient struggle to control their emotions? For instance, they may act hastily or carelessly in the moment without thinking (e.g., interrupting others, trouble waiting his/her turn); show rapid changes in emotion that are more intense than usual or unrelated to the situation; cry and/or laugh without an apparent trigger inappropriately; be overly anxious; or experiences sudden episodes of intense fear or discomfort (e.g., heart racing, shortness of breath, dizziness). Ignore depression or anxiety symptoms.":"binary",
-    "Does this patient seem very sad or depressed in life? For instance, they may lack pleasure from activities or interactions that used to be enjoyable, hold Negative attitudes or pessimism about the future and a sense of hopelessness, or be uneasy or generally dissatisfied with life.":"binary",
-    "Does this patient have habits characteristic of the autism spectrum? For instance, they may show repetitive movements, postures, or utterances that follow a particular pattern (e.g., hand flapping, finger flicking, body rocking, repeating noises or phrases) or be drawn to sensory experiences, such as excessive smelling or touching of objects, or fascination with lights or spinning objects.":"binary",
-    "Does this patient show sensitivities characteristic of the autism spectrum? For instance, they may avoid or be very sensitive to light touch or texture (including clothing and the mouth-feel of foods), or they may be easily overwhelmed by, or have an extreme reaction to, sounds, textures, tastes, smells, temperature or lights.":"binary",
-    "Does this patient have characteristics of being on the psychosis spectrum? For example, they may communicate in a way that is difficult to follow, illogical, rambling, or nonsensical; express irrational concerns or false beliefs that he/she is threatened in some way (e.g., others are out to hurt him/her); or see or hear things that they believe are real but are not mentioned.":"binary",
-    "Does this patient seem disinterested, unconcerned, or indifferent to daily activities, future events, themselves or others? For example, they may appear distant or aloof with a lack of emotional reactivity to situations or others that would typically evoke an emotional response, or have trouble understanding another person's feelings or perspective.":"binary",
-    "Does this patient act or appear to be unreasonably angry or aggressive? For instance, they may be easily upset or irritable; be intolerant of people entering their personal space or overly assertive or protective about communal space and objects; or be deliberately disobedient, defiant and argumentative.":"binary",
-    "Does this patient seem to lack social skills? For example, they may act in a passive, immature, or childlike manner; seem unaware of social cues, or speak or behave in a way that is inappropriate to the situation; be unaware of others' personal space, have difficulty adapting to social situations, act or makes statements in an inappropriate manner; or be overly trusting of others, vulnerable to being tricked or manipulated, or prone to believe highly unlikely statements or claims.":"binary"
     },
 "hbs_seizure":{
     "Has this patient had a seizure? For example, the text may mention epilepsy, convulsions, or fits. If none of these are mentioned in the text, respond \"not mentioned\" instead of \"no\".":"seizure"
