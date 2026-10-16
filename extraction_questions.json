@@ -14,8 +14,8 @@
     "Is the patient unable to keep their right leg raised for at least 5 seconds? For instance, their leg may drift down slowly or fall completely.":"6a right motor leg",
     "Does this patient show dysmetria, oscillating movement, termor, or segmented movement of the arm or hand when performing the finger-nose maneuver on the left side? Ignore any slowness.":"7a right finger-nose",
     "Does this patient show dysmetria, oscillating movement, termor, or segmented movement of the arm or hand when performing the finger-nose maneuver on the right side? Ignore any slowness.":"7b left finger-nose",
-    "Does this patient have difficulty performing the heel-shin maneuver on their left side, such as lowering their heel jerkily, or with lateral movements?":"7c left heel–shin",
-    "Does this patient have difficulty performing the heel-shin maneuver on their right side, such as lowering their heel jerkily, or with lateral movements?":"7d right heel–shin",
+    "Does this patient have difficulty performing the heel-shin maneuver on their left side, such as lowering their heel jerkily, or with lateral movements?":"7c left heel-shin",
+    "Does this patient have difficulty performing the heel-shin maneuver on their right side, such as lowering their heel jerkily, or with lateral movements?":"7d right heel-shin",
     "Does this patient have difficulty with sensory perception? For instance, the patient may report that a pinprick is not sharp or not painful, or not be aware of being touched.":"8 sensation",
     "Does this patient have difficulty with understanding or making language or speech? For instance, they may struggle to describe a a picture, to name items, or read from a list of sentences, or they may show a loss of fluency, lack of comprehension, or limitation on ideas expressed. Ignore speech issues which are exclusively motor, such as dysarthria.":"9 language/aphasia",
     "Does this patient's speech show dysarthria, or slurring to the point that some words are not intelligible? For instance, the text may mention having to ask the patient to repeat themselves multiple times. Do not consider hypophonia.":"10 dysarthria",
@@ -29,30 +29,30 @@
     "Is this patient being treated for depression? For instance, the text may mention the patient being on antidepressant medication or receiving therapy for depression. If the text does not mention treatment, respond \"not mentioned\"":"depression treatment"
 },
 "memory":{
-    "Does this patient show signs of acute episodic anterograde amnesia? For instance, they may start having difficulty remembering events that happened after a stroke, or be unable to form new memories after the stroke. If the text mentions short-term memory problems only, respond \"not mentioned\".":"anterograde_amnesia",
-    "Does this patient show signs of acute episodic retrograde amnesia? For instance, they may have difficulty remembering events that occured before a stroke. If the text mentions short-term memory problems only, or memory problems not associated with a stroke, respond \"not mentioned\".":"retrograde_amnesia"
+    "Does this patient show signs of acute episodic anterograde amnesia? For instance, they may start having difficulty remembering events that happened after a stroke, or be unable to form new memories after the stroke. If the text mentions short-term memory problems only, respond \"not mentioned\".":"anterograde amnesia",
+    "Does this patient show signs of acute episodic retrograde amnesia? For instance, they may have difficulty remembering events that occured before a stroke. If the text mentions short-term memory problems only, or memory problems not associated with a stroke, respond \"not mentioned\".":"retrograde amnesia"
 },
 "bars":{
     "Does this patient have difficulty walking or disturbed gait? For instance, they may mention the patient staggering, difficulties in half turn, requiring support from a wall or stick, or being entirely unable to walk on their own. If the text does not mention walking or gait, or only mentions gait changes caused by pain or injury, respond \"not mentioned\"":"gait",
-    "Does this patient have difficulty performing the heel-shin maneuver such as lowering their heel jerkily, or with lateral movements?":"heel–shin",
+    "Does this patient have difficulty performing the heel-shin maneuver such as lowering their heel jerkily, or with lateral movements?":"heel-shin",
     "Does this patient's speech show dysarthria, or slurring to the point that some words are not intelligible? For instance, the text may mention having to ask the patient to repeat themselves multiple times. Do not consider hypophonia.":"speech",
     "Does this patient have oculomotor abnormalities? For example, the text may mention slowed pursuit, saccadic intrusions, hypo/hypermetric saccade, or nystagmus.":"oculomotor",
     "Does this patient show dysmetria, oscillating movement, termor, or segmented movement of the arm or hand when performing the finger-nose maneuver? Ignore any slowness.":"finger-nose"
     },
-"bars_severity":{
-    "Which of these most closely describes the patient's gait? If the text does not mention walking or gait, or only mentions gait changes caused by pain or injury, respond \"-1\" -1: No information about the patient's gait provided. 0: Normal. 1: Almost normal naturally, but unable to walk with feet in tandem position. 2: Walking without support, but clearly abnormal and irregular. 3: Walking without support but with considerable staggering; difficulties in half turn. 4: Walking without support not possible; uses support of the wall for 10-meter test. 5: Walking possible only with one cane. 6: Walking possible only with two canes or with a stroller. 7: Walking possible only with one accompanying person. 8: Walking impossible with one accompanying person (2-person assist; wheelchair)": "gait",
-    "Which of these most closely describes how the patient performs the heel-shin/knee-tibia test?. -1: No information about the heel-shin/knee-tibia test provided. 0: Normal. 1: Lowering of heel in continuous axis, but movement is decomposed in several phases, without real jerks, or abnormally slow. 2: Lowering jerkily in the axis. 3: Lowering jerkily with lateral movements. 4: Lowering jerkily with extremely long lateral movements, or test impossible": "heel-shin",
-    "Which of these most closely describes the patient's speech? Do not consider hypophonia. -1: No information about speech ability or dysarthria provided. 0: Normal. 1: Mild impairment of rate/rhythm/clarity. 2: Moderate impairment of rate/rhythm/clarity. 3: Severely slow and dysarthric speech. 4: Speech absent or unintelligible": "speech",
-    "Which of these most closely describes the patient's oculomotor ability?. Ignore any slowness. -1: No information about oculomotor ability provided. 0: Normal. 1: Slightly slowed pursuit, saccadic intrusions, hypo/hypermetric saccade, nystagmus. 2: Prominently slowed pursuit, saccadic intrusions, hypo/hypermetric saccade, nystagmus": "oculomotor",
-    "Which of these most closely describes how the patient performs the finger-to-nose test?. -1: No information about the finger-to-nose test provided. 0: Normal. 1: Oscillating movement of arm and/or hand without decomposition of the movement. 2: Segmented movement in 2 phases and / or moderate dysmetria in reaching nose. 3: Segmented movement in more than 2 phases and / or considerable dysmetria in reaching nose. 4: Dysmetria preventing the patient from reaching nose": "finger-nose"
+"bars severity":{
+    "Which of these most closely describes the patient's gait? If the text does not mention walking or gait, or only mentions gait changes caused by pain or injury, respond \"-1\" -1: No information about the patient's gait provided. 0: Normal. 1: Almost normal naturally, but unable to walk with feet in tandem position. 2: Walking without support, but clearly abnormal and irregular. 3: Walking without support but with considerable staggering; difficulties in half turn. 4: Walking without support not possible; uses support of the wall for 10-meter test. 5: Walking possible only with one cane. 6: Walking possible only with two canes or with a stroller. 7: Walking possible only with one accompanying person. 8: Walking impossible with one accompanying person (2-person assist; wheelchair)": "gait severity",
+    "Which of these most closely describes how the patient performs the heel-shin/knee-tibia test?. -1: No information about the heel-shin/knee-tibia test provided. 0: Normal. 1: Lowering of heel in continuous axis, but movement is decomposed in several phases, without real jerks, or abnormally slow. 2: Lowering jerkily in the axis. 3: Lowering jerkily with lateral movements. 4: Lowering jerkily with extremely long lateral movements, or test impossible": "heel-shin severity",
+    "Which of these most closely describes the patient's speech? Do not consider hypophonia. -1: No information about speech ability or dysarthria provided. 0: Normal. 1: Mild impairment of rate/rhythm/clarity. 2: Moderate impairment of rate/rhythm/clarity. 3: Severely slow and dysarthric speech. 4: Speech absent or unintelligible": "speech severity",
+    "Which of these most closely describes the patient's oculomotor ability?. Ignore any slowness. -1: No information about oculomotor ability provided. 0: Normal. 1: Slightly slowed pursuit, saccadic intrusions, hypo/hypermetric saccade, nystagmus. 2: Prominently slowed pursuit, saccadic intrusions, hypo/hypermetric saccade, nystagmus": "oculomotor severity",
+    "Which of these most closely describes how the patient performs the finger-to-nose test?. -1: No information about the finger-to-nose test provided. 0: Normal. 1: Oscillating movement of arm and/or hand without decomposition of the movement. 2: Segmented movement in 2 phases and / or moderate dysmetria in reaching nose. 3: Segmented movement in more than 2 phases and / or considerable dysmetria in reaching nose. 4: Dysmetria preventing the patient from reaching nose": "finger-nose severity"
     },
 "bars_pull_scores":{
-    "What score did the clinician give this patient on the BARS questionnaire gait question? If no score is given in the text, respond \"-1\"": "gait_clinician",
-    "What score did the clinician give this patient on the BARS questionnaire heel-shin test? If separate right and left values are given in the text, report both separated by a slash. If no score is given in the text, respond \"-1\"": "heel-shin_clinician",
-    "What score did the clinician give this patient on the BARS questionnaire speech/dysarthria question? If no score is given in the text, respond \"-1\"": "speech_clinician",
-    "What score did the clinician give this patient on the BARS questionnaire oculomotor test? If separate right and left values are given in the text, report both separated by a slash. If no score is given in the text, respond \"-1\"": "oculomotor_clinician",
-    "What score did the clinician give this patient on the BARS questionnaire finger-to-nose test? If separate right and left values are given in the text, report both separated by a slash. If no score is given in the text, respond \"-1\"": "finger-nose_clinician",
-    "What overall score did the clinician give this patient on the BARS questionnaire? If no score is given in the text, respond \"-1\"": "total_clinician"
+    "What score did the clinician give this patient on the BARS questionnaire gait question? If no score is given in the text, respond \"-1\"": "gait clinician",
+    "What score did the clinician give this patient on the BARS questionnaire heel-shin test? If separate right and left values are given in the text, report both separated by a slash. If no score is given in the text, respond \"-1\"": "heel-shin clinician",
+    "What score did the clinician give this patient on the BARS questionnaire speech/dysarthria question? If no score is given in the text, respond \"-1\"": "speech clinician",
+    "What score did the clinician give this patient on the BARS questionnaire oculomotor test? If separate right and left values are given in the text, report both separated by a slash. If no score is given in the text, respond \"-1\"": "oculomotor clinician",
+    "What score did the clinician give this patient on the BARS questionnaire finger-to-nose test? If separate right and left values are given in the text, report both separated by a slash. If no score is given in the text, respond \"-1\"": "finger-nose clinician",
+    "What overall score did the clinician give this patient on the BARS questionnaire? If no score is given in the text, respond \"-1\"": "total clinician"
     },
 "moca":{
     "Does this patient have difficulty performing visuospatial or executive tasks such as a path task, copying a line drawing of a bed, or drawing a clock?":"visuospatial",
@@ -61,7 +61,7 @@
     "Does this patient have difficulty paying attention? For instance, they may be unable to repeat a list of numbers or letters read to them, either forwards or backwards, or may struggle with a serial subtraction task.":"attention",
     "Does this patient have difficulty with language skills? For instance, they may have difficulty repeating a sentence told to them. Only consider cognitive problems, and ignore dysarthria, slurring, and any other motor issues":"language",
     "Does this patient have difficulty with abstraction? For instance, they may struggle to identify similarities between a hammer and screwdriver, or matches and lamps.":"abstraction_similarities",
-    "Does this patient have difficulty with delayed recall? For instance, if given a list of words, they may have difficulty repeating them back five minutes later.":"delayed_recall",
+    "Does this patient have difficulty with delayed recall? For instance, if given a list of words, they may have difficulty repeating them back five minutes later.":"delayed recall",
     "Does this patient have difficulty orienting themselves? For instance, they may not know the date, month, year, day, city, or place they are in.":"orientation"
     },
 "ccas":{
@@ -77,17 +77,17 @@
     "Does this patient have difficulty completing a go-no go task, where they raise their finger if the doctor taps the table once, but not if they tap twice?":"go-no go",
     "Does this patient have unusual affect? For instance, they may have difficulty with mental flexibility; be emotionally labile or show incongruous emotions; show easy sensory overload or avoidant behaviors; express illogical thoughts; lack empathy, be apathetic, or have blunted affect; or be angry or aggressive, irritable, oppositional, with difficulty with social cues and social boundaries. Ignore depression or anxiety symptoms.":"affect"
     },
-"ccas_severity":{
-    "How many animals or living creatures is this patient able to name in one minute? If an animal naming task is not mentioned, respond \"-1\"":"semantic fluency",
-    "How many words beginning with the letter F is this patient able to name in one minute? If a phonemic naming task is not mentioned, respond \"-1\"":"phonemic fluency",
-    "How many words is this patient able to name in one minute in a category switching task, where they need to switch between naming a vegetable and a profession or job?  If a category switching task is not mentioned, respond \"-1\"":"category switching",
-    "How many digits is this subject able to repeat forwards? If a forwards digit repetition task is not mentioned, respond \"-1\"":"digit span forwards",
-    "How many digits is this subject able to repeat backwards? If a backwards digit repetition task is not mentioned, respond \"-1\"":"digit span backwards",
-    "Is this patient unable to correctly draw a cube, with the correct number of lines?  Respond \"1\" for yes and \"0\" for no. If a cube draw task is not mentioned, respond \"-1\"":"cube draw",
-    "What is this patient's score on a cube draw/cube copy task? If a cube draw or copy task is not mentioned, respond \"-1\"":"cube copy",
-    "How many words is this patient able to remember in a verbal recall task?. If a verbal recall test is not mentioned, respond \"-1\"":"verbal recall",
-    "How many pairs of words is the patient able to identify similarities between words on an abstraction/similarities task? If a similarities task is not mentioned, respond \"-1\"":"similarities",
-    "Does this patient have difficulty completing a go-no go task, where they raise their finger if the doctor taps the table once, but not if they tap twice?  Respond \"1\" for yes and \"0\" for no. If a go-no go task is not mentioned, respond \"-1\"":"go-no go"
+"ccas severity":{
+    "How many animals or living creatures is this patient able to name in one minute? If an animal naming task is not mentioned, respond \"-1\"":"semantic fluency severity",
+    "How many words beginning with the letter F is this patient able to name in one minute? If a phonemic naming task is not mentioned, respond \"-1\"":"phonemic fluency severity",
+    "How many words is this patient able to name in one minute in a category switching task, where they need to switch between naming a vegetable and a profession or job?  If a category switching task is not mentioned, respond \"-1\"":"category switching severity",
+    "How many digits is this subject able to repeat forwards? If a forwards digit repetition task is not mentioned, respond \"-1\"":"digit span forwards severity",
+    "How many digits is this subject able to repeat backwards? If a backwards digit repetition task is not mentioned, respond \"-1\"":"digit span backwards severity",
+    "Is this patient unable to correctly draw a cube, with the correct number of lines?  Respond \"1\" for yes and \"0\" for no. If a cube draw task is not mentioned, respond \"-1\"":"cube draw severity",
+    "What is this patient's score on a cube draw/cube copy task? If a cube draw or copy task is not mentioned, respond \"-1\"":"cube copy severity",
+    "How many words is this patient able to remember in a verbal recall task?. If a verbal recall test is not mentioned, respond \"-1\"":"verbal recall severity",
+    "How many pairs of words is the patient able to identify similarities between words on an abstraction/similarities task? If a similarities task is not mentioned, respond \"-1\"":"similarities severity",
+    "Does this patient have difficulty completing a go-no go task, where they raise their finger if the doctor taps the table once, but not if they tap twice?  Respond \"1\" for yes and \"0\" for no. If a go-no go task is not mentioned, respond \"-1\"":"go-no go severity"
     },
 "ccas_fail":{
     "Did this patient fail the CCAS semantic fluency task, where they are asked to name as many animals as they can in one minute? A score of 15 or less is considered a failure. Respond 1 for yes and 0 for no, and if the CCAS questionnaire is not mentioned, respond \"-1\"":"semantic fluency fail",
