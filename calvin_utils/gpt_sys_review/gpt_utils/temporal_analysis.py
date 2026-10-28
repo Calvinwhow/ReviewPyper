@@ -3,7 +3,6 @@ import os
 import pandas as pd
 import numpy as np
 from datetime import datetime
-
 class TemporalPlotter:
     """
     A class to analyze and plot the temporal progression of symptoms from evaluated JSON files.
@@ -189,14 +188,6 @@ class TemporalPlotter:
                 if not isinstance(chunks, dict): continue
                 
                 for chunk_id, answer in chunks.items():
-                    ans = str(answer).lower()
-                    if ans == '0' or ans == '0.0':
-                        continue # Exclude unmentioned data from the longitudinal tracking matrix
-                        
-                    status = 1 # 1 = No
-                    if any(s == ans for s in ["2", "yes", "true", "present", "y"]) or ans == '2' or ans == '2.0':
-                        status = 2 # 2 = Yes
-                    
                     metadata = metadata_by_chunk.get(str(chunk_id), {})
                     all_dates = metadata.get('all_dates', [])
                     if not all_dates:
@@ -210,7 +201,7 @@ class TemporalPlotter:
                                 'Date': date_str,
                                 'Question': question,
                                 'Chunk': chunk_id,
-                                'Status': status
+                                'Status': answer
                             })
                             
         if records:

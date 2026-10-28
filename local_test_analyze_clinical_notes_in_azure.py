@@ -12,7 +12,7 @@ import pandas as pd
 # select_mrns=pd.read_csv('F:/hbs_study_patient_notes/hbs_ross_aryan_gpt_n1205.csv')['MRN']
 select_mrns=None
 
-output_dir='/Users/rm026/Documents/code/ReviewPyper_testing/tests/env_saving/'
+output_dir='/Users/rm026/Documents/code/ReviewPyper_testing/tests/custommapper_severity/'
 
 # Provide the path to your OpenAI API key
 api_key_path = "/Users/rm026/Documents/code/openai-key.txt"
@@ -49,14 +49,14 @@ skip_segmentation=True
 # These are more open-ended than inclusion/exclusion questions, and don't have to be yes/no.
 # See notebook 05, section 02 for examples.
 # extraction_question_sets = ['bars','ccas','cnrs']
-extraction_question_sets = ['hemiparesis','nih_stroke','depression','memory','moca','hbs_seizure']
+extraction_question_sets = ['bars severity']
 
 # Types of answers you want for the extraction step. possible types are:
 # - "binary_without_explanations"
 # - "binary_with_explanations"
 # - "binary_with_unknown_and_explanations"
 # - "severity_with_explanations"
-extraction_answer_format="binary_with_unknown_and_explanations"
+extraction_answer_format="severity_with_unknown_and_explanations"
 
 
 # ################################################################################
@@ -194,7 +194,6 @@ answers = evaluator.evaluate_all_files(chunk_by_date=True)
 
 extraction_chunks_dir=evaluator.chunk_dir
 evaluated_json_path = evaluator.save_to_json(answers)
-evaluated_raw_csv_path = evaluator.save_raw_results_to_csv(answers)
 env.update({'extraction_chunks_dir': extraction_chunks_dir, 'evaluated_json_path': evaluated_json_path, 'extraction_questions_completed': True})
 
 ############# Summarize extraction results #############
@@ -215,8 +214,13 @@ custom_summarizer = CustomSummarizer(json_path=evaluated_json_path,
                                     #  chunks_dir=extraction_chunks_dir, 
                                      is_azure=False, 
                                      debug=False,
-                                     severity_mapping=severity_dict,
+                                     string_mapping=severity_dict,
+                                     left_right_questions=[]
                                     )
+
+mapped_json_path=custom_summarizer.mapped_json_path
+CustomSummarizer.save_raw_results_to_csv(mapped_json_path, extraction_questions)
+
 df, exclusion_summarizer_results_path = custom_summarizer.run_custom(positive_explanations_only=True,)
 env.update({'exclusion_summarizer_results_path': exclusion_summarizer_results_path, 'extraction_summarization_completed': True})
 
@@ -227,7 +231,7 @@ PostProcessing.update_emr_master_list(master_list_path=master_list_path,
 ############# Perform Temporal Analysis #############
 
 from calvin_utils.gpt_sys_review.gpt_utils.temporal_analysis import TemporalPlotter
-plotter = TemporalPlotter(json_path=evaluated_json_path, output_dir=output_dir+"plots/")
+plotter = TemporalPlotter(json_path=mapped_json_path, output_dir=output_dir+"plots/")
 onset_summary_path = plotter.run()
 env.update({'onset_summary_path': onset_summary_path, 'temporal_analysis_completed': True})
 

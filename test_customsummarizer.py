@@ -31,7 +31,7 @@ class TestCustomSummarizer(unittest.TestCase):
                                         summary_type='mapping', 
                                         api_key_path="",
                                         is_azure=False,
-                                        severity_mapping=severity_dict
+                                        string_mapping=severity_dict
                                         )
 
      def test_run_custom(self):

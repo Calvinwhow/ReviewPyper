@@ -328,7 +328,6 @@ class SectionLabeler:
                 self._store_results(filename, labeled_sections)
             self.save_to_json(self.output_dict)
 
-
 class FilterPapers:
     '''
     The FilterPapers class provides functionality to filter a dataset of articles based on inclusion/exclusion criteria.
@@ -526,60 +525,40 @@ class InclusionExclusionSummarizer:
         raw_path = self.save_to_csv()
         print(f"Your CSV files of filtered manuscripts have been saved to this directory: \n {os.path.dirname(raw_path)}")
         return self.df, raw_path
-    
-class CustomSummarizer(InclusionExclusionSummarizer):
+
+
+class CustomMapper():
     """
-    Class to create a custom summary of the results with user-defined keyword mapping and fuzzy matching.
-
-    Attributes:
-    - keyword_mapping (dict): Dictionary mapping each numeric level to a list of acceptable values.
-        Examples:
-          # Binary (kept for compatibility)
-          {0: ["no","n","negative"], 1: ["yes","y","positive"]}
-
-          # Severity scale
-          {0: ["none","absent"], 1: ["mild"], 2: ["moderate"], 3: ["severe"]}
+    Class to convert LLM responses into standardized answers, with several types of matching available.
     """
-
-    def __init__(self, json_path, answer_format, api_key_path=None, summary_type='llm',
-                 chunks_dir=None, is_azure=False, deployment_id=None, api_base=None, api_version=None,
-                 severity_mapping=None, max_workers=10, debug=False):
+    def __init__(self, answer_format, string_mapping=None, 
+                 summary_type='mapping', 
+                 api_key_path=None, is_azure=False, deployment_id=None, api_base=None, api_version=None, max_workers=10, 
+                ):
         """
-        Initializes the CustomSummarizer class.
-
-        Parameters:
-        - json_path (str): Path to the JSON file containing the answers.
-        - answers_binary (bool): If True, treat as binary (kept for compatibility). If False and
-                                 severity_mapping is provided, treat as severity scale.
-        - severity_mapping (dict|None): Optional numeric->list[str] mapping for severity levels.
-                                        If provided, enables severity mode.
+        Initializes the CustomMapper class.
         """
-        self.json_path = json_path
-        self.api_key_path = api_key_path
-        self.summary_type = summary_type
         self.answer_format = answer_format
-        self.has_explanations = self.answer_format in ["binary_with_explanations", "binary_with_unknown_and_explanations","severity_with_explanations", "severity_with_unknown_and_explanations"]
-        self.data = self.read_json()
-        self.chunks_dir = chunks_dir
+        self.summary_type=summary_type
+        self.api_key_path = api_key_path
         self.is_azure = is_azure
         self.deployment_id = deployment_id
         self.api_base = api_base
         self.api_version = api_version
         self.max_workers = max_workers
-        self.debug = debug
+        self.has_explanations = self.answer_format in ["binary_with_explanations", "binary_with_unknown_and_explanations","severity_with_unknown_and_explanations"]
 
         # --- NEW: allow severity mapping; else fall back to binary mapping if answers_binary=True ---
-        # self.severity_mode = False
-        if self.answer_format in ["binary_with_unknown_and_explanations", "severity_with_explanations", ]:
+        if self.answer_format in ["binary_with_unknown_and_explanations", ]:
 
-            if severity_mapping is None:
-                raise ValueError(f"Answer type {self.answer_format} cannot be evaluated without a severity_mapping dict, but none was given")
-            if not isinstance(severity_mapping, dict) or len(severity_mapping) == 0:
-                raise ValueError("""Invalid severity mapping. "severity_mapping" must be a non-empty dictionary""")
+            if string_mapping is None:
+                raise ValueError(f"Answer type {self.answer_format} cannot be evaluated without a string_mapping dict, but none was given")
+            if not isinstance(string_mapping, dict) or len(string_mapping) == 0:
+                raise ValueError("""Invalid severity mapping. "string_mapping" must be a non-empty dictionary""")
             
             # Normalize keys to ints and values to lowercase lists
             self.keyword_mapping = {
-                int(k): [str(v).lower() for v in vals] for k, vals in severity_mapping.items()
+                int(k): [str(v).lower() for v in vals] for k, vals in string_mapping.items()
             }
 
         elif self.answer_format in ["binary","binary_with_explanations","binary_without_explanations"]:
@@ -592,28 +571,66 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         elif self.answer_format=="severity_with_unknown_and_explanations":
             self.keyword_mapping=None
         else:
-            raise ValueError('''"answer_format" is invalid. Allowed answer types are "binary_without_explanations", "binary_with_explanations", "binary_with_unknown_and_explanations","severity_with_explanations","severity_with_unknown_and_explanations"''')
+            raise ValueError('''"answer_format" is invalid. Allowed answer types are "binary_without_explanations", "binary_with_explanations", "binary_with_unknown_and_explanations","severity_with_unknown_and_explanations"''')
 
+    @staticmethod
+    def read_json(json_file_path):
+        """Reads JSON data from a file and returns it as a dictionary."""
+        try:
+            with open(json_file_path, 'r', encoding='UTF-8') as file:
+                return json.load(file)
+        except FileNotFoundError:
+            print(f"Error: File {json_file_path} not found.")
+            return {}
+        except json.JSONDecodeError:
+            print("Error: Could not decode the JSON file.")
+            return {}
+
+    @staticmethod
+    def save_to_json(output_dict, save_file):
+        """Saves dict to a JSON file."""
+        with open(save_file, 'w', encoding='UTF-8') as f:
+            json.dump(output_dict, f, indent=0)
+        print(f"Saved to: {save_file}")
+
+        return save_file
 
     def numerical_interpretation(self, answer):
         check_numeric_answer = re.sub(r'[^0-9\.\-\/]', '', answer)
         try:
-            if '/' in check_numeric_answer and any(ch.isdigit() for ch in check_numeric_answer):
-                val = float(Fraction(check_numeric_answer))
-            else:
-                val = float(check_numeric_answer)
+            # if '/' in check_numeric_answer and any(ch.isdigit() for ch in check_numeric_answer):
+            #     val = float(Fraction(check_numeric_answer))
+            # else:
+            val = float(check_numeric_answer)
+            
+            if self.answer_format=='severity_with_unknown_and_explanations':
+                return val
 
             if float(val).is_integer() and float(val) in self.keyword_mapping.keys():
                 return int(val)
-            
-            if self.answer_format=="severity_with_explanations":
-                return val
             
         except Exception:
             pass
 
         return None
 
+    def passthrough_without_mapping(self):
+        # Raw text passthrough (research-style)
+        summary_dict = {}
+
+        for article, question_data in self.data.items(): # 'article' is subject id in EMR mode
+            for question, responses in question_data.items(): # question is question text, responses is dict of chunk name to answer
+                try:
+                    combined_answers = list(responses.values())[0]
+                    if not combined_answers:
+                        summary_dict[article][question] = 'No Answers'
+                    else:
+                        summary_dict[article][question] = combined_answers
+                except Exception as e:
+                    summary_dict[article][question] = f'Error: {str(e)}'
+
+        df = pd.DataFrame.from_dict(summary_dict, orient='index').fillna(np.nan)
+        return df
 
     def exact_match(self, answer):
         """Checks for an exact match of keywords in the answer text."""
@@ -621,13 +638,14 @@ class CustomSummarizer(InclusionExclusionSummarizer):
             return np.nan
 
         raw = str(answer).strip().lower()
-        from string import punctuation
-        raw_no_punctuation = raw.translate(str.maketrans(punctuation, ' '*len(punctuation)))
         
-        if self.answer_format=='severity_with_explanations': # for severity cases, prioritize numerical interpretation
+        if self.answer_format=='severity_with_unknown_and_explanations': # for severity cases, prioritize numerical interpretation
             numerical=self.numerical_interpretation(raw)
             if numerical is not None:
                 return numerical
+
+        from string import punctuation
+        raw_no_punctuation = raw.translate(str.maketrans(punctuation, ' '*len(punctuation)))
 
         found_keys_words = []
         for key, keywords in self.keyword_mapping.items():
@@ -660,7 +678,6 @@ class CustomSummarizer(InclusionExclusionSummarizer):
             return good_keys_words[0][0]
         else:
             return 99 # Indicates conflicting matches.
-
 
     def fuzzy_match(self, answer, threshold=60):
         """
@@ -705,23 +722,189 @@ class CustomSummarizer(InclusionExclusionSummarizer):
 
         return int(result)
 
-    def passthrough_without_mapping(self):
-        # Raw text passthrough (research-style)
-        summary_dict = {}
+    def interpret_left_right_severity(self, answer, divider='/'):
+        """
+        Interprets answers where left and right are (sometimes) given separately, separated by a slash/other divider.
+        Common for BARS heel-shin, finger-nose, etc.
+        """
+        if divider in answer:
+            left, right=[self.numerical_interpretation(score) for score in answer.split(divider)]
+        else:
+            left=self.interpret_severity(answer)
+            right=left
+        return left, right
 
-        for article, question_data in self.data.items(): # 'article' is subject id in EMR mode
-            for question, responses in question_data.items(): # question is question text, responses is dict of chunk name to answer
-                try:
-                    combined_answers = list(responses.values())[0]
-                    if not combined_answers:
-                        summary_dict[article][question] = 'No Answers'
+    def interpret_severity(self, answer):
+        mapped = self.numerical_interpretation(answer) 
+        if mapped is None:
+            mapped=99 
+        return mapped
+
+    def interpret_binary(self, raw_answer, article, question, chunk_name):
+
+        chunk_answer=self.keyword_or_fuzzy_match(raw_answer)
+
+        if chunk_answer not in self.keyword_mapping.keys() and chunk_answer != 99: # if the answer is not in our mapping and not the special "conflicting" code, this is a problem
+            print(f"""Warning: unexpected answer "{chunk_answer}" from "{raw_answer}" for article "{article}", question "{question}", chunk "{chunk_name}". Setting to 99.""")    
+            chunk_answer=99
+
+        return chunk_answer
+
+    def interpret_answer(self, raw_answer, article, q, chunk_name, is_left_right=False):
+        if self.answer_format=='severity_with_unknown_and_explanations' and is_left_right:
+            mapped=self.interpret_left_right_severity(raw_answer)
+
+        elif self.answer_format=='severity_with_unknown_and_explanations':
+            mapped=self.interpret_severity(raw_answer)
+
+        else:
+            mapped=self.interpret_binary(raw_answer, article, q, chunk_name)
+
+        return mapped
+
+    def map_json(self, input_json_path,output_json_path=None, left_right_questions=[]):
+        """
+        Takes the JSON output from OpenAIJsonEvaluator and maps the answers, 
+        creating a new json with standardized values.
+        """
+        data=self.read_json(input_json_path)
+
+        from copy import deepcopy
+        mapped_dict = deepcopy(data)
+
+        for article, question_data in tqdm(data.items(),"Interpreting answers: ",total=len(data)): 
+            # 'article' is subject id in EMR mode
+
+            for q, chunk_data in question_data.items():
+
+                is_left_right=q in left_right_questions
+                
+                if q=='metadata' or 'explanation' in q.lower():
+                    continue
+
+                if is_left_right:
+                    mapped_dict[article][q+'_left']={}
+                    mapped_dict[article][q+'_right']={}
+
+                for chunk_name, answer in chunk_data.items():
+
+                    mapped_answer=self.interpret_answer(answer, article, q, chunk_name,
+                                                        is_left_right=(q in left_right_questions))
+                    if is_left_right:
+                        mapped_dict[article][q+'_left'][chunk_name]=mapped_answer[0]
+                        mapped_dict[article][q+'_right'][chunk_name]=mapped_answer[1]
+                        mapped_dict[article][q][chunk_name]=max(mapped_answer) # set original question answer to whatever the max of the left and right scores was 
+
                     else:
-                        summary_dict[article][question] = combined_answers
-                except Exception as e:
-                    summary_dict[article][question] = f'Error: {str(e)}'
+                        mapped_dict[article][q][chunk_name]=mapped_answer
 
-        df = pd.DataFrame.from_dict(summary_dict, orient='index').fillna(np.nan)
-        return df
+        if output_json_path is not None:
+            self.save_to_json(mapped_dict, output_json_path)
+
+        return mapped_dict
+
+            
+class CustomSummarizer(CustomMapper):
+    """
+    Class to create a custom summary of the results with user-defined keyword mapping and fuzzy matching.
+
+    Attributes:
+    - keyword_mapping (dict): Dictionary mapping each numeric level to a list of acceptable values.
+        Examples:
+          # Binary (kept for compatibility)
+          {0: ["no","n","negative"], 1: ["yes","y","positive"]}
+
+          # Severity scale
+          {0: ["none","absent"], 1: ["mild"], 2: ["moderate"], 3: ["severe"]}
+    """
+
+    def __init__(self, json_path, answer_format, summary_type='llm', premapped=False, left_right_questions=[],
+                 api_key_path=None, is_azure=False, deployment_id=None, api_base=None, api_version=None, max_workers=10, 
+                 chunks_dir=None, string_mapping=None, debug=False,):
+        """
+        Initializes the CustomSummarizer class.
+
+        Parameters:
+        - json_path (str): Path to the JSON file containing the answers.
+        - answers_binary (bool): If True, treat as binary (kept for compatibility). If False and
+                                 string_mapping is provided, treat as severity scale.
+        - string_mapping (dict|None): Optional numeric->list[str] mapping for severity levels.
+                                        If provided, enables severity mode.
+        """
+        super().__init__(answer_format=answer_format, string_mapping=string_mapping)
+        self.json_path = json_path
+        self.summary_type = summary_type
+        self.has_explanations = self.answer_format in ["binary_with_explanations", "binary_with_unknown_and_explanations","severity_with_explanations", "severity_with_unknown_and_explanations"]
+        self.chunks_dir = chunks_dir
+        self.api_key_path = api_key_path
+        self.is_azure = is_azure
+        self.deployment_id = deployment_id
+        self.api_base = api_base
+        self.api_version = api_version
+        self.max_workers = max_workers
+        self.debug = debug
+
+        if answer_format=="severity_with_unknown_and_explanations":
+            self.answer_categories=[-1,0,1,99]
+        else:
+            self.answer_categories=list(self.keyword_mapping.keys()) 
+
+        if premapped:
+            self.mapped_json_path = json_path
+            self.data = self.read_json() 
+        else:
+            self.mapped_json_path=json_path.replace('.json','_mapped.json')
+            self.data = self.map_json(json_path, 
+                                      self.mapped_json_path,
+                                      left_right_questions)
+
+
+    @staticmethod
+    def replace_long_question_names(df, questions_dict):
+        
+        new_cols=df.columns
+        
+        for short_q, long_q in questions_dict.items():
+            new_cols=[col.replace(short_q, long_q) for col in new_cols]
+
+        return new_cols
+
+    @staticmethod
+    def save_raw_results_to_csv(json_path, questions=None):
+        """Saves the same information as the JSON file, but in CSV form.
+        Each row is an individual note, with date and answers."""
+
+        import pandas as pd
+
+        output_dict=CustomSummarizer.read_json(json_path)
+        subject_dfs=[]
+        for subject, subject_data in output_dict.items():
+
+            subdf=pd.DataFrame(subject_data)
+            
+            # subdf.reset_index(names='chunk', inplace=True)
+            subdf.insert(0, 'MRN',subject)
+            
+            subdf.insert(1,'date', [metadata['date'] for metadata in subdf['metadata']])
+            subdf.sort_values(by='date', inplace=True)
+            subdf.drop(columns='metadata', inplace=True)
+
+            subject_dfs.append(subdf)
+
+        out=pd.concat(subject_dfs)
+        out.sort_values(by=['MRN','date'], inplace=True)
+        out.reset_index(names='chunk', inplace=True)
+        
+        mrn_col = out.pop("MRN")
+        out.insert(0, 'MRN', mrn_col)
+
+        if questions is not None:
+            out.columns=CustomSummarizer.replace_long_question_names(out, questions)
+
+        save_file=json_path.replace('.json','.csv')
+        out.to_csv(save_file, index=False)
+
+        return save_file
 
     def compile_answers(self, answers, article_name, question_name, has_failed_chunk=False):
                     
@@ -753,9 +936,21 @@ class CustomSummarizer(InclusionExclusionSummarizer):
             # indents every new explanation for readability.
             output_dict[f"{ans}_{data_name}"] = "    "+'|\n    '.join(list(text))
         return output_dict
-        
 
-    def summarize_results_with_mapping(self, positive_explanations_only=False):
+    def present_absent_category(self,value):
+        """
+        Determines whether to categorize a severity value as "present","absent", or "unknown".
+        """
+        if value==99:
+            category=99
+        if self.answer_format=="severity_with_unknown_and_explanations":
+            category=int(value) if value <= 0 else 1 # if an answer is 0 for no or -1 for unknown, keep. if 1 or more, set to 'present'
+        else:
+            category=int(value) 
+        return category
+
+
+    def summarize_mapped_results(self, positive_explanations_only=False):
         """
         Summarizes the results based on keyword mapping/fuzzy matching.
 
@@ -779,37 +974,23 @@ class CustomSummarizer(InclusionExclusionSummarizer):
 
             for q in qs:
                 answers=[]
-                explanations={n:[] for n in list(self.keyword_mapping.keys())+[99]} # these two are now dicts, so that yes and no answers can be in separate cols
-                saved_chunks={n:[] for n in list(self.keyword_mapping.keys())+[99]}
+                explanations={n:[] for n in self.answer_categories} # these two are now dicts, so that yes and no answers can be in separate cols
+                saved_chunks={n:[] for n in self.answer_categories}
                 
                 for chunk_name, chunk_metadata in chunk_metadatas.items():
 
-                    raw_answer = question_data.get(q, {}).get(chunk_name, "")
-                    chunk_answer = self.keyword_or_fuzzy_match(raw_answer)
+                    answer = question_data.get(q, {}).get(chunk_name, "")
 
-                    if chunk_answer not in self.keyword_mapping.keys() and chunk_answer != 99: # if the answer is not in our mapping and not the special "conflicting" code, this is a problem
-                        if self.has_explanations:
-                            explanation_warning=f' explanation "{question_data[f"EXPLANATION: {q}"][chunk_name]}"'
-                        else:
-                            explanation_warning=''
-                        print(f"""Warning: unexpected answer "{chunk_answer}" from "{raw_answer}" for article "{article}", question "{q}", 
-                              chunk "{chunk_name}"{explanation_warning}. Setting to 99.""")    
-                        chunk_answer=99
-
-                    answers.append(chunk_answer)
-                    
-                    # if reformat_dates:
-                    #     from calvin_utils.gpt_sys_review.txt_utils import TextChunker
-                    #     chunk_metadata['date'] = TextChunker.reformat_date(chunk_metadata['date'])
-                    #     chunk_metadata['all_dates'] = sorted([TextChunker.reformat_date(d) for d in chunk_metadata['all_dates']])
-                    #     chunk_metadata['date_range']= f"{chunk_metadata['all_dates'][0]} to {chunk_metadata['all_dates'][-1]}"
+                    answers.append(answer)
 
                     if self.has_explanations:
                         expl = question_data.get(f'EXPLANATION: {q}').get(chunk_name, "")
-                        explanations[chunk_answer].append(f"{chunk_metadata['date_range']}: {expl}")
+                        expl_category=self.present_absent_category(answer) # for severity, explanations for answers are grouped into "present" and "absent"
+                        explanations[expl_category].append(f"{chunk_metadata['date_range']}, {answer}: {expl}")
 
                     if self.chunks_dir is not None:
-                        saved_chunks[chunk_answer].append(f"{chunk_metadata['date_range']}: {chunks_dict[chunk_name]['text']}")
+                        expl_category=self.present_absent_category(answer)
+                        saved_chunks[expl_category].append(f"{chunk_metadata['date_range']}: {chunks_dict[chunk_name]['text']}")
 
                 summary_dict[article][q] = self.compile_answers(answers, article, q, has_failed_chunk)
                 summary_dict[article].update(self.compile_text_data(explanations, f'explanations: {q}', positive_explanations_only))
@@ -862,10 +1043,10 @@ class CustomSummarizer(InclusionExclusionSummarizer):
     def summarize(self, positive_explanations_only=False):
         if self.summary_type == 'llm':
             df = self.summarize_with_llm()
-        elif self.keyword_mapping:
-            df = self.summarize_results_with_mapping(positive_explanations_only=positive_explanations_only)
         else:
-            df = self.passthrough_without_mapping()
+            df = self.summarize_mapped_results(positive_explanations_only=positive_explanations_only)
+        # else:
+        #     df = self.passthrough_without_mapping()
         return df
 
     def run_custom(self, positive_explanations_only=False):
@@ -879,3 +1060,21 @@ class CustomSummarizer(InclusionExclusionSummarizer):
         raw_path = self.save_to_csv(filename=f'responses_raw')
         print(f"Your CSV files of filtered manuscripts have been saved to this directory: \n {os.path.dirname(raw_path)}")
         return self.df, raw_path
+
+    def save_to_csv(self, filename='inclusion_exclusion_results'):
+        """
+        Saves the DataFrame to a CSV file.
+        
+        Parameters:
+        - dropped (bool): Indicates whether rows have been dropped from the DataFrame.
+        
+        Returns:
+        - None
+        """
+        # Create a new directory in the same root folder
+        out_dir = os.path.dirname(self.json_path)
+        os.makedirs(out_dir, exist_ok=True)
+        csv_path = os.path.join(out_dir, filename + '.csv')
+        self.df.index.name = 'MRN'
+        self.df.to_csv(csv_path)
+        return csv_path

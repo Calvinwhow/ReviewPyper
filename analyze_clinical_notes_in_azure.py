@@ -201,7 +201,7 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
 answers = evaluator.evaluate_all_files(chunk_by_date=True)
 
 extraction_chunks_dir=evaluator.chunk_dir
-evaluated_json_path = evaluator.save_to_json(answers)
+evaluated_json_path = evaluator.save_to_json()
 env.update({'extraction_chunks_dir': extraction_chunks_dir, 'evaluated_json_path': evaluated_json_path, 'extraction_questions_completed': True})
 
 ############# Summarize extraction results #############
@@ -221,10 +221,13 @@ custom_summarizer = CustomSummarizer(json_path=evaluated_json_path,
                                     #  chunks_dir=extraction_chunks_dir, 
                                      is_azure=True, 
                                      debug=False,
-                                     severity_mapping=severity_dict,
-                                     deployment_id=extraction_model_name, 
-                                     api_base=api_base, api_version=api_version,
+                                     string_mapping=severity_dict,
+                                     left_right_questions=[],
+                                     deployment_id=extraction_model_name, api_base=api_base, api_version=api_version,
                                     )
+mapped_json_path=custom_summarizer.mapped_json_path
+CustomSummarizer.save_raw_results_to_csv(mapped_json_path, extraction_questions)
+
 df, exclusion_summarizer_results_path = custom_summarizer.run_custom(positive_explanations_only=True,)
 env.update({'exclusion_summarizer_results_path': exclusion_summarizer_results_path, 'extraction_summarization_completed': True})
 
@@ -235,7 +238,7 @@ PostProcessing.update_emr_master_list(master_list_path=master_list_path,
 ############# Perform Temporal Analysis #############
 
 from calvin_utils.gpt_sys_review.gpt_utils.temporal_analysis import TemporalPlotter
-plotter = TemporalPlotter(json_path=evaluated_json_path, output_dir=output_dir+"plots/")
+plotter = TemporalPlotter(json_path=mapped_json_path, output_dir=output_dir+"plots/")
 onset_summary_path = plotter.run()
 env.update({'onset_summary_path': onset_summary_path, 'temporal_analysis_completed': True})
 

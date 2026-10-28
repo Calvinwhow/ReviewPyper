@@ -431,7 +431,10 @@ class SymptomProgressionPlotter:
         temp_longitudinal_filename="temp_longitudinal.csv",
         min_valid_year=1900,
         max_valid_year=2100,
+        time_range=(12,12),
+        value_range=(0,1),
         drop_unknown=False,
+        unknown_value=0,
         show_yes_before_yes_after=True,
         show_yes_before_no_after=True,
         show_no_before_no_after=True,
@@ -441,7 +444,7 @@ class SymptomProgressionPlotter:
         transition_threshold_months=3,
         state_rule="hierarchical",
         state_floor_threshold=None,
-        coerce_observation_threshold=3,
+        coerce_observation_threshold=1,
     ):
         self.json_path = Path(json_path)
         self.onset_csv_path = Path(onset_csv_path)
@@ -458,7 +461,9 @@ class SymptomProgressionPlotter:
         self.temp_longitudinal_path = self.output_dir / temp_longitudinal_filename
         self.min_valid_year = min_valid_year
         self.max_valid_year = max_valid_year
+        self.x_range=time_range
         self.drop_unknown = drop_unknown
+        self.unknown_value=unknown_value
         self.set_transition_threshold_months(transition_threshold_months)
         self.state_rule = state_rule
         self.state_floor_threshold = state_floor_threshold
@@ -483,6 +488,7 @@ class SymptomProgressionPlotter:
         self.onset_df = None
         self.merged_df = None
         self.series_df = None
+        self.y_range = value_range
 
     def set_transition_threshold_months(self, transition_threshold_months):
         """
@@ -614,7 +620,7 @@ class SymptomProgressionPlotter:
         """
         Load onset CSV.
         """
-        self.onset_df = pd.read_csv(self.onset_csv_path)
+        self.onset_df = pd.read_csv(self.onset_csv_path, dtype={self.mrn_col:str})
 
         if self.onset_df.empty:
             raise ValueError("Onset CSV is empty.")
@@ -856,15 +862,19 @@ class SymptomProgressionPlotter:
         incidence_map = self._calculate_incidence_map()
 
         for symptom_key in self.symptom_keys:
+
             symptom_df = self.series_df[self.series_df["Question"] == symptom_key]
+
             if symptom_df.empty:
                 print(f"Warning: symptom key '{symptom_key}' has no plotted data.")
                 continue
 
             for mrn, patient_df in symptom_df.groupby(self.mrn_col):
+
                 patient_df = self.status_calculator.prepare_trace_dataframe(patient_df)
                 if self.drop_unknown:
-                    patient_df = patient_df[patient_df["State"] != -1]
+                    patient_df = patient_df[patient_df["Status"] != self.unknown_value]
+                    patient_df = patient_df[patient_df["Status"] != 99]
                     if patient_df.empty:
                         continue
 
@@ -880,7 +890,7 @@ class SymptomProgressionPlotter:
                 if show_legend:
                     shown_trace_classes.add(trace_class)
 
-                y_display = patient_df["State"] + self.TRACE_Y_OFFSETS[trace_class]
+                y_display = patient_df["Status"] + self.TRACE_Y_OFFSETS[trace_class]
                 color = self.TRACE_COLORS[trace_class]
                 
                 # Build legend name with incidence if available
@@ -911,8 +921,8 @@ class SymptomProgressionPlotter:
                             f"Class={trace_class}<extra></extra>"
                         ),
                         customdata=[
-                            [str(mrn), symptom_key, state]
-                            for state in patient_df["StateLabel"]
+                            [str(mrn), symptom_key, status]
+                            for status in patient_df["Status"]
                         ],
                     )
                 )
@@ -921,7 +931,10 @@ class SymptomProgressionPlotter:
         if not plotted_any:
             raise ValueError("No plotted symptom trajectories were available.")
 
-        self.format_figure(fig, self.series_df)
+
+
+        self.format_figure(fig,)
+        
         output_symptoms = [
             self.get_symptom_display_name(key)
             for key in self.symptom_keys
@@ -953,7 +966,8 @@ class SymptomProgressionPlotter:
             for mrn, patient_df in symptom_df.groupby(self.mrn_col):
                 patient_df = self.status_calculator.prepare_trace_dataframe(patient_df)
                 if self.drop_unknown:
-                    patient_df = patient_df[patient_df["State"] != -1]
+                    patient_df = patient_df[patient_df["Status"] != self.unknown_value]
+                    patient_df = patient_df[patient_df["Status"] != 99]
                 
                 if patient_df.empty:
                     continue
@@ -1055,7 +1069,7 @@ class SymptomProgressionPlotter:
             f"data: {missing}\nAvailable symptom keys:\n{available}"
         )
 
-    def format_figure(self, fig, symptom_df):
+    def format_figure(self, fig):
         """
         Apply Plotly layout, labels, and onset reference line.
         """
@@ -1076,12 +1090,12 @@ class SymptomProgressionPlotter:
             xaxis_title=months_label,
             yaxis_title="Symptom Status",
             xaxis={
-                "range": [-12, 12],
+                "range": self.x_range,
                 "zeroline": False,
                 "showgrid": False,
             },
             yaxis={
-                **self.get_yaxis_config(),
+                **self.get_yaxis_config(self.y_range),
                 "showgrid": False,
             },
             hovermode="closest",
@@ -1098,23 +1112,15 @@ class SymptomProgressionPlotter:
             template="plotly_white",
         )
 
-    def get_yaxis_config(self):
+    def get_yaxis_config(self,y_range):
         """
         Build y-axis ticks based on whether unknown states are hidden.
         """
-        if self.drop_unknown:
-            return {
-                "range": [-0.4, 1.4],
-                "tickmode": "array",
-                "tickvals": [0, 1],
-                "ticktext": ["0: No", "1: Yes"],
-            }
-
         return {
-            "range": [-1.4, 1.4],
+            "range": [y_range[0]-0.4, y_range[1]+0.4],
             "tickmode": "array",
-            "tickvals": [-1, 0, 1],
-            "ticktext": ["-1: No Data", "0: No", "1: Yes"],
+            "tickvals": list(range(y_range[0], y_range[1]+1)),
+            # "ticktext": ["-1: No Data", "0: No", "1: Yes"],
         }
 
     def get_output_filepath(self, prefix, symptom_key, ext):
@@ -1173,7 +1179,8 @@ class SymptomProgressionPlotter:
             for mrn, patient_df in symptom_df.groupby(self.mrn_col):
                 patient_df = self.status_calculator.prepare_trace_dataframe(patient_df)
                 if self.drop_unknown:
-                    patient_df = patient_df[patient_df["State"] != -1]
+                    patient_df = patient_df[patient_df["State"] != self.unknown_value]
+                    patient_df = patient_df[patient_df["State"] != 99]
                 
                 if patient_df.empty:
                     continue
@@ -1237,7 +1244,8 @@ class SymptomProgressionPlotter:
             for mrn, patient_df in symptom_df.groupby(self.mrn_col):
                 patient_df = self.status_calculator.prepare_trace_dataframe(patient_df)
                 if self.drop_unknown:
-                    patient_df = patient_df[patient_df["State"] != -1]
+                    patient_df = patient_df[patient_df["Status"] != self.unknown_value]
+                    patient_df = patient_df[patient_df["Status"] != 99]
                     if patient_df.empty:
                         continue
 
