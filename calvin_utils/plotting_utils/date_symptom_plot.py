@@ -60,6 +60,10 @@ class SymptomPlottingStatusCalculator:
     def __init__(
         self,
         state_rule="hierarchical",
+        is_binary=True,
+        yes_value=2,
+        no_value=1,
+        unknown_value=0,
         floor_threshold=None,
         coerce_observation_threshold=3,
         transition_threshold_months=3,
@@ -69,6 +73,10 @@ class SymptomPlottingStatusCalculator:
             raise ValueError(f"state_rule must be one of: {valid}")
 
         self.state_rule = state_rule
+        self.is_binary=is_binary
+        self.yes_value=yes_value
+        self.no_value=no_value
+        self.unknown_value=unknown_value
         self.floor_threshold = floor_threshold
         self.coerce_observation_threshold = coerce_observation_threshold
         self.set_transition_threshold_months(transition_threshold_months)
@@ -93,7 +101,7 @@ class SymptomPlottingStatusCalculator:
         )
 
     @staticmethod
-    def raw_status_to_state(raw_status):
+    def raw_status_to_state(raw_status, is_binary=True, yes_value=2, no_value=1, unknown_value=0):
         """
         Map raw ReviewPyper status into plot state.
 
@@ -102,17 +110,24 @@ class SymptomPlottingStatusCalculator:
           - 1 -> 0  (No)
           - any other value -> -1 (No data)
         """
-        if raw_status == 2:
-            return 1
-        if raw_status == 1:
-            return 0
-        return -1
+        if is_binary:
+            if raw_status == yes_value:
+                return 1
+            if raw_status == no_value:
+                return 0
+            return -1
+        else:
+            if raw_status==no_value:
+                return 0
+            elif raw_status > 0 and raw_status!=99:
+                return 1
+            return -1
 
     def raw_states(self, status_series):
         """
         Convert raw statuses directly to plotted state values.
         """
-        return [self.raw_status_to_state(raw_status) for raw_status in status_series]
+        return [self.raw_status_to_state(raw_status, self.is_binary, self.yes_value, self.no_value, self.unknown_value) for raw_status in status_series]
 
     def coerce_states(self, status_series):
         """
@@ -423,6 +438,10 @@ class SymptomProgressionPlotter:
         json_path,
         onset_csv_path,
         symptoms,
+        is_binary=True,
+        yes_value=2,
+        no_value=1,
+        unknown_value=0,
         question_key_file=None,
         output_dir="dateTimePlots",
         onset_col="stroke_date",
@@ -434,7 +453,6 @@ class SymptomProgressionPlotter:
         time_range=(12,12),
         value_range=(0,1),
         drop_unknown=False,
-        unknown_value=0,
         show_yes_before_yes_after=True,
         show_yes_before_no_after=True,
         show_no_before_no_after=True,
@@ -451,6 +469,10 @@ class SymptomProgressionPlotter:
         self.requested_symptom_keys = list(symptoms)
         self.symptom_keys = list(symptoms)
         self.symptom_key_map = {}
+        self.is_binary = is_binary
+        self.yes_value = yes_value
+        self.no_value = no_value
+        self.unknown_value = unknown_value
         self.question_key_file = Path(question_key_file) if question_key_file is not None else None
         self.question_names_dict = None
         self.output_dir = Path(output_dir)
@@ -463,7 +485,6 @@ class SymptomProgressionPlotter:
         self.max_valid_year = max_valid_year
         self.x_range=time_range
         self.drop_unknown = drop_unknown
-        self.unknown_value=unknown_value
         self.set_transition_threshold_months(transition_threshold_months)
         self.state_rule = state_rule
         self.state_floor_threshold = state_floor_threshold
@@ -478,6 +499,10 @@ class SymptomProgressionPlotter:
         self.display_plot = display_plot
         self.status_calculator = SymptomPlottingStatusCalculator(
             state_rule,
+            is_binary=self.is_binary,
+            yes_value=self.yes_value,
+            no_value=self.no_value,
+            unknown_value=self.unknown_value,
             floor_threshold=state_floor_threshold,
             coerce_observation_threshold=coerce_observation_threshold,
             transition_threshold_months=self.transition_window_months,
@@ -538,6 +563,8 @@ class SymptomProgressionPlotter:
         plotter = TemporalPlotter(
             json_path=str(self.json_path),
             output_dir=str(self.output_dir),
+            no_value=self.no_value,
+            unknown_value=self.unknown_value,
         )
         self.resolve_json_symptom_keys(plotter.data)
 
@@ -889,8 +916,11 @@ class SymptomProgressionPlotter:
                 show_legend = trace_class not in shown_trace_classes
                 if show_legend:
                     shown_trace_classes.add(trace_class)
-
-                y_display = patient_df["Status"] + self.TRACE_Y_OFFSETS[trace_class]
+                
+                if self.is_binary:
+                    y_display = patient_df["State"] + self.TRACE_Y_OFFSETS[trace_class]
+                else:
+                    y_display = patient_df["Status"] + self.TRACE_Y_OFFSETS[trace_class]
                 color = self.TRACE_COLORS[trace_class]
                 
                 # Build legend name with incidence if available
@@ -917,12 +947,13 @@ class SymptomProgressionPlotter:
                             "MRN=%{customdata[0]}<br>"
                             "Symptom=%{customdata[1]}<br>"
                             "Months from onset=%{x:.2f}<br>"
-                            "State=%{customdata[2]}<br>"
+                            "Value=%{customdata[2]}<br>"
+                            "State=%{customdata[3]}<br>"
                             f"Class={trace_class}<extra></extra>"
                         ),
                         customdata=[
-                            [str(mrn), symptom_key, status]
-                            for status in patient_df["Status"]
+                            [str(mrn), symptom_key, row["Status"],row['State']]
+                            for _, row in patient_df.iterrows()
                         ],
                     )
                 )
@@ -1003,24 +1034,11 @@ class SymptomProgressionPlotter:
 
         display(fig)
 
-    @classmethod
-    def prepare_trace_dataframe(cls, patient_df):
+    def prepare_trace_dataframe(self, patient_df):
         """
         Sort one trajectory and map raw ReviewPyper status to plot state.
-
-        Raw ReviewPyper status is mapped as:
-          - 2 -> 1  (Yes)
-          - 1 -> 0  (No)
-          - 0 -> -1 (No data)
         """
-        return SymptomPlottingStatusCalculator().prepare_trace_dataframe(patient_df)
-
-    @staticmethod
-    def apply_state_rules(status_series):
-        """
-        Legacy wrapper for the explicit coerce rule.
-        """
-        return SymptomPlottingStatusCalculator(state_rule="coerce").calculate_states(status_series)
+        return self.status_calculator.prepare_trace_dataframe(patient_df)
 
     @staticmethod
     def classify_trace(patient_df, transition_threshold_months=3, remove_delayed_conversions=True):

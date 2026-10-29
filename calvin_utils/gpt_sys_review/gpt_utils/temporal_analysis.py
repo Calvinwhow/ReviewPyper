@@ -9,14 +9,16 @@ class TemporalPlotter:
     Implements a 'permanent flip' logic where once a symptom is detected, it stays detected.
     """
 
-    def __init__(self, json_path, output_dir):
+    def __init__(self, json_path, output_dir, no_value=1, unknown_value=0):
         self.json_path = json_path
         self.output_dir = output_dir
+        self.no_value=no_value
+        self.unknown_value=unknown_value,
         os.makedirs(output_dir, exist_ok=True)
         with open(json_path, 'r', encoding='UTF-8') as f:
             self.data = json.load(f)
 
-    def extract_temporal_data(self, acceptable_strings=["1", "yes", "true", "present", "y"]):
+    def extract_temporal_data(self):
         """
         Parses the JSON data to extract dates and binary statuses for each question.
         Returns a dictionary or DataFrame with the results.
@@ -39,21 +41,13 @@ class TemporalPlotter:
                     continue
                 
                 for chunk_id, answer in chunks.items():
-                    ans = str(answer).lower()
-                    if ans == '0' or ans == '0.0':
+                    if answer == self.unknown_value or answer == 99:
                         continue # Skip completely unmentioned symptom evaluations
+
+                    status = 1 if answer==self.no_value else 2 
                     
-                    status = 1 # 1 = No
-                    # More robust status check for Yes (2)
-                    if any(s == ans for s in acceptable_strings) or ans == '2' or ans == '2.0':
-                        status = 2
-                    
-                    # Extract date directly from the LLM's new inline output
-                    # Fallback to chunk metadata if the LLM didn't return one or if running older files
-                    date_str = str(content.get(f'onset_date: {question}', {}).get(chunk_id, 'Unknown')).strip()
-                    if date_str == 'Unknown' or date_str == '':
-                        metadata = metadata_by_chunk.get(str(chunk_id), {})
-                        date_str = metadata.get('date', 'Unknown')
+                    metadata = metadata_by_chunk.get(str(chunk_id), {})
+                    date_str = metadata.get('date', 'Unknown')
                     
                     date_val = None
                     if date_str != 'Unknown' and date_str != 'None':
