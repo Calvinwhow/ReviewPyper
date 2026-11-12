@@ -23,12 +23,12 @@ class PerNoteExtractor(ClinicalNotesExtractor):
     """
     def __init__(self, input_file_list, mrn_file, output_dir, filter_list=None, separator="|", MRN_str='MRN', report_end_str='[report_end]',debug=False):
 
-        super().__init__(input_file_list, mrn_file, output_dir, filter_list=None, separator="|", MRN_str='MRN', report_end_str='[report_end]',debug=False)
-    
+        super().__init__(input_file_list, mrn_file, output_dir, filter_list=filter_list, separator=separator, MRN_str=MRN_str, report_end_str=report_end_str, debug=debug)
+
 
     ### Public API ###
     @staticmethod
-    def append_json(filepath, mrn, dictionary, write_new):
+    def append_json(filepath, dictionary, write_new):
         if write_new:
             with open(filepath, 'w', encoding="UTF-8") as file:
                 json.dump(dictionary, file)
