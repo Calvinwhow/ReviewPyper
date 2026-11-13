@@ -99,7 +99,7 @@ class PerNoteExtractor(ClinicalNotesExtractor):
                     dict_to_write={report_id:{'date':note_date.date().strftime('%m/%d/%Y'),'text':note}}
                     make_new_file=(False if mrn in list(file_list.keys()) else True)
 
-                    self.append_json(path,mrn,dict_to_write, write_new=make_new_file)
+                    self.append_json(path,dict_to_write, write_new=make_new_file)
 
                     file_list[mrn]=path
 
@@ -122,7 +122,7 @@ class PerNoteExtractor(ClinicalNotesExtractor):
                 for report_number, data in sorted_dict.items():
                     text_file.write(data['text'])
 
-    def run(self, selected_mrns=None, make_master_file=False):
+    def run(self, master_list_path=None, selected_mrns=None, make_master_file=False):
         """ Runs the entire process of splitting the files, generating the master list, and filtering it."""
         
         file_list=self.split_notes(self.combine_files_temp(), make_master_file=make_master_file)
@@ -132,6 +132,6 @@ class PerNoteExtractor(ClinicalNotesExtractor):
         self.sort_and_write_to_text(file_list.values()) 
         self.generate_master_list()
         # self.filter_master_list(selected_mrns)
-        self.save_master_list()
+        self.save_master_list(master_list_path=master_list_path)
         return self.master_list
     

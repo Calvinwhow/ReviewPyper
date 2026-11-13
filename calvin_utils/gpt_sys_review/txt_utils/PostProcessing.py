@@ -60,8 +60,8 @@ class PostProcessing:
     @staticmethod
     def add_raw_results_to_master_list(master_list_path, raw_results_path, debug=False, filename_col='PMID'):
         '''Merges results into the master list, assuming the files have names which are stored in a column in the master list.'''
-        master_df = pd.read_csv(master_list_path)
-        raw_results_df = pd.read_csv(raw_results_path)
+        master_df = pd.read_csv(master_list_path, dtype={'MRN':str})
+        raw_results_df = pd.read_csv(raw_results_path, dtype={'MRN':str})
 
         new_columns = [col for col in raw_results_df.columns if col != raw_results_df.columns[0]]
         for column in new_columns:
@@ -86,8 +86,8 @@ class PostProcessing:
     @staticmethod
     def update_emr_master_list(master_list_path, raw_results_path, debug=False, matching_col='MRN'):
         '''Merges results into the master list, based on MRN'''
-        master_df = pd.read_csv(master_list_path)
-        raw_results_df = pd.read_csv(raw_results_path)
+        master_df = pd.read_csv(master_list_path, dtype={'MRN':str})
+        raw_results_df = pd.read_csv(raw_results_path,dtype={'MRN':str})
 
         master_df = pd.merge(master_df, raw_results_df, on=matching_col, how='outer')
         if not debug:
@@ -124,7 +124,7 @@ class PostProcessing:
     @staticmethod
     def finalize_master_list(master_list_path, questions_dict):
 
-        master_df = pd.read_csv(master_list_path)
+        master_df = pd.read_csv(master_list_path, dtype={'MRN':str})
         
         new_cols=master_df.columns.values.tolist()
         short_qs_counts={}

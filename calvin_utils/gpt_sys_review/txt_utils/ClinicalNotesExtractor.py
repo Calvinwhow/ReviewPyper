@@ -18,14 +18,15 @@ class ClinicalNotesExtractor:
     - save_master_list: saves the master list to a csv file.
     - run: runs the entire process of splitting the files, generating the master list, and filtering it.
     """
-    def __init__(self, input_file_list, mrn_file, output_dir, filter_list=None, separator="|", MRN_str='MRN', report_end_str='[report_end]',debug=False):
+    def __init__(self, input_file_list, mrn_file, output_dir, run_number=None, filter_list=None, separator="|", MRN_str='MRN', report_end_str='[report_end]',debug=False):
         self.MRN_str = MRN_str
         self.report_end_str=report_end_str
         self.separator=separator
         self.input_file_list=input_file_list
         self.mrn_file=mrn_file
         self.output_dir=output_dir
-        self.raw_files_dir = output_dir + '_separated'
+        self.run_number=run_number
+        self.raw_files_dir = output_dir + '_notes'
         self.debug=debug
 
         if filter_list is not None:
@@ -214,7 +215,7 @@ class ClinicalNotesExtractor:
         for mrn, reports in subject_reports.items():
             reports.sort(key=lambda x: x[0])
             
-            output_path = os.path.join(self.raw_files_dir, f'{mrn}.txt')
+            output_path = os.path.join(self.raw_files_dir, f'{mrn}_notes.txt')
             with open(output_path, 'w', encoding='utf-8') as subject_file:
                 for _, report_text in reports:
                     subject_file.write(report_text)
@@ -238,6 +239,7 @@ class ClinicalNotesExtractor:
                 master_list.append({'MRN': mrn, 'filepath': filepath})
         
         self.master_list = pd.DataFrame(master_list)
+
         
     # def filter_master_list(self, selected_mrns=None):
     #     """Filters the master list based on selected MRNs."""
@@ -249,17 +251,16 @@ class ClinicalNotesExtractor:
     #         print("No list of MRNs given, keeping all subjects in the master list.")
         
 
-    def save_master_list(self, run_counter=None):
+    def save_master_list(self, master_list_path=None):
         """Saves the master list to a CSV file."""
 
-        master_list_path = os.path.join(self.output_dir, 'master_list.csv')
-        if run_counter is not None:
-            master_list_path = os.path.join(self.output_dir, f'master_list_{run_counter}.csv')
-        else:
-            counter=0
+        if master_list_path is None:
+            master_list_path = os.path.join(self.output_dir, 'master_list_001.csv')
+            counter=1
             while os.path.isfile(master_list_path): #rename if master list already exists
                 counter+=1
-                master_list_path=os.path.join(self.output_dir, f'master_list_{counter}.csv')
+                master_list_path=os.path.join(self.output_dir, f'master_list_{counter:03}.csv')
+
         self.master_list.to_csv(master_list_path, index=False)
         print(f"Master list saved to {master_list_path}")
 
@@ -273,13 +274,13 @@ class ClinicalNotesExtractor:
         return new_input_file
 
 
-    def run(self, selected_mrns=None, make_master_file=False):
+    def run(self, selected_mrns=None, run_number=None,make_master_file=False):
         """ Runs the entire process of splitting the files, generating the master list, and filtering it."""
         self.split_by_subject(self.combine_files_temp(), make_master_file=make_master_file)
         # for file in self.input_file_list:
         #     self.split_by_subject(file) 
         self.generate_master_list()
         # self.filter_master_list(selected_mrns)
-        self.save_master_list()
+        self.save_master_list(run_number=run_number)
         return self.master_list
     

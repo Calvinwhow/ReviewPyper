@@ -25,7 +25,7 @@ class TextPreprocessor:
         - output_dir (str): Path to the directory where the preprocessed text files will be saved.
         """
         # self.input_dir = input_dir
-        self.raw_txt_file_dir = input_dir+'_separated'
+        self.raw_txt_file_dir = input_dir+'_notes'
         self.output_dir = input_dir + '_preprocessed'
         self._prep_out_dir()
         
@@ -75,7 +75,7 @@ class TextPreprocessor:
         raw_txt_files = [f for f in raw_txt_files if f.endswith('.txt')]    # make sure only to process .txt files
         for filename in tqdm(raw_txt_files, desc='Preprocessing text files',total=len(raw_txt_files)):
             input_filepath = os.path.join(self.raw_txt_file_dir, filename)
-            output_filepath = os.path.join(self.output_dir, filename)
+            output_filepath = os.path.join(self.output_dir, filename.replace('.txt','_preprocessed.txt'))
 
             try: 
                 original_text = self._extract_text(input_filepath)

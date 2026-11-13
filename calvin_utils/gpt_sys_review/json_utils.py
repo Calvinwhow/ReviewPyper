@@ -29,7 +29,7 @@ class SectionLabeler:
     - save_to_json: Saves the labeled sections to a JSON file.
     """
 
-    def __init__(self, folder_path, article_type, api_key_path=None, is_azure=False, deployment_id=None, api_base=None, api_version=None):
+    def __init__(self, folder_path, article_type, run_number=None, api_key_path=None, is_azure=False, deployment_id=None, api_base=None, api_version=None):
         """
         Initializes the SectionLabeler class with the folder path and article type.
 
@@ -48,6 +48,7 @@ class SectionLabeler:
         self.deployment_id=deployment_id
         self.api_base=api_base
         self.api_version=api_version
+        self.run_number=run_number
 
     def select_labels(self):
         # Define section labels for each article type
@@ -201,14 +202,15 @@ class SectionLabeler:
         os.makedirs(out_dir, exist_ok=True)
         
         if filename is not None and not os.path.exists(filename):
-            save_file_path = os.path.join(out_dir, f'{filename}_labeled_sections.json')
-            with open(save_file_path, 'w', encoding='UTF-8') as f:
-                json.dump(output_dict, f, indent=0)
+            save_file_path = os.path.join(out_dir, filename)
+        elif self.run_number is not None:
+            save_file_path = os.path.join(out_dir, f'_{self.article_type}_labeled_sections_{self.run_number:03}.json')
         else:
             save_file_path = os.path.join(out_dir, f'_{self.article_type}_labeled_sections.json')
-            with open(save_file_path, 'w', encoding='UTF-8') as f:
-                json.dump(output_dict, f, indent=0)
-                print(f"Saved to: \n {save_file_path}")
+
+        with open(save_file_path, 'w', encoding='UTF-8') as f:
+            json.dump(output_dict, f, indent=0)
+            print(f"Saved to: \n {save_file_path}")
                 
         return save_file_path
    
@@ -223,7 +225,7 @@ class SectionLabeler:
         Returns:
         - None
         """
-        filename = os.path.splitext(os.path.basename(filename))[0]
+        filename = os.path.splitext(os.path.basename(filename))[0].split('_')[0]
         self.save_to_json({filename: labeled_sections}, filename=filename)
         self.output_dict[filename] = labeled_sections
 
@@ -294,7 +296,7 @@ class SectionLabeler:
                 continue
             with open(os.path.join(self.folder_path, filename), encoding='UTF-8') as file:
                 processed=file.read().replace('|', ',') 
-                self.output_dict[filename.split('.')[0]]={'emr':" ".join(processed.split())}
+                self.output_dict[filename.split('_')[0]]={'emr':" ".join(processed.split())}
 
         # self.save_to_json(section_json)
         # os.mkdir(os.path.join(output_dir,'json'))
@@ -818,7 +820,7 @@ class CustomSummarizer(CustomMapper):
           {0: ["none","absent"], 1: ["mild"], 2: ["moderate"], 3: ["severe"]}
     """
 
-    def __init__(self, json_path, answer_format, summary_type='llm', premapped=False, left_right_questions=[],
+    def __init__(self, json_path, answer_format, run_number=None, summary_type='llm', premapped=False, left_right_questions=[],
                  api_key_path=None, is_azure=False, deployment_id=None, api_base=None, api_version=None, max_workers=10, 
                  chunks_dir=None, string_mapping=None, debug=False,):
         """
@@ -833,6 +835,7 @@ class CustomSummarizer(CustomMapper):
         """
         super().__init__(answer_format=answer_format, string_mapping=string_mapping)
         self.json_path = json_path
+        self.run_number = run_number
         self.summary_type = summary_type
         self.has_explanations = self.answer_format in ["binary_with_explanations", "binary_with_unknown_and_explanations","severity_with_explanations", "severity_with_unknown_and_explanations"]
         self.chunks_dir = chunks_dir
@@ -970,7 +973,7 @@ class CustomSummarizer(CustomMapper):
             chunk_metadatas=question_data['metadata']
 
             if self.chunks_dir is not None:
-                chunks_dict = self.read_json(self.chunks_dir + '/' + article + '_chunks.json')
+                chunks_dict = self.read_json(os.path.join(self.chunks_dir,f'{article}_chunks_{self.run_number:03}.json'))
 
             for q in qs:
                 answers=[]
@@ -1057,7 +1060,7 @@ class CustomSummarizer(CustomMapper):
         - DataFrame: Pandas DataFrame containing the summarized results.
         """
         self.df = self.summarize(positive_explanations_only=positive_explanations_only)
-        raw_path = self.save_to_csv(filename=f'responses_raw')
+        raw_path = self.save_to_csv(filename=f'responses_raw_{self.run_number:03}')
         print(f"Your CSV files of filtered manuscripts have been saved to this directory: \n {os.path.dirname(raw_path)}")
         return self.df, raw_path
 

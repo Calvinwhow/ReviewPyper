@@ -4,7 +4,8 @@ import json
 class EmrEnvironment:
 
     def __init__(self, path):
-        self.path=self.find_filenum(path)
+        self.run_number=self.find_filenum(path)
+        self.path=self.append_filenum(path)
         self.parameters={}
     
     def find_filenum(self,filename):
@@ -16,19 +17,17 @@ class EmrEnvironment:
             counter=1
             previous_name=filename
 
-            while os.path.isfile(filename.replace('.json',f"_{counter}.json")):
-                previous_name=filename.replace('.json',f"_{counter}.json")
+            while os.path.isfile(filename.replace('.json',f"_{counter:03}.json")):
+                previous_name=filename.replace('.json',f"_{counter:03}.json")
                 counter+=1
 
         self.previous_run=json.load(open(previous_name)) if previous_name else {}
-        self.counter=counter
-
-        return filename.replace('.json',f"_{counter}.json") if counter>0 else filename
+        return counter
     
     def append_filenum(self, filename):
-        if self.counter != 0:
-            filename=filename.replace('.json',f"_{self.counter}.json")
-            filename=filename.replace('.csv',f"_{self.counter}.csv")
+        if self.run_number != 0:
+            filename=filename.replace('.json',f"_{self.run_number:03}.json")
+            filename=filename.replace('.csv',f"_{self.run_number:03}.csv")
         return filename 
     
     def save(self):

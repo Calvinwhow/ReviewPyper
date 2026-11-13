@@ -19,7 +19,7 @@ class BIDSOrganizer():
 
         self.env=self.load_env()
         self.master_list = self.load_master_list()
-        self.new_metadata=self.prep_new_metadata()
+        self.new_metadata = self.prep_new_metadata()
         self.create_bids_structure()
 
     @staticmethod
@@ -28,9 +28,11 @@ class BIDSOrganizer():
         if len(filename_list) == 1:
             return filename_list[0]
         else:
-            if initial_name:
+            if initial_name and initial_name in filename_list:
                 filename_list.remove(initial_name) # can't be the default if there are other lists, and lack of number screws up next step
+            
             numbered={pd.to_numeric(number_getter(name), errors='coerce'): name for name in filename_list}
+
             return numbered[max(numbered.keys())]
            
     @staticmethod
@@ -56,17 +58,19 @@ class BIDSOrganizer():
     def load_master_list(self):
 
         lists = [file for file in os.listdir(self.data_dir) if 'master_list' in file]
-        if lists==[]:
-            raise FileNotFoundError("No master_list CSV file found in the data directory.")
+        # if lists==[]:
+        #     raise FileNotFoundError("No master_list CSV file found in the data directory.")
         
-        elif len(lists) == 1:
-            self.master_list_name =  lists[0]
+        # elif len(lists) == 1:
+        #     self.master_list_name =  lists[0]
         
-        else:
-            lists.remove('master_list.csv') # can't be the default if there are other lists, and lack of number screws up next step
-            numbered={pd.to_numeric(name.split('_')[-1].replace('.csv', ''), errors='coerce'): name for name in lists}
-            max_list_file=numbered[max(numbered.keys())]
-            self.master_list_name = max_list_file
+        # else:
+        #     if 'master_list.csv' in lists:
+        #         lists.remove('master_list.csv') # can't be the default if there are other lists, and lack of number screws up next step
+        #     numbered={pd.to_numeric(name.split('_')[-1].replace('.csv', ''), errors='coerce'): name for name in lists}
+        #     max_list_file=numbered[max(numbered.keys())]
+        #     self.master_list_name = max_list_file
+        self.master_list_name=self.find_latest_filename(lists, lambda x:x.split('_')[-1].replace('.csv', ''), initial_name='master_list.csv')
 
         return pd.read_csv(os.path.join(self.data_dir,self.master_list_name), dtype={'MRN': str})
 
@@ -80,8 +84,9 @@ class BIDSOrganizer():
         env_name=self.find_latest_filename(env_list, initial_name='env.json',
                                             number_getter=lambda name: name.split('_')[-1].replace('.json',''))
         env=self.read_json(os.path.join(self.data_dir, env_name))
-            # selected_mrns needs to be removed for PII reasons. 
-            # We don't actually use it here, but this step is still necessary
+
+        # selected_mrns needs to be removed for PII reasons. 
+        # We don't actually use it here, but this step is still necessary
         selected_mrns=env.pop("select_mrns", None)
 
         return env
@@ -106,8 +111,11 @@ class BIDSOrganizer():
 
         for mrn in self.master_list['MRN'].unique():
 
-            to_move ={'separated': os.path.join(self.data_dir, '_separated', f"{mrn}.txt"),
-                      'preprocessed': os.path.join(self.data_dir, '_preprocessed', f"{mrn}.txt"),}
+            to_move ={'notes':os.path.join(self.data_dir, '_notes', f"{mrn}.txt"),
+                      'preprocessed': os.path.join(self.data_dir, '_preprocessed', f"{mrn}_preprocessed.txt"),
+                    #   'separated': os.path.join(self.data_dir, '_separated', f"{mrn}.txt"), # legacy naming, now called 'notes'
+                    #   'preprocessed': os.path.join(self.data_dir, '_preprocessed', f"{mrn}.txt"), # legacy naming. now append '_preprocessed'
+                    }
             
             for name, source_file in to_move.items():
 
@@ -201,7 +209,7 @@ class BIDSOrganizer():
     def update_bids_jsons(self, json_file_path):
 
         extraction_json = self.read_json(json_file_path)
-        json_name = os.path.basename(json_file_path)
+        # json_name = os.path.basename(json_file_path)
 
         for mrn, data in extraction_json.items():
 
@@ -209,7 +217,7 @@ class BIDSOrganizer():
                 print(f"MRN {mrn} from the JSON does not correspond to any MRN in the master list.")
                 continue
 
-            output_file_path = os.path.join(self.bids_folders[mrn], f"{mrn}_{json_name}")
+            output_file_path = os.path.join(self.bids_folders[mrn], f"{mrn}_reviewpyper_results.json")
 
             if os.path.isfile(output_file_path):
 
@@ -224,7 +232,7 @@ class BIDSOrganizer():
     
             question_dict={q_name:q_text for q_text, q_name in self.env["extraction_questions"].items()}
 
-            # original metadata is just chunk dates, which have been moved to the 'chunks' header, so not needed
+            # original metadata is just chunk dates, which have been moved to the 'chunks' header, so not needed. Overwrite.
             data['metadata']=self.new_metadata 
 
             rebuilt_data=self.build_json_structure(mrn, data, question_dict, run_suffix=f'_{run_number:03}')
@@ -235,8 +243,18 @@ class BIDSOrganizer():
     def organize(self, json_file_path=None):
 
         if json_file_path is None:
-            json_file_path=os.path.join(self.data_dir, 'json_evaluated/emr_strict_extraction_evaluations_mapped.json')
-
+            json_names=[name for name in os.listdir(os.path.join(self.data_dir, 'json_evaluated')) if 'mapped.json' in name]
+            json_file_path=os.path.join(self.data_dir,
+                                        'json_evaluated',
+                                        self.find_latest_filename(json_names,
+                                                                  lambda x: x.replace('.json','').split('_')[-2],
+                                                                  initial_name='emr_strict_extraction_evaluations_mapped.json'
+                                                                  )
+                                        )
+            # json_file_path=os.path.join(self.data_dir, 'json_evaluated/emr_strict_extraction_evaluations_mapped.json')
+            # json_file_path=os.path.join(self.data_dir, 'json_evaluated/emr_strict_extraction_evaluations_mapped.json')
+                        
+        print(json_file_path)
         self.move_txt_files_to_bids()
         # self.move_chunks_to_bids()
         self.update_bids_jsons(json_file_path)

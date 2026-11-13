@@ -6,7 +6,11 @@ from tqdm import tqdm
 from calvin_utils.gpt_sys_review.gpt_utils.openai_chat_base import OpenAIChatBase
 
 class OpenAIJsonEvaluator(OpenAIChatBase):
-    def __init__(self, api_key_path, json_file_path, keys_to_consider, question, answer_format, retain_chunks=False, question_token_estimate=500, question_type='research',  model_choice="gpt3_small", response_tokens=None, is_azure=False, deployment_id=None, api_base=None, api_version=None, debug=False, test_mode=True, test_count=5, max_workers=10):
+    def __init__(self, api_key_path, json_file_path, keys_to_consider, question, answer_format, 
+                 run_number=None, retain_chunks=False, question_token_estimate=500, question_type='research', 
+                 model_choice="gpt3_small", response_tokens=None, 
+                 is_azure=False, deployment_id=None, api_base=None, api_version=None, 
+                 debug=False, test_mode=True, test_count=5, max_workers=10):
         """
         Initializes the OpenAIChatEvaluator class.
         
@@ -28,6 +32,7 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
         self.all_answers = {}
         self.questions = question
         self.answer_format = answer_format
+        self.run_number = run_number
         self.retain_chunks = retain_chunks
         if self.retain_chunks:
             self.chunk_dir = os.path.dirname(self.json_path) + "_chunks"
@@ -76,24 +81,28 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
             self.relevant_text_by_file[file_name] = selected_text
 
     @staticmethod
-    def create_output_filename(json_path,question_type, filetype_suffix='json'):
+    def create_output_filename(json_path, question_type, filetype_suffix='json',run_number=None):
 
         out_dir = os.path.dirname(json_path) + "_evaluated"
         os.makedirs(out_dir, exist_ok=True)
 
-        base_save_file = os.path.join(out_dir, f'{question_type}_evaluations.{filetype_suffix}')
+        if run_number is not None:
+            save_file=f'{question_type}_evaluations_{run_number:03}.{filetype_suffix}'
 
-        save_file = base_save_file
-        count = 1
-        while os.path.exists(save_file):
-            save_file = os.path.join(out_dir, f'{question_type}_evaluations_{count}.{filetype_suffix}')
-            count += 1
+        else:
+            base_save_file = os.path.join(out_dir, f'{question_type}_evaluations.{filetype_suffix}')
+
+            save_file = base_save_file
+            count = 1
+            while os.path.exists(save_file):
+                save_file = os.path.join(out_dir, f'{question_type}_evaluations_{count:03}.{filetype_suffix}')
+                count += 1
         
         return save_file 
             
     def save_to_json(self, output_dict):
         """Saves the labeled sections to a JSON file."""
-        save_file=self.create_output_filename(self.json_path, self.question_type, filetype_suffix='json')
+        save_file=self.create_output_filename(self.json_path, self.question_type, run_number=self.run_number, filetype_suffix='json')
 
         with open(save_file, 'w', encoding='UTF-8') as f:
             json.dump(output_dict, f, indent=0)
@@ -103,19 +112,25 @@ class OpenAIJsonEvaluator(OpenAIChatBase):
     
     def save_chunks(self, file_name, chunks, metadata=None):
 
-        base_save_file = os.path.join(self.chunk_dir, f'{file_name}_chunks.json')
-        save_file = base_save_file
-        count = 1
         if metadata:
             chunk_dict = {f'chunk_{i+1}': {'text': chunk, 'metadata': metadata[i]} for i, chunk in enumerate(chunks)}
         else:
-            chunk_dict = {f'chunk_{i+1}': chunk for i, chunk in enumerate(chunks)}
-        while os.path.exists(save_file):
-            save_file = os.path.join(self.chunk_dir, f'{file_name}_chunks_{count}.json')
-            count += 1
+            chunk_dict = {f'chunk_{i+1}': {'text':chunk} for i, chunk in enumerate(chunks)}
+
+        if self.run_number is not None:
+            save_file = os.path.join(self.chunk_dir, f'{file_name}_chunks_{self.run_number:03}.json')
+        else:
+            base_save_file = os.path.join(self.chunk_dir, f'{file_name}_chunks_{1:03}.json')
+            save_file = base_save_file
+            count = 1
+            while os.path.exists(save_file):
+                save_file = os.path.join(self.chunk_dir, f'{file_name}_chunks_{count:03}.json')
+                count += 1
+
         with open(save_file, 'w', encoding='UTF-8') as f:
             json.dump(chunk_dict, f, indent=0)
         # print(f"Saved to: {save_file}")
+
         return save_file
 
 

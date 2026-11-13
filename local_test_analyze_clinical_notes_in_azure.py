@@ -12,7 +12,7 @@ import pandas as pd
 # select_mrns=pd.read_csv('F:/hbs_study_patient_notes/hbs_ross_aryan_gpt_n1205.csv')['MRN']
 select_mrns=None
 
-output_dir='/Users/rm026/Documents/code/ReviewPyper_testing/tests/custommapper_severity/'
+output_dir='/Users/rm026/Documents/code/ReviewPyper_testing/tests/renaming_test_2/'
 
 # Provide the path to your OpenAI API key
 api_key_path = "/Users/rm026/Documents/code/openai-key.txt"
@@ -106,11 +106,12 @@ extraction_questions={q:name for set_name in extraction_question_sets for q, nam
 env.update({"extraction_questions": extraction_questions})
 
 master_list_path = env.append_filenum(output_dir+"master_list.csv") 
-master_list_excel_path = env.append_filenum(output_dir+"master_list.xlsx")
-json_file_path = output_dir+"json/_emr_labeled_sections.json"
+master_list_excel_path = master_list_path.replace('.csv','.xlsx')
+json_file_path = env.append_filenum(output_dir+f"json/_emr_labeled_sections.json")
 env.update({"master_list_path": master_list_path,
             "master_list_excel_path": master_list_excel_path,
             "json_file_path": json_file_path})
+
 ############# Preprocess text and split into individual notes #############
 
 from calvin_utils.gpt_sys_review.txt_utils import PerNoteExtractor, TextPreprocessor
@@ -118,12 +119,12 @@ extractor=PerNoteExtractor(notes_file_list, mrn_file, output_dir)
 preprocessor = TextPreprocessor(input_dir=output_dir)
 
 if env.parameters['extraction_completed']==False:    
-    note_df=extractor.run()
+    note_df=extractor.run(master_list_path=master_list_path)
     preprocessed_path = preprocessor.process_files()
 
 else: # if extraction has already been done, just generate a blank master list 
     extractor.generate_master_list()
-    extractor.save_master_list(run_counter=env.counter)
+    extractor.save_master_list(master_list_path=master_list_path)
     preprocessed_path = preprocessor.output_dir
 
 env.update({'extraction_completed': True, 'preprocessed_path': preprocessed_path})
@@ -133,8 +134,9 @@ env.update({'extraction_completed': True, 'preprocessed_path': preprocessed_path
 from calvin_utils.gpt_sys_review.json_utils import SectionLabeler
 ## Initialize the SectionLabeler class and process the files
 section_labeler = SectionLabeler(folder_path=preprocessed_path, 
-                                article_type="emr", 
-                                api_key_path=api_key_path,)
+                                 article_type="emr", 
+                                 api_key_path=api_key_path,
+                                 run_number=env.run_number,)
 section_labeler.process_files(skip_segmentation=skip_segmentation)
 env.update({'section_labeling_step_completed': True})
 
@@ -167,11 +169,11 @@ env.update({'section_labeling_step_completed': True})
 
 ############# Ask extraction questions #############
 
-extraction_debug=True
-if extraction_debug and os.path.exists('/Users/rm026/Documents/code/ReviewPyper/debug_openai_chat.txt'):
-    os.remove('/Users/rm026/Documents/code/ReviewPyper/debug_openai_chat.txt')
-elif extraction_debug and os.path.exists('/Users/rm026/Documents/code/ReviewPyper/error_log.txt'):
-    os.remove('/Users/rm026/Documents/code/ReviewPyper/error_log.txt')
+# extraction_debug=True
+# if extraction_debug and os.path.exists('/Users/rm026/Documents/code/ReviewPyper/debug_openai_chat.txt'):
+#     os.remove('/Users/rm026/Documents/code/ReviewPyper/debug_openai_chat.txt')
+# elif extraction_debug and os.path.exists('/Users/rm026/Documents/code/ReviewPyper/error_log.txt'):
+#     os.remove('/Users/rm026/Documents/code/ReviewPyper/error_log.txt')
     
 retain_chunks=True
 max_workers=50
@@ -188,7 +190,8 @@ evaluator = OpenAIJsonEvaluator(api_key_path=api_key_path,
                                 test_mode=test_mode,
                                 model_choice="gpt-4.1",
                                 max_workers=50,
-                                debug=extraction_debug)
+                                # debug=extraction_debug,
+                                )
 answers = evaluator.evaluate_all_files(chunk_by_date=True)
 
 
@@ -212,6 +215,7 @@ custom_summarizer = CustomSummarizer(json_path=evaluated_json_path,
                                      answer_format=extraction_answer_format,
                                      summary_type=summary_type,
                                     #  chunks_dir=extraction_chunks_dir, 
+                                     run_number=env.run_number,
                                      is_azure=False, 
                                      debug=False,
                                      string_mapping=severity_dict,
@@ -231,7 +235,8 @@ PostProcessing.update_emr_master_list(master_list_path=master_list_path,
 ############# Perform Temporal Analysis #############
 
 from calvin_utils.gpt_sys_review.gpt_utils.temporal_analysis import TemporalPlotter
-plotter = TemporalPlotter(json_path=mapped_json_path, output_dir=output_dir+"plots/")
+plotter = TemporalPlotter(json_path=mapped_json_path, 
+                          output_dir=os.path.join(output_dir,f"plots_{env.run_number:03}/"))
 onset_summary_path = plotter.run()
 env.update({'onset_summary_path': onset_summary_path, 'temporal_analysis_completed': True})
 
@@ -245,7 +250,7 @@ env.update({'master_list_finalized': True})
 
 #Create excel file with masterListPath results
 import pandas as pd
-excelDf = pd.read_csv(master_list_path)
+excelDf = pd.read_csv(master_list_path, dtype={'MRN':str})
 excelDf.to_excel(master_list_excel_path, index=False)
 
 print("Done!")
